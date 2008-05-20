@@ -299,7 +299,7 @@ jdibug-source-paths will be ignored if this is set to t."
 	 (jdi   (jdibug-jdi jdibug))
 	 (class (jdi-value-class value)))
     (ado (jdibug jdi tree class value)
-      (jdibug-info "Expanding value:%s" value)
+      (jdibug-trace "Expanding value:%s" value)
       (cond ((= (jdi-value-type value) jdwp-tag-object)
 	     (ado (jdi value class)
 	       (jdi-class-resolve-parent jdi class)
