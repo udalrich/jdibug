@@ -633,7 +633,9 @@
 		   (cc           (cdr (assoc id (jdwp-transactions-alist jdwp)))))
       (if (not (= error 0))
 		  (progn
-			(unless (= error jdwp-error-absent-information) ;; for absent-information, the client need this and its not an error
+			(if (member error (list jdwp-error-absent-information 
+									jdwp-error-thread-not-suspended))
+				(jdwp-info "received error:%d:%s for id:%d command:%s" error (jdwp-error-string error) id (getf protocol :name))
 			  (jdwp-error "received error:%d:%s for id:%d command:%s" error (jdwp-error-string error) id (getf protocol :name)))
 			(if cc (ado-continue cc nil error jdwp id)))
 		(if reply-spec
