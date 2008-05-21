@@ -38,6 +38,14 @@
 
 (elog-make-logger jdwp)
 
+(defcustom jdwp-read-whole-packet t
+  "Emacs will read from processes in 4096 blocks, so when we get a really
+large packet from the debuggee, sometimes it takes a while to read the full
+package, setting this to t will try to speed up reading of large packets
+when we received partial packets. During benchmarking, it speeds up 
+connection by 0.5-1.0 second when retrieving reply for the all-classes
+commands for around 9000 classes")
+
 (defstruct jdwp
   ;; the elisp process that connects to the debuggee
   process		   
@@ -581,6 +589,8 @@
   (process-send-string (jdwp-process jdwp) "JDWP-Handshake"))
 
 (defun jdwp-connect (jdwp server port)
+  (let ((buf (get-buffer " jdwp-socket-buffer")))
+	(if buf (kill-buffer buf)))
   (setf (jdwp-process jdwp) (open-network-stream "jdwp" " jdwp-socket-buffer" server port))
   (when (jdwp-process jdwp)
     (process-put               (jdwp-process jdwp) 'jdwp jdwp)
@@ -675,17 +685,30 @@
   ;;(message "process:%s" (string-to-hex (substring string 0 11)))
   (jdwp-with-size jdwp
     (let ((len 0)
-		  (total-length (jdwp-output-length jdwp)))
-      (if (and (> total-length 11) (< total-length (jdwp-output-first-packet-length jdwp)))
-		  (jdwp-info "first-packet-length:%d, total-length=%d" (jdwp-output-first-packet-length jdwp) total-length))
-      (unless (or (< total-length 11) (< total-length (jdwp-output-first-packet-length jdwp)))
-		(let* ((packet  (bindat-unpack jdwp-packet-spec (jdwp-output-first-packet-header jdwp)))
-			   (flags   (bindat-get-field packet :flags)))      
-		  (setq len (jdwp-output-first-packet-length jdwp))
-		  (if (= flags #x80)
-			  (jdwp-process-reply jdwp)
-			(jdwp-process-command jdwp))))
-      len)))
+		  (total-length (jdwp-output-length jdwp))
+		  (first-packet-length (jdwp-output-first-packet-length jdwp)))
+		(when (>= total-length 11)
+		  (if (>= total-length first-packet-length)
+			  (let* ((packet  (bindat-unpack jdwp-packet-spec (jdwp-output-first-packet-header jdwp)))
+					 (flags   (bindat-get-field packet :flags)))
+				(setq len (jdwp-output-first-packet-length jdwp))
+				(if (= flags #x80)
+					(jdwp-process-reply jdwp)
+				  (jdwp-process-command jdwp)))
+			(jdwp-info "first-packet-length:%d, total-length=%d" first-packet-length total-length)
+			(if (and jdwp-read-whole-packet
+					 (not jdwp-accepting-more-output))
+				(run-with-timer 0 nil 'jdwp-accept-more-output jdwp))))
+		len)))
+
+(defvar jdwp-accepting-more-output nil
+  "This will be true when we are 'in' jdwp-accept-more-output")
+
+(defun jdwp-accept-more-output (jdwp)
+  (jdwp-info "jdwp-accept-more-output")
+  (let ((jdwp-accepting-more-output t))
+	(while (accept-process-output (jdwp-process jdwp) 0.01)
+	  (jdwp-info "accepted some output"))))
 
 (defun jdwp-ordinary-insertion-filter (proc string)
   (with-current-buffer (process-buffer proc)
@@ -724,10 +747,12 @@
   (when (jdwp-process jdwp)
     (let* ((proc (jdwp-process jdwp))
 		   (buf  (process-buffer proc)))
-      (with-current-buffer buf
-		(bindat-get-field
-		 (bindat-unpack '((:length u32)) (buffer-substring-no-properties 1 5))
-		 :length)))))
+	  (condition-case err
+		  (with-current-buffer buf
+			(bindat-get-field
+			 (bindat-unpack '((:length u32)) (buffer-substring-no-properties 1 5))
+			 :length))
+		('args-out-of-range 0)))))
 
 (defun jdwp-output-first-packet-header (jdwp)
   "Returns the size of the first packet from the debuggee."
