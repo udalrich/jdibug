@@ -127,32 +127,34 @@ jdibug-source-paths will be ignored if this is set to t."
   (interactive)
   (message "JDIbug connecting...")
   (lexical-let ((host jdibug-connect-host)
-		(port jdibug-connect-port)
-		(source-paths (if jdibug-use-jde-source-paths
-				  jde-sourcepath
-				jdibug-source-paths)))
+				(port jdibug-connect-port)
+				(source-paths (if jdibug-use-jde-source-paths
+								  jde-sourcepath
+								jdibug-source-paths))
+				(start-time (current-time)))
     (let ((invalid-source-paths (loop for sp in source-paths
 				      when (not (file-exists-p sp)) 
 				      collect sp)))
       (if invalid-source-paths
-	  (message "source paths invalid:%s" invalid-source-paths)
-	(lexical-let ((jdi (jdibug-jdi jdibug-this)))
-	  (ado ()
-	    (if (jdibug-connected-p)
-		(condition-case err
-		    (jdibug-disconnect)))
-	    (jdi-connect (jdibug-jdi jdibug-this) host port source-paths)
-	    (if (equal (jdi-get-last-error jdi) 'failed-to-connect)
-		(message "JDIbug connecting...failed to connect to %s:%d" host port)
-	      (setf (jdi-breakpoint-handler jdi) 'jdibug-handle-breakpoint)
-	      (setf (jdi-step-handler jdi) 'jdibug-handle-step)
-	      (setf (jdi-breakpoint-resolved-handler jdi) 'jdibug-handle-resolved-breakpoint)
-	      (setf (jdi-detached-handler jdi) 'jdibug-handle-detach)
-	      (setf (jdibug-threads-buffer jdibug-this) (get-buffer-create jdibug-threads-buffer-name))
-	      (setf (jdibug-locals-buffer jdibug-this) (get-buffer-create jdibug-locals-buffer-name))
-	      (setf (jdibug-frames-buffer jdibug-this) (get-buffer-create jdibug-frames-buffer-name))
-	      (jdibug-refresh-threads-buffer jdibug-this)
-	      (message "JDIbug connecting...done"))))))))
+		  (message "source paths invalid:%s" invalid-source-paths)
+		(lexical-let ((jdi (jdibug-jdi jdibug-this)))
+		  (ado (start-time)
+			(if (jdibug-connected-p)
+				(condition-case err
+					(jdibug-disconnect)))
+			(jdi-connect (jdibug-jdi jdibug-this) host port source-paths)
+			(if (equal (jdi-get-last-error jdi) 'failed-to-connect)
+				(message "JDIbug connecting...failed to connect to %s:%d" host port)
+			  (setf (jdi-breakpoint-handler jdi) 'jdibug-handle-breakpoint)
+			  (setf (jdi-step-handler jdi) 'jdibug-handle-step)
+			  (setf (jdi-breakpoint-resolved-handler jdi) 'jdibug-handle-resolved-breakpoint)
+			  (setf (jdi-detached-handler jdi) 'jdibug-handle-detach)
+			  (setf (jdibug-threads-buffer jdibug-this) (get-buffer-create jdibug-threads-buffer-name))
+			  (setf (jdibug-locals-buffer jdibug-this) (get-buffer-create jdibug-locals-buffer-name))
+			  (setf (jdibug-frames-buffer jdibug-this) (get-buffer-create jdibug-frames-buffer-name))
+			  (jdibug-refresh-threads-buffer jdibug-this)
+  			  (message "JDIbug connecting...done in %s seconds"
+  					   (float-time (time-subtract (current-time) start-time))))))))))
 
 (defun jdibug-have-class-source-p (jdibug class)
   (let ((file-name (jdi-class-signature-to-source (jdibug-jdi jdibug-this) (jdi-class-signature class))))
