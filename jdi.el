@@ -839,8 +839,8 @@ named field-name, and call func with (jdi value field-value) after that."
 													   (:method-id . ,(jdi-method-id method))))
       (let ((reply (car ado-last-return-value)))
 		(jdi-trace "start=%s:end=%s:lines=%d" 
-				   (string-id-to-hex (bindat-get-field reply :start))
-				   (string-id-to-hex (bindat-get-field reply :end))
+				   (jdwp-string-to-hex (bindat-get-field reply :start))
+				   (jdwp-string-to-hex (bindat-get-field reply :end))
 				   (bindat-get-field reply :lines))
 		(setf (jdi-method-locations method)
 			  (loop for line in (bindat-get-field reply :line)
