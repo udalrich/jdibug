@@ -116,9 +116,10 @@ Return the tag list with the same depth."
 		  (tree-widget-dynamic-reopen child opened))))))
 
 (defun tree-widget-dynamic-refresh (tree)
-  (widget-put tree :opened-path (tree-widget-dynamic-opened-path tree))
-  (widget-put tree :args nil)
+  (tree-widget-dynamic-info "tree-widget-dynamic-refresh")
   (when (widget-get tree :open)
+	(widget-put tree :opened-path (tree-widget-dynamic-opened-path tree))
+	(widget-put tree :args nil)
 	(widget-apply-action tree)
 	(tree-widget-dynamic-reopen tree)))
 
