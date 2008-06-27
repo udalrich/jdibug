@@ -99,6 +99,7 @@ jdibug-source-paths will be ignored if this is set to t."
 (require 'elog)
 (require 'jdi)
 (require 'tree-mode)
+(require 'tree-widget-dynamic)
 
 (elog-make-logger jdibug)
 
@@ -108,6 +109,7 @@ jdibug-source-paths will be ignored if this is set to t."
   threads-tree 
   threads-buffer
   locals-buffer
+  locals-tree
   frames-buffer
   breakpoints ;; list of jdibug-breakpoint
 
@@ -294,7 +296,28 @@ jdibug-source-paths will be ignored if this is set to t."
     (tree-mode)
     (tree-mode-insert (jdibug-make-threads-tree jdibug))))
 
+(defun jdibug-expand-locals-node (tree)
+  "Expander function on the root node in the locals tree."
+  (jdibug-trace "jdibug-expand-locals-node")
+  (let* ((jdibug (widget-get tree :jdibug))
+		 (jdi   (jdibug-jdi jdibug)))
+	(ado (jdibug jdi tree)
+	  (jdi-locals-refresh jdi)
+	  (with-current-buffer (jdibug-locals-buffer jdibug)
+		(widget-put tree :args nil)
+		(widget-apply-action tree)
+
+		(widget-put tree :args 
+					(mapcar (lambda (value) (jdibug-make-value-node jdibug value)) 
+							(jdi-locals jdi)))
+
+		;; open the tree back again
+		(widget-apply-action tree)
+		(tree-widget-dynamic-reopen (jdibug-locals-tree jdibug)))))
+  nil)
+
 (defun jdibug-expand-value-node (tree)
+  "Expander function on any other expandable nodes in the locals tree."
   (jdibug-trace "jdibug-expand-value-node")
   (let* ((value (widget-get tree :jdi-value))
 	 (jdibug (widget-get tree :jdibug))
@@ -324,20 +347,22 @@ jdibug-source-paths will be ignored if this is set to t."
       (jdibug-trace "setting into the tree")
 
       ;; clear the "loading" child and close it
-      (widget-put tree :args nil)
-      (widget-apply-action tree)
+	  (with-current-buffer (jdibug-locals-buffer jdibug)
+		(widget-put tree :args nil)
+		(widget-apply-action tree)
 
-      (widget-put tree :args 
-		  (mapcar (lambda (value) (jdibug-make-value-node jdibug value)) (jdi-value-values value)))
+		(widget-put tree :args 
+					(mapcar (lambda (value) (jdibug-make-value-node jdibug value)) (jdi-value-values value)))
 
-      (jdibug-trace "jdi-value-values:%s" (jdi-value-values value))
+		(jdibug-trace "jdi-value-values:%s" (jdi-value-values value))
 
-      (unless (jdi-value-values value)
-	(widget-put tree :args
-		    (list `(item :value "empty"))))
+		(unless (jdi-value-values value)
+		  (widget-put tree :args
+					  (list `(item :value "empty"))))
 
-      ;; open the tree back again
-      (widget-apply-action tree)))
+		;; open the tree back again
+		(widget-apply-action tree)
+		(tree-widget-dynamic-reopen (jdibug-locals-tree jdibug)))))
   ;; we will get the values later, now you have to live with the empty list
   (jdibug-trace "returning loading sign")
   (list `(item :value "loading...")))
@@ -358,25 +383,26 @@ jdibug-source-paths will be ignored if this is set to t."
       ,(format "%s: %s" (jdi-value-name value) (jdi-value-string value)))))
 
 (defun jdibug-make-values-tree (jdibug values)
-  `(tree-widget
+  `(tree-widget-dynamic
     :node (push-button
 	   :tag "Locals"
 	   :format "%[%t%]\n")
-    :open t
+    :open nil
     :has-children t
-    :args ,(mapcar (lambda (value) (jdibug-make-value-node jdibug value)) values)))
+	:jdibug ,jdibug
+	:expander jdibug-expand-locals-node))
 
 (defun jdibug-refresh-locals-buffer (jdibug)
   (jdibug-info "jdibug-refresh-locals-buffer")
   (if (jdibug-locals-update-timer jdibug)
       (cancel-timer (jdibug-locals-update-timer jdibug)))
   (mapc (lambda (buffer) 
-	  (with-current-buffer buffer
-	    (toggle-read-only 1)
-	    (let ((inhibit-read-only t))
-	      (erase-buffer)
-	      (insert "refreshing..."))))
-	(list (jdibug-locals-buffer jdibug) (jdibug-frames-buffer jdibug)))
+ 		  (with-current-buffer buffer
+ 			(toggle-read-only 1)
+ 			(let ((inhibit-read-only t))
+ 			  (erase-buffer)
+ 			  (insert "refreshing..."))))
+ 		(list (jdibug-frames-buffer jdibug)))
   (jdibug-refresh-locals-buffer-now jdibug))
 
 
@@ -388,15 +414,22 @@ jdibug-source-paths will be ignored if this is set to t."
   (ado (jdibug)
     (jdi-locals-refresh (jdibug-jdi jdibug))
     (with-current-buffer (jdibug-locals-buffer jdibug)
-      (kill-all-local-variables)
-      (let ((inhibit-read-only t))
-	(erase-buffer))
-      (tree-mode)
-      (local-set-key "s" 'jdibug-node-tostring)
-      (jdibug-info "making the locals tree")
-      (tree-mode-insert (jdibug-make-values-tree jdibug (jdi-locals (jdibug-jdi jdibug))))
-      (jdibug-refresh-frames-buffer jdibug)
-      (jdibug-info "jdibug-refresh-locals-buffer-now done"))))
+	  (let ((tree (jdibug-locals-tree jdibug)))
+		(if tree
+			(tree-widget-dynamic-refresh tree)
+		  (kill-all-local-variables)
+		  (let ((inhibit-read-only t))
+			(erase-buffer))
+		  (tree-mode)
+		  (local-set-key "s" 'jdibug-node-tostring)
+		  (jdibug-info "making the locals tree")
+		  (setf (jdibug-locals-tree jdibug)
+				(tree-mode-insert (jdibug-make-values-tree jdibug (jdi-locals (jdibug-jdi jdibug)))))
+		  ;; default to open it the first time 
+		  (widget-apply-action (jdibug-locals-tree jdibug)))
+
+		(jdibug-refresh-frames-buffer jdibug)
+		(jdibug-info "jdibug-refresh-locals-buffer-now done")))))
 
 (defun jdibug-refresh-frames-buffer (jdibug)
   (jdibug-info "jdibug-refresh-frames-buffer, frames=%d" (length (jdi-frames (jdibug-jdi jdibug-this))))
@@ -488,6 +521,7 @@ jdibug-source-paths will be ignored if this is set to t."
 		(delete-overlay (jdibug-breakpoint-overlay bp))))
 	  (jdibug-breakpoints jdibug-this))
     (setf (jdibug-breakpoints jdibug-this) nil)
+	(setf (jdibug-locals-tree jdibug-this) nil)
     (if (not (jdibug-connected-p))
 	(message "JDIbug already disconnected")
       (jdi-disconnect (jdibug-jdi jdibug-this))
@@ -565,11 +599,11 @@ jdibug-source-paths will be ignored if this is set to t."
 
 (defun jdibug-send-step (depth)
   (mapc (lambda (buffer) 
-	  (with-current-buffer buffer
-	    (let ((inhibit-read-only t))
-	      (erase-buffer)
-	      (insert "not suspended"))))
-	(list (jdibug-locals-buffer jdibug-this) (jdibug-frames-buffer jdibug-this)))
+		  (with-current-buffer buffer
+			(let ((inhibit-read-only t))
+			  (erase-buffer)
+			  (insert "not suspended"))))
+		(list (jdibug-frames-buffer jdibug-this)))
   (if (jdibug-current-line-overlay jdibug-this)
       (delete-overlay (jdibug-current-line-overlay jdibug-this)))
   (if (null (jdi-suspended-thread-id (jdibug-jdi jdibug-this)))
@@ -591,11 +625,11 @@ jdibug-source-paths will be ignored if this is set to t."
 (defun jdibug-resume ()
   (interactive)
   (mapc (lambda (buffer) 
-	  (with-current-buffer buffer
-	    (let ((inhibit-read-only t))
-	      (erase-buffer)
-	      (insert "not suspended"))))
-	(list (jdibug-locals-buffer jdibug-this) (jdibug-frames-buffer jdibug-this)))
+		  (with-current-buffer buffer
+			(let ((inhibit-read-only t))
+			  (erase-buffer)
+			  (insert "not suspended"))))
+		(list (jdibug-frames-buffer jdibug-this)))
   (if (jdibug-current-line-overlay jdibug-this)
       (delete-overlay (jdibug-current-line-overlay jdibug-this)))
   (ado ()
