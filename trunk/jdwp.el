@@ -253,7 +253,7 @@ commands for around 9000 classes")
 				(,jdwp-tag-thread       (:value vec (eval jdwp-object-id-size)))
 				(,jdwp-tag-thread-group (:value vec (eval jdwp-object-id-size)))
 				(,jdwp-tag-class-loader (:value vec (eval jdwp-object-id-size)))
-				(,jdwp-tag-object       (:value vec (eval jdwp-object-id-size))))))
+				(,jdwp-tag-class-object (:value vec (eval jdwp-object-id-size))))))
 
 (setq jdwp-arrayregion-header-spec
       '((:type    u8)
