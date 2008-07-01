@@ -704,6 +704,9 @@
 		   (jdi-value-resolve-string jdi value))
 		  ((equal (jdi-value-type value) jdwp-tag-boolean)
 		   (setf (jdi-value-string value) (if (= 0 (jdi-value-value value)) "false" "true")))
+		  ((equal (jdi-value-type value) jdwp-tag-object)
+		   ;; TODO: put in the class name
+		   (setf (jdi-value-string value) "class"))
 		  (t 
 		   (jdi-error "fixme: do not know how to print value of type:%s name:%s" (jdi-value-type value) (jdi-value-name value))
 		   (setf (jdi-value-string value) "...")))))
