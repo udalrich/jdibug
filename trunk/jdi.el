@@ -704,7 +704,7 @@
 		   (jdi-value-resolve-string jdi value))
 		  ((equal (jdi-value-type value) jdwp-tag-boolean)
 		   (setf (jdi-value-string value) (if (= 0 (jdi-value-value value)) "false" "true")))
-		  ((equal (jdi-value-type value) jdwp-tag-object)
+		  ((equal (jdi-value-type value) jdwp-tag-class-object)
 		   ;; TODO: put in the class name
 		   (setf (jdi-value-string value) "class"))
 		  (t 
