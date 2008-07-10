@@ -51,6 +51,9 @@
   ;; hash table with the class-id as the key and jdi-class as the value
   classes 
 
+  ;; hash table with the object-id as the key and the class as the value
+  objects
+
   ;; the current thread-id that have suspended, will be set after a breakpoint
   ;; or step event, this is used for the step events that we will send over
   suspended-thread-id
@@ -257,6 +260,7 @@
 			(jdi-trace "capabilities:%s" (car ado-last-return-value))
 			(jdi-info "getting classes")
 			(jdi-get-classes jdi)
+			(setf (jdi-objects jdi) (make-hash-table :test 'equal))
 			;; 			(jdi-info "getting top level threads")
 			;; 			(jdi-get-top-level-thread-groups jdi)
 			(jdi-info "setting event handlers")
@@ -442,6 +446,7 @@
   (let ((jdi (jdwp-get jdwp 'jdi)))
     (jdi-info "jdi-handle-vm-death")
     (setf (jdi-classes jdi) nil)
+	(setf (jdi-objects jdi) nil)
     (setf (jdi-thread-groups jdi) nil)
     (setf (jdi-breakpoints jdi) nil)
     (setf (jdi-breakpoint-requests jdi) nil)
@@ -455,6 +460,7 @@
 
 (defun jdi-disconnect (jdi)
   (setf (jdi-classes jdi) nil)
+  (setf (jdi-objects jdi) nil)
   (setf (jdi-thread-groups jdi) nil)
   (setf (jdi-breakpoints jdi) nil)
   (setf (jdi-breakpoint-requests jdi) nil)
@@ -746,21 +752,39 @@ named field-name, and call func with (jdi value field-value) after that."
 							 (:arguments . 0)
 							 (:options . 0)))))))
 
+(defun jdi-objects-find-by-id (jdi object-id)
+  "Return the jdi-class for this object-id"
+  (gethash object-id (jdi-objects jdi)))
+
 (defun jdi-value-resolve-ref-type (jdi value)
   (unless (equal (jdi-value-value value) [0 0 0 0 0 0 0 0])
-    (jdi-info "jdi-value-resolve-ref-type:%s" (jdi-value-name value))
-    (ado (jdi value)
-      (setf (jdi-value-has-children-p value) t)
-      (jdwp-send-command (jdi-jdwp jdi) "reference-type" `((:object . ,(jdi-value-value value))))
-      (let* ((reply (car ado-last-return-value))
-			 (class (jdi-classes-find-by-id jdi (bindat-get-field reply :type-id))))
-		(ado (jdi value class)
-		  (setf (jdi-value-class value) class)
-		  (jdi-class-resolve-parent jdi class)
-		  (let ((set-string-func (jdi-value-custom-set-strings-find jdi value)))
-			(if set-string-func
-				(funcall set-string-func jdi value)
-			  (setf (jdi-value-string value) (jdi-class-name class)))))))))
+	(let ((class (jdi-objects-find-by-id jdi (jdi-value-value value))))
+	  (if class
+		  ;; we already have the class information in the cache for this object
+		  ;; do not need to query again
+		  (progn
+			(setf (jdi-value-class value) class)
+			(let ((set-string-func (jdi-value-custom-set-strings-find jdi value)))
+			  (if set-string-func
+				  (funcall set-string-func jdi value)
+				(setf (jdi-value-string value) (jdi-class-name class)))))
+
+		;; we do not have the class for this value, query it and get all the parents
+		;; of the class
+		(jdi-info "jdi-value-resolve-ref-type:%s" (jdi-value-name value))
+		(ado (jdi value)
+		  (setf (jdi-value-has-children-p value) t)
+		  (jdwp-send-command (jdi-jdwp jdi) "reference-type" `((:object . ,(jdi-value-value value))))
+		  (let* ((reply (car ado-last-return-value))
+				 (class (jdi-classes-find-by-id jdi (bindat-get-field reply :type-id))))
+			(ado (jdi value class)
+			  (setf (jdi-value-class value) class)
+			  (puthash (jdi-value-value value) class (jdi-objects jdi))
+			  (jdi-class-resolve-parent jdi class))
+			(let ((set-string-func (jdi-value-custom-set-strings-find jdi value)))
+			  (if set-string-func
+				  (funcall set-string-func jdi value)
+				(setf (jdi-value-string value) (jdi-class-name class))))))))))
 
 (defun jdi-value-resolve-array (jdi value)
   (ado (jdi value)
