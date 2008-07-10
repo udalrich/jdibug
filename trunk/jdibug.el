@@ -412,7 +412,6 @@ jdibug-source-paths will be ignored if this is set to t."
 (defun jdibug-refresh-locals-buffer-now (jdibug)
   (jdibug-info "jdibug-refresh-locals-buffer-now")
   (ado (jdibug)
-    (jdi-locals-refresh (jdibug-jdi jdibug))
     (with-current-buffer (jdibug-locals-buffer jdibug)
 	  (let ((tree (jdibug-locals-tree jdibug)))
 		(if tree
@@ -634,7 +633,7 @@ jdibug-source-paths will be ignored if this is set to t."
   (if (jdibug-current-line-overlay jdibug-this)
       (delete-overlay (jdibug-current-line-overlay jdibug-this)))
   (ado ()
-    (jdwp-send-command (jdi-jdwp (jdibug-jdi jdibug-this)) "resume" nil)
+	(jdi-resume jdi)
     (run-hooks 'jdibug-resumed-hook)
     (message "JDIbug resumed")))
 
