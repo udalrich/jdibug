@@ -85,6 +85,11 @@ jdibug-source-paths will be ignored if this is set to t."
   :group 'jdibug
   :type 'string)
 
+(defcustom jdibug-breakpoints-buffer-name "*JDIbug-Breakpoints*"
+  "Name of the buffer to display the list of breakpoints."
+  :group 'jdibug
+  :type 'string)
+
 (defvar jdibug-breakpoint-hit-hook nil
   "Hook to run when a breakpoint is hit.")
 
@@ -112,6 +117,7 @@ jdibug-source-paths will be ignored if this is set to t."
   locals-tree
   frames-buffer
   breakpoints ;; list of jdibug-breakpoint
+  breakpoints-buffer
 
   ;; when the user steps through quickly, do not bother getting the locals from the debuggee
   locals-update-timer)
@@ -121,6 +127,12 @@ jdibug-source-paths will be ignored if this is set to t."
   line-number
   status ;; one of 'unresolved 'enabled 'disabled
   overlay)
+
+(defun jdibug-breakpoint-class-name (bp)
+  (let ((buf (jdibug-breakpoint-source-file bp)))
+	(setf buf (replace-regexp-in-string ".*/" "" buf))
+	(setf buf (replace-regexp-in-string ".java$" "" buf))
+	buf))
 
 (defvar jdibug-this (make-jdibug)
   "The current instance of jdibug, we can only have one jdibug running.")
@@ -154,6 +166,9 @@ jdibug-source-paths will be ignored if this is set to t."
 			  (setf (jdibug-threads-buffer jdibug-this) (get-buffer-create jdibug-threads-buffer-name))
 			  (setf (jdibug-locals-buffer jdibug-this) (get-buffer-create jdibug-locals-buffer-name))
 			  (setf (jdibug-frames-buffer jdibug-this) (get-buffer-create jdibug-frames-buffer-name))
+			  (setf (jdibug-breakpoints-buffer jdibug-this) (get-buffer-create jdibug-breakpoints-buffer-name))
+			  (with-current-buffer (jdibug-breakpoints-buffer jdibug-this)
+				(toggle-read-only 1))
 			  (jdibug-refresh-threads-buffer jdibug-this)
   			  (message "JDIbug connecting...done in %s seconds"
   					   (float-time (time-subtract (current-time) start-time))))))))))
@@ -533,26 +548,27 @@ jdibug-source-paths will be ignored if this is set to t."
 
 (defun jdibug-set-breakpoint (jdibug bp)
   (let ((source-file (jdibug-breakpoint-source-file bp))
-	(line-number (jdibug-breakpoint-line-number bp))
-	(jdi         (jdibug-jdi jdibug)))
+		(line-number (jdibug-breakpoint-line-number bp))
+		(jdi         (jdibug-jdi jdibug)))
     (message "JDIbug setting breakpoint...")
     (ado (jdibug jdi source-file line-number bp)
       (if (not (jdi-file-in-source-paths-p jdi source-file))
-	  (message "JDIbug setting breakpoint...file not in source path!")
-	(jdi-set-breakpoint jdi source-file line-number)
-	(let ((le (jdi-get-last-error jdi)))
-	  (cond ((equal le 'no-code-at-line)
-		 (message "JDIbug setting breakpoint...No code at line!"))
-		((equal le 'not-loaded)
-		 (message "JDIbug setting breakpoint...breakpoint will be set when class is loaded")
-		 (setf (jdibug-breakpoint-status bp) 'unresolved)
-		 (push bp (jdibug-breakpoints jdibug))
-		 (jdibug-breakpoint-update bp))
-		(t 
-		 (message "JDIbug setting breakpoint...done")
-		 (setf (jdibug-breakpoint-status bp) 'enabled)
-		 (push bp (jdibug-breakpoints jdibug))
-		 (jdibug-breakpoint-update bp))))))))
+		  (message "JDIbug setting breakpoint...file not in source path!")
+		(jdi-set-breakpoint jdi source-file line-number)
+		(let ((le (jdi-get-last-error jdi)))
+		  (cond ((equal le 'no-code-at-line)
+				 (message "JDIbug setting breakpoint...No code at line!"))
+				((equal le 'not-loaded)
+				 (message "JDIbug setting breakpoint...breakpoint will be set when class is loaded")
+				 (setf (jdibug-breakpoint-status bp) 'unresolved)
+				 (push bp (jdibug-breakpoints jdibug))
+				 (jdibug-breakpoint-update bp))
+				(t 
+				 (message "JDIbug setting breakpoint...done")
+				 (setf (jdibug-breakpoint-status bp) 'enabled)
+				 (push bp (jdibug-breakpoints jdibug))
+				 (jdibug-breakpoint-update bp))))))))
+
 
 (defun jdibug-disable-breakpoint (jdibug bp)
   (ado (jdibug bp)
@@ -561,9 +577,17 @@ jdibug-source-paths will be ignored if this is set to t."
     (jdibug-breakpoint-update bp)
     (message "breakpoint disabled")))
 
+(defun jdibug-enable-breakpoint (jdibug bp)
+  (ado (jdibug bp)
+    (jdi-set-breakpoint (jdibug-jdi jdibug) (jdibug-breakpoint-source-file bp) (jdibug-breakpoint-line-number bp))
+    (setf (jdibug-breakpoint-status bp) 'enabled)
+    (jdibug-breakpoint-update bp)
+    (message "breakpoint enabled")))
+  
 (defun jdibug-remove-breakpoint (jdibug bp)
   (setf (jdibug-breakpoints jdibug) (delete bp (jdibug-breakpoints jdibug)))
   (delete-overlay (jdibug-breakpoint-overlay bp))
+  (jdibug-refresh-breakpoints-buffer jdibug)
   (message "breakpoint removed"))
 
 (defun jdibug-toggle-breakpoint ()
@@ -583,6 +607,7 @@ jdibug-source-paths will be ignored if this is set to t."
 	   (jdibug-set-breakpoint jdibug-this (make-jdibug-breakpoint :source-file source-file :line-number line-number))))))
 
 (defun jdibug-breakpoint-update (bp)
+  (jdibug-refresh-breakpoints-buffer jdibug-this)
   (let ((buffer (find-if (lambda (buf)
 			   (string= (buffer-file-name buf) (jdibug-breakpoint-source-file bp)))
 			 (buffer-list))))
@@ -599,6 +624,33 @@ jdibug-source-paths will be ignored if this is set to t."
 			  'jdibug-breakpoint-unresolved)
 			 ((equal (jdibug-breakpoint-status bp) 'disabled)
 			  'jdibug-breakpoint-disabled))))))
+
+(defun jdibug-refresh-breakpoints-buffer (jdibug)
+  (with-current-buffer (jdibug-breakpoints-buffer jdibug)
+	(let ((inhibit-read-only t))
+	  (erase-buffer)
+	  (let ((i 1))
+		;; the breakpoints are added in reverse order, so in order to display the first one added first, we reverse it here
+		(dolist (bp (reverse (jdibug-breakpoints jdibug)))
+		  (let ((cb (widget-create 
+					 'checkbox 
+					 :jdibug-breakpoint bp
+					 :jdibug jdibug)))
+			(if (equal (jdibug-breakpoint-status bp) 'enabled)
+				(widget-apply-action cb))
+			(widget-put cb :action
+						(lambda (widget &rest ignore)
+						  (let ((bp (widget-get widget :jdibug-breakpoint)))
+							(if (equal (jdibug-breakpoint-status bp) 'enabled)
+								(progn
+								  (message ":action disable breakpoint")
+								  (jdibug-disable-breakpoint jdibug-this bp))
+							  (message ":action enable breakpoint")
+							  (jdibug-enable-breakpoint jdibug-this bp))))))
+		  (insert (format " %2d. %s:%d\n" i (jdibug-breakpoint-class-name bp) (jdibug-breakpoint-line-number bp)))
+		  (incf i)))
+	  (use-local-map widget-keymap)
+	  (widget-setup))))
 
 (defun jdibug-send-step (depth)
   (mapc (lambda (buffer) 
@@ -657,16 +709,18 @@ jdibug-source-paths will be ignored if this is set to t."
   (end-of-buffer)
   (split-window-horizontally)
   (other-window 1)
-  (switch-to-buffer jdibug-frames-buffer-name)
+  (switch-to-buffer jdibug-breakpoints-buffer-name)
   (set-window-dedicated-p (get-buffer-window (current-buffer)) t)
   (other-window 1))
 
 (defun jdibug-undebug-view ()
   (interactive)
   (let ((localswin (get-buffer-window jdibug-locals-buffer-name t))
-		(frameswin (get-buffer-window jdibug-frames-buffer-name t)))
+		(frameswin (get-buffer-window jdibug-frames-buffer-name t))
+		(breakpointswin (get-buffer-window jdibug-breakpoints-buffer-name t)))
 	(if localswin (delete-window localswin))
-	(if frameswin (delete-window frameswin))))
+	(if frameswin (delete-window frameswin))
+	(if breakpointswin (delete-window breakpointswin))))
 
 (add-hook 'jdibug-breakpoint-hit-hook 'jdibug-debug-view)
 (add-hook 'jdibug-detached-hook 'jdibug-undebug-view)
