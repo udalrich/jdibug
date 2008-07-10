@@ -956,7 +956,7 @@ named field-name, and call func with (jdi value field-value) after that."
       (jdwp-send-step (jdi-jdwp jdi) depth tid)
       (jdwp-send-command (jdi-jdwp jdi) "resume" nil))))
 
-(defun jdi-resume (jdi depth)
+(defun jdi-resume (jdi)
   (setf (jdi-suspended-thread-id jdi) nil)
   (setf (jdi-current-location jdi) nil)
   (setf (jdi-frames jdi) nil)

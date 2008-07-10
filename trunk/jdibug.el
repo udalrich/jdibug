@@ -633,7 +633,7 @@ jdibug-source-paths will be ignored if this is set to t."
   (if (jdibug-current-line-overlay jdibug-this)
       (delete-overlay (jdibug-current-line-overlay jdibug-this)))
   (ado ()
-	(jdi-resume jdi)
+	(jdi-resume (jdibug-jdi jdibug-this))
     (run-hooks 'jdibug-resumed-hook)
     (message "JDIbug resumed")))
 
