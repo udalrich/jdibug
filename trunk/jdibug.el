@@ -90,6 +90,9 @@ jdibug-source-paths will be ignored if this is set to t."
   :group 'jdibug
   :type 'string)
 
+(defvar jdibug-connected-hook nil
+  "Hook to run when we are connected to the debuggee.")
+
 (defvar jdibug-breakpoint-hit-hook nil
   "Hook to run when a breakpoint is hit.")
 
@@ -171,7 +174,8 @@ jdibug-source-paths will be ignored if this is set to t."
 				(toggle-read-only 1))
 			  (jdibug-refresh-threads-buffer jdibug-this)
   			  (message "JDIbug connecting...done in %s seconds"
-  					   (float-time (time-subtract (current-time) start-time))))))))))
+  					   (float-time (time-subtract (current-time) start-time)))
+			  (run-hooks 'jdibug-connected-hook))))))))
 
 (defun jdibug-have-class-source-p (jdibug class)
   (let ((file-name (jdi-class-signature-to-source (jdibug-jdi jdibug-this) (jdi-class-signature class))))
@@ -722,7 +726,7 @@ jdibug-source-paths will be ignored if this is set to t."
 	(if frameswin (delete-window frameswin))
 	(if breakpointswin (delete-window breakpointswin))))
 
-(add-hook 'jdibug-breakpoint-hit-hook 'jdibug-debug-view)
+(add-hook 'jdibug-connected-hook 'jdibug-debug-view)
 (add-hook 'jdibug-detached-hook 'jdibug-undebug-view)
 
 ;; Until when we have our own minor mode, we put it into jde-mode-map
