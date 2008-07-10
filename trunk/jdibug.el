@@ -314,7 +314,7 @@ jdibug-source-paths will be ignored if this is set to t."
 		;; open the tree back again
 		(widget-apply-action tree)
 		(tree-widget-dynamic-reopen (jdibug-locals-tree jdibug)))))
-  nil)
+  (list `(item :value "loading...")))
 
 (defun jdibug-expand-value-node (tree)
   "Expander function on any other expandable nodes in the locals tree."
