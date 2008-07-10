@@ -435,6 +435,7 @@ jdibug-source-paths will be ignored if this is set to t."
   (jdibug-info "jdibug-refresh-frames-buffer, frames=%d" (length (jdi-frames (jdibug-jdi jdibug-this))))
   (let ((jdi (jdibug-jdi jdibug-this)))
     (ado (jdibug jdi)
+      (jdi-resolve-frames jdi (jdi-suspended-thread-id jdi))
       (jdibug-trace "associate the locations with their classes")
       (dolist (frame (jdi-frames jdi))
 	(let* ((location (jdi-frame-location frame))
