@@ -181,14 +181,21 @@ jdibug-source-paths will be ignored if this is set to t."
   (let ((file-name (jdi-class-signature-to-source (jdibug-jdi jdibug-this) (jdi-class-signature class))))
     (file-exists-p file-name)))
 
+(defun jdibug-find-buffer (file-name)
+  "Return the buffer that is viewing this file."
+  (catch 'found 
+	(dolist (buf (buffer-list))
+	  (if (equal file-name (buffer-file-name buf))
+		  (throw 'found buf)))))
+
 (defun jdibug-goto-location (jdibug class location)
   (jdibug-info "jdibug-goto-location:%s:%s" (jdi-class-name class) location)
   (let* ((jdi (jdibug-jdi jdibug-this))
 	 (file-name (jdi-class-signature-to-source jdi (jdi-class-signature class)))
 	 (line-number (jdi-location-line-number location))
-	 (buffer-name (replace-regexp-in-string ".*/" "" file-name))
+	 (buffer-name (jdibug-find-buffer file-name))
 	 (win (get-buffer-window buffer-name t)))
-    (jdibug-info "after assignment")
+    (jdibug-info "going to file-name:%s buffer-name:%s" file-name buffer-name)
     (if win
 	(let ((frame (window-frame win)))
 	  (jdibug-info "raise-frame")
