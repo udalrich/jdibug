@@ -766,6 +766,7 @@ named field-name, and call func with (jdi value field-value) after that."
 		  ;; do not need to query again
 		  (progn
 			(setf (jdi-value-class value) class)
+			(setf (jdi-value-has-children-p value) t)
 			(let ((set-string-func (jdi-value-custom-set-strings-find jdi value)))
 			  (if set-string-func
 				  (funcall set-string-func jdi value)
