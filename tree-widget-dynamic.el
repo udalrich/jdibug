@@ -99,21 +99,22 @@ Return the tag list with the same depth."
 
 (defun tree-widget-dynamic-reopen (tree &optional path)
   "Reopen a tree according to the saved path."
-  (if (null path)
-	  (setq path (widget-get tree :opened-path)))
-  (tree-widget-dynamic-info "tree-widget-dynamic-reopen, children=%s, args=%d, path=%s, cdr path=%s" 
-							(length (widget-get tree :children)) 
-							(length (widget-get tree :args)) 
-							path
-							(cdr path))
-  (when (cdr path)
-	(if (not (widget-get tree :open))
-		(progn
-		  (tree-widget-dynamic-trace "widget is closed, opening:%s" tree)
-		  (widget-apply-action tree))
-	  (dolist (opened (cdr path))
-		(let ((child (tree-widget-dynamic-find-child tree (car opened))))
-		  (tree-widget-dynamic-reopen child opened))))))
+  (if tree
+	  (if (null path)
+		  (setq path (widget-get tree :opened-path)))
+	(tree-widget-dynamic-info "tree-widget-dynamic-reopen, children=%s, args=%d, path=%s, cdr path=%s" 
+							  (length (widget-get tree :children)) 
+							  (length (widget-get tree :args)) 
+							  path
+							  (cdr path))
+	(when (cdr path)
+	  (if (not (widget-get tree :open))
+		  (progn
+			(tree-widget-dynamic-trace "widget is closed, opening:%s" tree)
+			(widget-apply-action tree))
+		(dolist (opened (cdr path))
+		  (let ((child (tree-widget-dynamic-find-child tree (car opened))))
+			(tree-widget-dynamic-reopen child opened)))))))
 
 (defun tree-widget-dynamic-refresh (tree)
   (tree-widget-dynamic-info "tree-widget-dynamic-refresh")
