@@ -728,12 +728,11 @@ jdibug-source-paths will be ignored if this is set to t."
 
 (defun jdibug-undebug-view ()
   (interactive)
-  (let ((localswin (get-buffer-window jdibug-locals-buffer-name t))
-		(frameswin (get-buffer-window jdibug-frames-buffer-name t))
-		(breakpointswin (get-buffer-window jdibug-breakpoints-buffer-name t)))
-	(if localswin (delete-window localswin))
-	(if frameswin (delete-window frameswin))
-	(if breakpointswin (delete-window breakpointswin))))
+  (mapc (lambda (buffer)
+		  (let ((win (get-buffer-window buffer t)))
+			(if win (delete-window win)))
+		  (kill-buffer buffer))
+		(list jdibug-locals-buffer-name jdibug-frames-buffer-name jdibug-breakpoints-buffer-name)))
 
 (add-hook 'jdibug-connected-hook 'jdibug-debug-view)
 (add-hook 'jdibug-detached-hook 'jdibug-undebug-view)
