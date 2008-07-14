@@ -173,6 +173,11 @@ jdibug-source-paths will be ignored if this is set to t."
 			  (with-current-buffer (jdibug-breakpoints-buffer jdibug-this)
 				(toggle-read-only 1))
 			  (jdibug-refresh-threads-buffer jdibug-this)
+			  (let ((bps (jdibug-breakpoints jdibug-this)))
+				(setf (jdibug-breakpoints jdibug-this) nil)
+				(mapc (lambda (bp) 
+						(jdibug-set-breakpoint jdibug-this bp))
+					  bps))
   			  (message "JDIbug connecting...done in %s seconds"
   					   (float-time (time-subtract (current-time) start-time)))
 			  (run-hooks 'jdibug-connected-hook))))))))
@@ -242,7 +247,6 @@ jdibug-source-paths will be ignored if this is set to t."
 	    (if (jdibug-breakpoint-overlay bp)
 		(delete-overlay (jdibug-breakpoint-overlay bp))))
 	  (jdibug-breakpoints jdibug-this))
-    (setf (jdibug-breakpoints jdibug-this) nil)
     (message "JDIBUG vm detached")
     (run-hooks 'jdibug-detached-hook)))
 
@@ -552,7 +556,6 @@ jdibug-source-paths will be ignored if this is set to t."
 	    (if (jdibug-breakpoint-overlay bp)
 		(delete-overlay (jdibug-breakpoint-overlay bp))))
 	  (jdibug-breakpoints jdibug-this))
-    (setf (jdibug-breakpoints jdibug-this) nil)
 	(setf (jdibug-locals-tree jdibug-this) nil)
     (if (not (jdibug-connected-p))
 	(message "JDIbug already disconnected")
