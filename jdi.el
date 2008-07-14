@@ -339,7 +339,6 @@
 (defun jdi-locals-refresh (jdi)
   (jdi-info "jdi-locals-refresh, suspended-thread-id:%s, current-location:%s" (jdi-suspended-thread-id jdi) (jdi-current-location jdi))
   (ado (jdi)
-	(jdi-resolve-frames jdi (jdi-suspended-thread-id jdi))
 	(jdi-resolve-locals jdi 
 						(jdi-location-class-id (jdi-current-location jdi))
 						(jdi-location-method-id (jdi-current-location jdi))
