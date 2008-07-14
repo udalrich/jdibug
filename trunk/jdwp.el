@@ -118,6 +118,10 @@ commands for around 9000 classes")
 (defconst jdwp-tag-thread-group 103)
 (defconst jdwp-tag-class-loader 108)
 
+(defconst jdwp-suspend-policy-none 0)
+(defconst jdwp-suspend-policy-event-thread 1)
+(defconst jdwp-suspend-policy-all 2)
+
 (setq jdwp-error-constants
       `((0   none                 "No error has occured.")
 		(10  invalid-thread       "Passed thread is null, is not a valid thread or has exited.")
@@ -888,7 +892,7 @@ commands for around 9000 classes")
 (defun jdwp-send-step (jdwp depth thread)
   (jdwp-trace "jdwp-send-step")
   (let ((data `((:event-kind     . 1)
-				(:suspend-policy . 2)
+				(:suspend-policy . ,jdwp-suspend-policy-all)
 				(:modifiers      . 2)
 				(:modifier       
 				 ((:mod-kind . 10)
