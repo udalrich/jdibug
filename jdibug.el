@@ -717,7 +717,6 @@ jdibug-source-paths will be ignored if this is set to t."
   (other-window 1)
   (switch-to-buffer jdibug-locals-buffer-name)
   (set-window-dedicated-p (get-buffer-window (current-buffer)) t)
-  (end-of-buffer)
   (split-window-horizontally)
   (other-window 1)
   (switch-to-buffer jdibug-breakpoints-buffer-name)
