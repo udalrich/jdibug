@@ -915,8 +915,9 @@ named field-name, and call func with (jdi value field-value) after that."
 
 (defun jdi-class-resolve-parent (jdi class)
   "Get the whole parent hierarchy of this class, stop only after reaching the Object class."
-  (unless (jdi-class-super class)
-    (jdi-info "jdi-class-resolve-parent for %s" (jdi-class-name class))
+  (unless (or (jdi-class-super class)
+			  (string= (jdi-class-signature class) "Ljava/lang/Object;"))
+    (jdi-info "jdi-class-resolve-parent for %s:%s" (jdi-class-signature class) (jdi-class-id class))
     (ado (jdi class)
       (jdwp-send-command (jdi-jdwp jdi) "interfaces" `((:ref-type . ,(jdi-class-id class))))
       (let ((reply (car ado-last-return-value)))
