@@ -229,6 +229,10 @@ jdibug-source-paths will be ignored if this is set to t."
 (defun jdibug-handle-breakpoint (jdi class location)
   (jdibug-info "jdibug-handle-breakpoint")
   (ado (jdi class location)
+	;; for breakpoints, we do the long operation first
+	;; then only we bring jdibug up and show user the location
+	;; this will give the desired (but false) impression
+	;; that jdibug is fast
 	(jdi-resolve-frames jdi (jdi-suspended-thread-id jdi))
 	(jdibug-refresh-locals-buffer jdibug-this)
 	(message "JDIbug: breakpoint hit:%s" location)
@@ -238,8 +242,12 @@ jdibug-source-paths will be ignored if this is set to t."
 (defun jdibug-handle-step (jdi class location)
   (jdibug-info "jdibug-handle-step")
   (ado (jdi class location)
-  	(jdi-resolve-frames jdi (jdi-suspended-thread-id jdi))
+	;; but for stepping, the user is already in jdibug
+	;; and might not be interested in the data in the
+	;; locals browser or the frames buffer
+	;; hence we show it faster
 	(jdibug-goto-location jdibug-this class location)
+  	(jdi-resolve-frames jdi (jdi-suspended-thread-id jdi))
 	(jdibug-refresh-locals-buffer jdibug-this)))
 
 (defun jdibug-handle-detach (jdi)
