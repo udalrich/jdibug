@@ -339,19 +339,20 @@ jdibug-source-paths will be ignored if this is set to t."
   (jdibug-trace "jdibug-expand-locals-node")
   (let* ((jdibug (widget-get tree :jdibug))
 		 (jdi   (jdibug-jdi jdibug)))
-	(ado (jdibug jdi tree)
-	  (jdi-locals-refresh jdi)
-	  (with-current-buffer (jdibug-locals-buffer jdibug)
-		(widget-put tree :args nil)
-		(widget-apply-action tree)
+	(when (jdi-suspended-p jdi)
+	  (ado (jdibug jdi tree)
+		(jdi-locals-refresh jdi)
+		(with-current-buffer (jdibug-locals-buffer jdibug)
+		  (widget-put tree :args nil)
+		  (widget-apply-action tree)
 
-		(widget-put tree :args 
-					(mapcar (lambda (value) (jdibug-make-value-node jdibug value)) 
-							(jdi-locals jdi)))
+		  (widget-put tree :args 
+					  (mapcar (lambda (value) (jdibug-make-value-node jdibug value)) 
+							  (jdi-locals jdi)))
 
-		;; open the tree back again
-		(widget-apply-action tree)
-		(tree-widget-dynamic-reopen (jdibug-locals-tree jdibug)))))
+		  ;; open the tree back again
+		  (widget-apply-action tree)
+		  (tree-widget-dynamic-reopen (jdibug-locals-tree jdibug))))))
   (list `(item :value "loading...")))
 
 (defun jdibug-expand-value-node (tree)
