@@ -295,13 +295,15 @@
 
 (defun jdi-resolve-locals (jdi class-id method-id line-code-index)
   "Make sure debuggee is suspended and jdi-frames is populated."
-  (jdi-info "jdi-resolve-locals:class=%s:method=%s:line-code-index=%s" class-id method-id line-code-index)
-  (unless (jdi-locals jdi)
+  (jdi-info "jdi-resolve-locals:class=%s:method=%s:line-code-index=%s:nframes:%d" class-id method-id line-code-index (length (jdi-frames jdi)))
+  (unless (or (jdi-locals jdi)
+			  (null (jdi-frames jdi)))
 	(ado (jdi) 
 	  (jdwp-send-command (jdi-jdwp jdi) "variable-table" `((:ref-type . ,class-id)
 														   (:method-id . ,method-id)))
 	  (destructuring-bind (reply error id jdwp) ado-last-return-value
-		(unless (= error jdwp-error-absent-information)
+		(unless (or (= error jdwp-error-absent-information)
+					(null (jdi-frames jdi)))
 		  (jdi-trace "variable-table arg-count:%d slots:%d" (bindat-get-field reply :arg-cnt) (bindat-get-field reply :slots))
 		  (setf (jdi-locals jdi) nil)
 		  (let* ((current-frame (car (jdi-frames jdi)))
