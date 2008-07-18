@@ -335,11 +335,12 @@
 
 (defun jdi-locals-refresh (jdi)
   (jdi-info "jdi-locals-refresh, suspended-thread-id:%s, current-location:%s" (jdi-suspended-thread-id jdi) (jdi-current-location jdi))
-  (ado (jdi)
-	(jdi-resolve-locals jdi 
-						(jdi-location-class-id (jdi-current-location jdi))
-						(jdi-location-method-id (jdi-current-location jdi))
-						(jdi-location-line-code-index (jdi-current-location jdi)))))
+  (if (jdi-suspended-p jdi)
+	  (ado (jdi)
+		(jdi-resolve-locals jdi 
+							(jdi-location-class-id (jdi-current-location jdi))
+							(jdi-location-method-id (jdi-current-location jdi))
+							(jdi-location-line-code-index (jdi-current-location jdi))))))
 
 (defun jdi-handle-breakpoint-event (jdwp event)
   (jdi-trace "jdi-handle-breakpoint-event")
@@ -694,7 +695,7 @@
 
 (defun jdi-values-slot-resolve (jdi thread frame values)
   "Resolve a list of top level (not in objects) jdi-values."
-  (jdi-info "jdi-values-slot-resolve")
+  (jdi-info "jdi-values-slot-resolve thread=%s frame=%s" thread frame)
   (let ((data `((:thread . ,thread)
 				(:frame  . ,frame)
 				(:slots  . ,(length values))
@@ -748,6 +749,7 @@
 (defun jdi-value-get-field-value (jdi value field-name func)
   "For object type jdi-value in value, get the value of the field
 named field-name, and call func with (jdi value field-value) after that."
+  (jdi-trace "jdi-value-get-field-value")
   (ado (jdi value field-name func)
     (jdi-class-resolve-parent jdi (jdi-value-class value))
     (jdi-class-resolve-fields jdi (jdi-value-class value))
@@ -1122,6 +1124,7 @@ to populate the jdi-value-values of the jdi-value.")
        (setf (jdi-value-string value) "Boolean.TRUE")))))
 
 (defun jdi-value-custom-set-string-with-size (jdi value)
+  (jdi-trace "jdi-value-custom-set-string-with-size")
   (setf (jdi-value-has-children-p value) t)
   (ado (jdi value)
     (jdi-class-resolve-parent jdi (jdi-value-class value))
