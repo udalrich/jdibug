@@ -203,28 +203,28 @@ jdibug-source-paths will be ignored if this is set to t."
 					   (progn
 						 (find-file file-name)
 						 (jdibug-find-buffer file-name))))
-		 (win (get-buffer-window buffer-name t)))
-		 (jdibug-info "going to file-name:%s buffer-name:%s" file-name buffer-name)
-		 (if win
-			 (let ((frame (window-frame win)))
-			   (jdibug-info "raise-frame")
-			   (make-frame-visible frame)
-			   (raise-frame frame)
-			   (select-frame frame)
-			   (jdibug-info "select-window")
-			   (select-window win)
-			   (with-current-buffer buffer-name
-				 (jdibug-highlight-current-line jdi line-number)))
-		   (if (file-exists-p file-name)
-			   (if line-number
-				   (progn
-					 (if (window-dedicated-p (get-buffer-window (current-buffer)))
-						 (find-file-other-window file-name)
-					   (find-file file-name))
-					 (with-current-buffer buffer-name
-					   (jdibug-highlight-current-line jdi line-number)))
-				 (message "JDIbug class %s does not have line number information" (jdi-class-name class)))
-			 (message "JDIbug file %s not in source path" file-name)))))
+		 (win (if buffer-name (get-buffer-window buffer-name t) nil)))
+	(jdibug-info "going to file-name:%s buffer-name:%s" file-name buffer-name)
+	(if win
+		(let ((frame (window-frame win)))
+		  (jdibug-info "raise-frame")
+		  (make-frame-visible frame)
+		  (raise-frame frame)
+		  (select-frame frame)
+		  (jdibug-info "select-window")
+		  (select-window win)
+		  (with-current-buffer buffer-name
+			(jdibug-highlight-current-line jdi line-number)))
+	  (if (file-exists-p file-name)
+		  (if line-number
+			  (progn
+				(if (window-dedicated-p (get-buffer-window (current-buffer)))
+					(find-file-other-window file-name)
+				  (find-file file-name))
+				(with-current-buffer buffer-name
+				  (jdibug-highlight-current-line jdi line-number)))
+			(message "JDIbug class %s does not have line number information" (jdi-class-name class)))
+		(message "JDIbug file %s not in source path" file-name)))))
 
 (defun jdibug-handle-breakpoint (jdi class location)
   (jdibug-info "jdibug-handle-breakpoint")
