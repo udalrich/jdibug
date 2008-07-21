@@ -131,10 +131,9 @@ jdibug-source-paths will be ignored if this is set to t."
   status ;; one of 'unresolved 'enabled 'disabled
   overlay)
 
-(defun jdibug-breakpoint-class-name (bp)
+(defun jdibug-breakpoint-short-source-file (bp)
   (let ((buf (jdibug-breakpoint-source-file bp)))
 	(setf buf (replace-regexp-in-string ".*/" "" buf))
-	(setf buf (replace-regexp-in-string ".java$" "" buf))
 	buf))
 
 (defvar jdibug-this (make-jdibug)
@@ -171,6 +170,7 @@ jdibug-source-paths will be ignored if this is set to t."
 			  (setf (jdibug-frames-buffer jdibug-this) (get-buffer-create jdibug-frames-buffer-name))
 			  (setf (jdibug-breakpoints-buffer jdibug-this) (get-buffer-create jdibug-breakpoints-buffer-name))
 			  (with-current-buffer (jdibug-breakpoints-buffer jdibug-this)
+				(use-local-map jdibug-breakpoints-mode-map)
 				(toggle-read-only 1))
 			  (jdibug-refresh-threads-buffer jdibug-this)
 			  (let ((bps (jdibug-breakpoints jdibug-this)))
@@ -193,38 +193,53 @@ jdibug-source-paths will be ignored if this is set to t."
 	  (if (equal file-name (buffer-file-name buf))
 		  (throw 'found buf)))))
 
-(defun jdibug-goto-location (jdibug class location)
-  (jdibug-info "jdibug-goto-location:%s:%s" (jdi-class-name class) location)
+(defun jdibug-show-file-and-line-number (jdibug file-name line-number &optional highlight)
+  "Show the buffer containing the file, or open the file if there are no open buffer for this file.
+And position the point at the line number."
+  (jdibug-info "jdibug-show-file-and-line-number:%s:%d" file-name line-number)
   (let* ((jdi (jdibug-jdi jdibug-this))
-		 (file-name (jdi-class-signature-to-source jdi (jdi-class-signature class)))
-		 (line-number (jdi-location-line-number location))
-		 (buffer-name (or 
-					   (jdibug-find-buffer file-name)
-					   (progn
-						 (find-file file-name)
-						 (jdibug-find-buffer file-name))))
-		 (win (if buffer-name (get-buffer-window buffer-name t) nil)))
-	(jdibug-info "going to file-name:%s buffer-name:%s" file-name buffer-name)
+		 (buffer-name (jdibug-find-buffer file-name))
+		 (win (if buffer-name (get-buffer-window buffer-name t) nil))
+		 (frame (if win (window-frame win) nil)))
 	(if win
-		(let ((frame (window-frame win)))
+		;; file is already open in a buffer, just show it
+		(progn
 		  (jdibug-info "raise-frame")
 		  (make-frame-visible frame)
 		  (raise-frame frame)
 		  (select-frame frame)
 		  (jdibug-info "select-window")
 		  (select-window win)
-		  (with-current-buffer buffer-name
-			(jdibug-highlight-current-line jdi line-number)))
+		  (goto-line line-number)
+		  (if highlight
+			  (with-current-buffer buffer-name
+				(jdibug-highlight-current-line jdi line-number))))
+	  ;; file is not open, try to find it
 	  (if (file-exists-p file-name)
 		  (if line-number
 			  (progn
-				(if (window-dedicated-p (get-buffer-window (current-buffer)))
-					(find-file-other-window file-name)
-				  (find-file file-name))
-				(with-current-buffer buffer-name
-				  (jdibug-highlight-current-line jdi line-number)))
+				(catch 'done
+				  (walk-windows (lambda (win)
+								  (when (not (window-dedicated-p win))
+									(select-window win)
+									(find-file file-name)
+									(run-with-idle-timer 0 nil (lambda (win line-number)
+																 (select-window win)
+																 (goto-line line-number))
+														 win line-number)
+									(throw 'done nil)))))
+				(if highlight
+					(with-current-buffer buffer-name
+					  (jdibug-highlight-current-line jdi line-number))))
 			(message "JDIbug class %s does not have line number information" (jdi-class-name class)))
 		(message "JDIbug file %s not in source path" file-name)))))
+
+(defun jdibug-goto-location (jdibug class location)
+  (jdibug-info "jdibug-goto-location:%s:%s" (jdi-class-name class) location)
+  (jdibug-show-file-and-line-number jdibug-this
+									(jdi-class-signature-to-source jdi (jdi-class-signature class))
+									(jdi-location-line-number location)
+									t))
 
 (defun jdibug-handle-breakpoint (jdi class location)
   (jdibug-info "jdibug-handle-breakpoint")
@@ -655,32 +670,54 @@ jdibug-source-paths will be ignored if this is set to t."
 			 ((equal (jdibug-breakpoint-status bp) 'disabled)
 			  'jdibug-breakpoint-disabled))))))
 
+(defvar jdibug-breakpoints-mode-map nil
+  "Local keymap for breakpoints buffer.")
+
+(setq jdibug-breakpoints-mode-map (make-keymap))
+(suppress-keymap jdibug-breakpoints-mode-map t)
+(define-key jdibug-breakpoints-mode-map "e" 'jdibug-breakpoints-toggle)
+(define-key jdibug-breakpoints-mode-map "d" 'jdibug-breakpoints-delete)
+(define-key jdibug-breakpoints-mode-map "\C-m" 'jdibug-breakpoints-goto)
+(define-key jdibug-breakpoints-mode-map [mouse-1] 'jdibug-breakpoints-goto)
+
+(defun jdibug-breakpoints-toggle ()
+  (interactive)
+  (let ((bp (get-text-property (point) 'breakpoint)))
+	(if (equal (jdibug-breakpoint-status bp) 'enabled)
+		(progn
+		  (message ":action disable breakpoint")
+		  (jdibug-disable-breakpoint jdibug-this bp))
+	  (message ":action enable breakpoint")
+	  (jdibug-enable-breakpoint jdibug-this bp))))
+
+(defun jdibug-breakpoints-delete ()
+  (interactive)
+  (message "jdibug-breakpoints-delete"))
+
+(defun jdibug-breakpoints-goto ()
+  (interactive)
+  (let ((bp (get-text-property (point) 'breakpoint)))
+	(if bp
+		(jdibug-show-file-and-line-number jdibug-this
+										  (jdibug-breakpoint-source-file bp)
+										  (jdibug-breakpoint-line-number bp)))))
+
 (defun jdibug-refresh-breakpoints-buffer (jdibug)
   (with-current-buffer (jdibug-breakpoints-buffer jdibug)
-	(let ((inhibit-read-only t))
+	(let* ((fmt "%s %-40s %-20s")
+		   (header (format fmt "  S" "File" "Line"))
+		   (inhibit-read-only t))
 	  (erase-buffer)
-	  (let ((i 1))
-		;; the breakpoints are added in reverse order, so in order to display the first one added first, we reverse it here
-		(dolist (bp (reverse (jdibug-breakpoints jdibug)))
-		  (let ((cb (widget-create 
-					 'checkbox 
-					 :jdibug-breakpoint bp
-					 :jdibug jdibug)))
-			(if (equal (jdibug-breakpoint-status bp) 'enabled)
-				(widget-apply-action cb))
-			(widget-put cb :action
-						(lambda (widget &rest ignore)
-						  (let ((bp (widget-get widget :jdibug-breakpoint)))
-							(if (equal (jdibug-breakpoint-status bp) 'enabled)
-								(progn
-								  (message ":action disable breakpoint")
-								  (jdibug-disable-breakpoint jdibug-this bp))
-							  (message ":action enable breakpoint")
-							  (jdibug-enable-breakpoint jdibug-this bp))))))
-		  (insert (format " %2d. %s:%d\n" i (jdibug-breakpoint-class-name bp) (jdibug-breakpoint-line-number bp)))
-		  (incf i)))
-	  (use-local-map widget-keymap)
-	  (widget-setup))))
+	  (setq header-line-format header)
+	  ;; the breakpoints are added in reverse order, so in order to display the first one added first, we reverse it here
+	  (dolist (bp (reverse (jdibug-breakpoints jdibug)))
+		(let ((str (format (concat fmt "\n")
+						   (cond ((equal (jdibug-breakpoint-status bp) 'enabled) " E")
+								 ((equal (jdibug-breakpoint-status bp) 'unresolved) " P")
+								 (t "  "))
+						   (jdibug-breakpoint-short-source-file bp) (jdibug-breakpoint-line-number bp))))
+		(insert (propertize str 'breakpoint bp)))))
+	(goto-char (point-min))))
 
 (defun jdibug-send-step (depth)
   (mapc (lambda (buffer) 
