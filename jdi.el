@@ -821,11 +821,11 @@ named field-name, and call func with (jdi value field-value) after that."
 			(ado (jdi value class)
 			  (setf (jdi-value-class value) class)
 			  (puthash (jdi-value-value value) class (jdi-objects jdi))
-			  (jdi-class-resolve-parent jdi class))
-			(let ((set-string-func (jdi-value-custom-set-strings-find jdi value)))
-			  (if set-string-func
-				  (funcall set-string-func jdi value)
-				(setf (jdi-value-string value) (jdi-class-name class))))))))))
+			  (jdi-class-resolve-parent jdi class)
+			  (let ((set-string-func (jdi-value-custom-set-strings-find jdi value)))
+				(if set-string-func
+					(funcall set-string-func jdi value)
+				  (setf (jdi-value-string value) (jdi-class-name class)))))))))))
 
 (defun jdi-value-resolve-array (jdi value)
   (ado (jdi value)
