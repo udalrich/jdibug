@@ -812,7 +812,7 @@ named field-name, and call func with (jdi value field-value) after that."
 
 		;; we do not have the class for this value, query it and get all the parents
 		;; of the class
-		(jdi-info "jdi-value-resolve-ref-type:%s" (jdi-value-name value))
+		(jdi-info "jdi-value-resolve-ref-type:%s:%s" (jdi-value-name value) (jdi-value-value value))
 		(ado (jdi value)
 		  (setf (jdi-value-has-children-p value) t)
 		  (jdwp-send-command (jdi-jdwp jdi) "reference-type" `((:object . ,(jdi-value-value value))))
@@ -1060,27 +1060,28 @@ named field-name, and call func with (jdi value field-value) after that."
 	(setf (jdi-value-values value) (append (jdi-value-values value) values))))))
 
 (defun jdi-value-get-array-values (jdi value)
+  (jdi-info "jdi-value-get-array-values")
   (setf (jdi-value-values value)
-	(loop for v from 0 to (- (jdi-value-array-length value) 1)
-	      collect (make-jdi-value :name (format "%s[%d]" (jdi-value-name value) v))))
+		(loop for v from 0 to (- (jdi-value-array-length value) 1)
+			  collect (make-jdi-value :name (format "%s[%d]" (jdi-value-name value) v))))
   (ado (jdi value) (jdwp-send-command (jdi-jdwp jdi) "array-get-values"
-				      `((:array-object . ,(jdi-value-value value))
-					(:first-index . 0)
-					(:length . ,(jdi-value-array-length value))))
+									  `((:array-object . ,(jdi-value-value value))
+										(:first-index . 0)
+										(:length . ,(jdi-value-array-length value))))
     (let* ((reply (car ado-last-return-value))
-	   (array (jdwp-unpack-arrayregion reply)))
+		   (array (jdwp-unpack-arrayregion reply)))
       (jdi-trace "got array-get-values:%s" array)
       (if (= (bindat-get-field array :type) jdwp-tag-object)
-	  (loop for jdi-value in (jdi-value-values value)
-		for value in (bindat-get-field array :value)
-		do
-		(setf (jdi-value-type jdi-value) (bindat-get-field value :value :type))
-		(setf (jdi-value-value jdi-value) (bindat-get-field value :value :u :value)))
-	(loop for jdi-value in (jdi-value-values value)
-	      for value in (bindat-get-field array :value)
-	      do
-	      (setf (jdi-value-type jdi-value) (bindat-get-field array :type))
-	      (setf (jdi-value-value jdi-value) (bindat-get-field value :value)))))))
+		  (loop for jdi-value in (jdi-value-values value)
+				for value in (bindat-get-field array :value)
+				do
+				(setf (jdi-value-type jdi-value) (bindat-get-field value :value :type))
+				(setf (jdi-value-value jdi-value) (bindat-get-field value :value :u :value)))
+		(loop for jdi-value in (jdi-value-values value)
+			  for value in (bindat-get-field array :value)
+			  do
+			  (setf (jdi-value-type jdi-value) (bindat-get-field array :type))
+			  (setf (jdi-value-value jdi-value) (bindat-get-field value :value)))))))
 
 ;;; Customized display and expanders:
 (defvar jdi-value-custom-set-strings nil
