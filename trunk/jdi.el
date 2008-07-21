@@ -232,6 +232,13 @@
 		(ado ()
 		  (jdi-info "connecting")
 		  (jdwp-connect (jdi-jdwp jdi) host port)
+		  (jdwp-set-event-handler (jdi-jdwp jdi) jdwp-event-breakpoint 'jdi-handle-breakpoint-event)
+		  (jdwp-set-event-handler (jdi-jdwp jdi) jdwp-event-single-step 'jdi-handle-step-event)
+		  (jdwp-set-event-handler (jdi-jdwp jdi) jdwp-event-class-prepare 'jdi-handle-class-prepare)
+		  (jdwp-set-event-handler (jdi-jdwp jdi) jdwp-event-class-unload 'jdi-handle-class-unload)
+		  (jdwp-set-event-handler (jdi-jdwp jdi) jdwp-event-vm-start 'jdi-handle-vm-start)
+		  (jdwp-set-event-handler (jdi-jdwp jdi) jdwp-event-vm-death 'jdi-handle-vm-death)
+		  (jdwp-set-event-handler (jdi-jdwp jdi) jdwp-event-thread-start 'jdi-handle-thread-start)
 		  (jdi-get-idsizes jdi)
 		  (progn
 			(mapc (lambda (event)
@@ -262,12 +269,7 @@
 			(setf (jdi-objects jdi) (make-hash-table :test 'equal))
 			;; 			(jdi-info "getting top level threads")
 			;; 			(jdi-get-top-level-thread-groups jdi)
-			(jdi-info "setting event handlers")
-			(jdwp-set-event-handler (jdi-jdwp jdi) jdwp-event-breakpoint 'jdi-handle-breakpoint-event)
-			(jdwp-set-event-handler (jdi-jdwp jdi) jdwp-event-single-step 'jdi-handle-step-event)
-			(jdwp-set-event-handler (jdi-jdwp jdi) jdwp-event-class-prepare 'jdi-handle-class-prepare)
-			(jdwp-set-event-handler (jdi-jdwp jdi) jdwp-event-class-unload 'jdi-handle-class-unload)
-			(jdwp-set-event-handler (jdi-jdwp jdi) jdwp-event-vm-death 'jdi-handle-vm-death)))
+			(jdi-info "setting event handlers")))
       (file-error (setf (jdi-last-error jdi) 'failed-to-connect))))
   )
 
@@ -464,6 +466,13 @@
     (setf (jdwp-handshaked-p jdwp) nil)
 
     (funcall (jdi-detached-handler jdi) jdi)))
+
+(defun jdi-handle-vm-start (jdwp event)
+  (let ((jdi (jdwp-get jdwp 'jdi)))
+    (jdi-info "jdi-handle-vm-start")))
+
+(defun jdi-handle-thread-start (jdwp event)
+  (jdi-info "jdi-handle-thread-start"))
 
 (defun jdi-disconnect (jdi)
   (setf (jdi-classes jdi) nil)
