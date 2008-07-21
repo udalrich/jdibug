@@ -654,21 +654,21 @@ And position the point at the line number."
 (defun jdibug-breakpoint-update (bp)
   (jdibug-refresh-breakpoints-buffer jdibug-this)
   (let ((buffer (find-if (lambda (buf)
-			   (string= (buffer-file-name buf) (jdibug-breakpoint-source-file bp)))
-			 (buffer-list))))
+						   (string= (buffer-file-name buf) (jdibug-breakpoint-source-file bp)))
+						 (buffer-list))))
     (with-current-buffer buffer
       (goto-line (jdibug-breakpoint-line-number bp))
       (if (jdibug-breakpoint-overlay bp)
-	  (delete-overlay (jdibug-breakpoint-overlay bp)))
+		  (delete-overlay (jdibug-breakpoint-overlay bp)))
       (setf (jdibug-breakpoint-overlay bp) (make-overlay (point) (1+ (line-end-position))))
       (overlay-put (jdibug-breakpoint-overlay bp) 'priority 5)
       (overlay-put (jdibug-breakpoint-overlay bp) 'face
-		   (cond ((equal (jdibug-breakpoint-status bp) 'enabled)
-			  'jdibug-breakpoint-enabled)
-			 ((equal (jdibug-breakpoint-status bp) 'unresolved)
-			  'jdibug-breakpoint-unresolved)
-			 ((equal (jdibug-breakpoint-status bp) 'disabled)
-			  'jdibug-breakpoint-disabled))))))
+				   (cond ((equal (jdibug-breakpoint-status bp) 'enabled)
+						  'jdibug-breakpoint-enabled)
+						 ((equal (jdibug-breakpoint-status bp) 'unresolved)
+						  'jdibug-breakpoint-unresolved)
+						 ((equal (jdibug-breakpoint-status bp) 'disabled)
+						  'jdibug-breakpoint-disabled))))))
 
 (defvar jdibug-breakpoints-mode-map nil
   "Local keymap for breakpoints buffer.")
@@ -701,6 +701,13 @@ And position the point at the line number."
 		(jdibug-show-file-and-line-number jdibug-this
 										  (jdibug-breakpoint-source-file bp)
 										  (jdibug-breakpoint-line-number bp)))))
+
+(defun jdibug-breakpoints-jde-mode-hook ()
+  (mapc (lambda (bp)
+		  (jdibug-breakpoint-update bp))
+		(jdibug-breakpoints jdibug-this)))
+
+(add-hook 'jde-mode-hook 'jdibug-breakpoints-jde-mode-hook)
 
 (defun jdibug-refresh-breakpoints-buffer (jdibug)
   (with-current-buffer (jdibug-breakpoints-buffer jdibug)
