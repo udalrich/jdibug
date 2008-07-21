@@ -149,8 +149,8 @@ jdibug-source-paths will be ignored if this is set to t."
 								jdibug-source-paths))
 				(start-time (current-time)))
     (let ((invalid-source-paths (loop for sp in source-paths
-				      when (not (file-exists-p sp)) 
-				      collect sp)))
+									  when (not (file-exists-p sp)) 
+									  collect sp)))
       (if invalid-source-paths
 		  (message "source paths invalid:%s" invalid-source-paths)
 		(lexical-let ((jdi (jdibug-jdi jdibug-this)))
@@ -269,20 +269,20 @@ And position the point at the line number."
   (interactive)
   (ado ()
     (if (jdibug-current-line-overlay jdibug-this)
-	(delete-overlay (jdibug-current-line-overlay jdibug-this)))
+		(delete-overlay (jdibug-current-line-overlay jdibug-this)))
     (mapc (lambda (bp) 
-	    (if (jdibug-breakpoint-overlay bp)
-		(delete-overlay (jdibug-breakpoint-overlay bp))))
-	  (jdibug-breakpoints jdibug-this))
+			(if (jdibug-breakpoint-overlay bp)
+				(delete-overlay (jdibug-breakpoint-overlay bp))))
+		  (jdibug-breakpoints jdibug-this))
     (message "JDIBUG vm detached")
     (run-hooks 'jdibug-detached-hook)))
 
 (defun jdibug-handle-resolved-breakpoint (jdi resolved-breakpoint)
   (jdibug-info "jdibug-handle-resolved-breakpoint")
   (let ((bp (find-if (lambda (bp)
-		       (and (equal (jdibug-breakpoint-source-file bp) (jdi-breakpoint-request-source-file resolved-breakpoint))
-			    (equal (jdibug-breakpoint-line-number bp) (jdi-breakpoint-request-line-number resolved-breakpoint))))
-		     (jdibug-breakpoints jdibug-this))))
+					   (and (equal (jdibug-breakpoint-source-file bp) (jdi-breakpoint-request-source-file resolved-breakpoint))
+							(equal (jdibug-breakpoint-line-number bp) (jdi-breakpoint-request-line-number resolved-breakpoint))))
+					 (jdibug-breakpoints jdibug-this))))
     (setf (jdibug-breakpoint-status bp) 'enabled)
     (jdibug-breakpoint-update bp)
     (message "breakpoint-resolved:%s" resolved-breakpoint)))
@@ -323,14 +323,14 @@ And position the point at the line number."
 
 (defun jdibug-make-thread-group-node (jdibug thread-group)
   (let ((child-group-nodes (mapcar (lambda (ctg) (jdibug-make-thread-group-node jdibug ctg))
-				   (jdi-thread-group-thread-groups thread-group)))
-	(child-thread-nodes (mapcar (lambda (thread) (jdibug-make-thread-node jdibug thread))
-				    (jdi-thread-group-threads thread-group))))
+								   (jdi-thread-group-thread-groups thread-group)))
+		(child-thread-nodes (mapcar (lambda (thread) (jdibug-make-thread-node jdibug thread))
+									(jdi-thread-group-threads thread-group))))
     `(tree-widget
       :node (push-button
-	     :tag 
-	     ,(format "%s (%s)" (jdi-thread-group-name thread-group) (jdi-thread-group-id thread-group))
-	     :format "%[%t%]\n")
+			 :tag 
+			 ,(format "%s (%s)" (jdi-thread-group-name thread-group) (jdi-thread-group-id thread-group))
+			 :format "%[%t%]\n")
       :has-children t
       :open t
       :args ,(append child-group-nodes child-thread-nodes))))
@@ -343,8 +343,8 @@ And position the point at the line number."
 (defun jdibug-make-threads-tree (jdibug)
   `(tree-widget
     :node (push-button
-	   :tag "*"
-	   :format "%[%t%]\n")
+		   :tag "*"
+		   :format "%[%t%]\n")
     :open t
     :has-children t
     :args ,(mapcar (lambda (tg) (jdibug-make-thread-group-node jdibug tg)) (jdi-thread-groups (jdibug-jdi jdibug)))))
@@ -382,30 +382,30 @@ And position the point at the line number."
   "Expander function on any other expandable nodes in the locals tree."
   (jdibug-trace "jdibug-expand-value-node")
   (let* ((value (widget-get tree :jdi-value))
-	 (jdibug (widget-get tree :jdibug))
-	 (jdi   (jdibug-jdi jdibug))
-	 (class (jdi-value-class value)))
+		 (jdibug (widget-get tree :jdibug))
+		 (jdi   (jdibug-jdi jdibug))
+		 (class (jdi-value-class value)))
     (ado (jdibug jdi tree class value)
       (jdibug-trace "Expanding value:%s" value)
       (cond ((= (jdi-value-type value) jdwp-tag-object)
-	     (ado (jdi value class)
-	       (jdi-class-resolve-parent jdi class)
-	       (jdi-class-resolve-fields jdi class)
-	       (setf (jdi-value-values value) nil)
-	       (jdi-value-get-nonstatic-values jdi value)
-	       (jdi-value-get-static-values jdi value)
+			 (ado (jdi value class)
+			   (jdi-class-resolve-parent jdi class)
+			   (jdi-class-resolve-fields jdi class)
+			   (setf (jdi-value-values value) nil)
+			   (jdi-value-get-nonstatic-values jdi value)
+			   (jdi-value-get-static-values jdi value)
 
-	       (let ((expander-func (jdi-value-custom-expanders-find jdi value)))
-		 (if expander-func
-		     (funcall expander-func jdi value)))
+			   (let ((expander-func (jdi-value-custom-expanders-find jdi value)))
+				 (if expander-func
+					 (funcall expander-func jdi value)))
 
-	       (jdi-values-resolve jdi (jdi-value-values value))
-	       (jdibug-info "done resolving values")))
-	    ((= (jdi-value-type value) jdwp-tag-array)
-	     (ado (jdi value)
-	       (jdi-value-get-array-values jdi value)
-	       (jdibug-trace "jdi-values:%s" (jdi-value-values value))
-	       (jdi-values-resolve jdi (jdi-value-values value)))))
+			   (jdi-values-resolve jdi (jdi-value-values value))
+			   (jdibug-info "done resolving values")))
+			((= (jdi-value-type value) jdwp-tag-array)
+			 (ado (jdi value)
+			   (jdi-value-get-array-values jdi value)
+			   (jdibug-trace "jdi-values:%s" (jdi-value-values value))
+			   (jdi-values-resolve jdi (jdi-value-values value)))))
       (jdibug-trace "setting into the tree")
 
       ;; clear the "loading" child and close it
@@ -432,14 +432,14 @@ And position the point at the line number."
 (defun jdibug-make-value-node (jdibug value)
   (if (jdi-value-has-children-p value)
       `(tree-widget
-	:node (push-button
-	       :tag ,(format "%s: %s" (jdi-value-name value) (jdi-value-string value))
-	       :format "%[%t%]\n")
-	:open nil
-	:has-children t
-	:jdi-value ,value
-	:jdibug ,jdibug
-	:expander jdibug-expand-value-node)
+		:node (push-button
+			   :tag ,(format "%s: %s" (jdi-value-name value) (jdi-value-string value))
+			   :format "%[%t%]\n")
+		:open nil
+		:has-children t
+		:jdi-value ,value
+		:jdibug ,jdibug
+		:expander jdibug-expand-value-node)
     `(item 
       :value 
       ,(format "%s: %s" (jdi-value-name value) (jdi-value-string value)))))
@@ -447,8 +447,8 @@ And position the point at the line number."
 (defun jdibug-make-values-tree (jdibug values)
   `(tree-widget-dynamic
     :node (push-button
-	   :tag "Locals"
-	   :format "%[%t%]\n")
+		   :tag "Locals"
+		   :format "%[%t%]\n")
     :open nil
     :has-children t
 	:jdibug ,jdibug
@@ -501,92 +501,92 @@ And position the point at the line number."
     (ado (jdibug jdi)
       (jdibug-trace "associate the locations with their classes")
       (dolist (frame (jdi-frames jdi))
-	(let* ((location (jdi-frame-location frame))
-	       (class (jdi-classes-find-by-id jdi (jdi-location-class-id location))))
-	  (setf (jdi-location-class location) class)))
+		(let* ((location (jdi-frame-location frame))
+			   (class (jdi-classes-find-by-id jdi (jdi-location-class-id location))))
+		  (setf (jdi-location-class location) class)))
 
       (jdibug-trace "resolve the methods for all the classes in the location")
       (dolist (frame (jdi-frames jdi))
-	(jdi-class-resolve-methods jdi (jdi-location-class (jdi-frame-location frame))))
+		(jdi-class-resolve-methods jdi (jdi-location-class (jdi-frame-location frame))))
 
       (jdibug-trace "associate all the locations with their methods")
       (dolist (frame (jdi-frames jdi))
-	(let* ((location (jdi-frame-location frame))
-	       (class (jdi-location-class location))
-	       (method (jdi-methods-find-by-id class
-					       (jdi-location-method-id location))))
-	  (setf (jdi-location-method location) method)))
+		(let* ((location (jdi-frame-location frame))
+			   (class (jdi-location-class location))
+			   (method (jdi-methods-find-by-id class
+											   (jdi-location-method-id location))))
+		  (setf (jdi-location-method location) method)))
 
       (jdibug-trace "resolve the locations for all the methods")
       (dolist (frame (jdi-frames jdi))
-	(jdi-method-resolve-locations jdi (jdi-location-method (jdi-frame-location frame))))
+		(jdi-method-resolve-locations jdi (jdi-location-method (jdi-frame-location frame))))
 
       ;; display it
       (jdibug-trace "now we output the name of the location")
 
       (with-current-buffer (jdibug-frames-buffer jdibug)
-	(let ((inhibit-read-only t))
-	  (erase-buffer)))
+		(let ((inhibit-read-only t))
+		  (erase-buffer)))
 
       (dolist (frame (jdi-frames (jdibug-jdi jdibug-this)))
-	(with-current-buffer (jdibug-frames-buffer jdibug)
-	  (let ((inhibit-read-only t))
-	    (let* ((location (jdi-frame-location frame))
-		   (class (jdi-location-class location))
-		   (method (jdi-location-method location))
-		   (resolved-location (jdi-locations-find-by-line-code-index method
-									     (jdi-location-line-code-index location))))
-	      (if (null class) (jdibug-error "failed to find class of location"))
-	      (if (null method) (jdibug-error "failed to find method of location"))
+		(with-current-buffer (jdibug-frames-buffer jdibug)
+		  (let ((inhibit-read-only t))
+			(let* ((location (jdi-frame-location frame))
+				   (class (jdi-location-class location))
+				   (method (jdi-location-method location))
+				   (resolved-location (jdi-locations-find-by-line-code-index method
+																			 (jdi-location-line-code-index location))))
+			  (if (null class) (jdibug-error "failed to find class of location"))
+			  (if (null method) (jdibug-error "failed to find method of location"))
 
-	      (if (and resolved-location
-		       (jdibug-have-class-source-p jdibug-this class))
-		  (insert-button (format "%s.%s():%s"
-					 (jdi-class-name class)
-					 (jdi-method-name method)
-					 (if resolved-location
-					     (jdi-location-line-number resolved-location)))
-				 'class class
-				 'method method
-				 'location resolved-location
-				 'action (lambda (but) 
-					   (jdibug-goto-location jdibug-this 
-								 (button-get but 'class)
-								 (button-get but 'location)))
-				 'follow-link t)
-		(insert (format "%s.%s()" (jdi-class-name class) (jdi-method-name method))))
-	      (insert "\n"))))))))
+			  (if (and resolved-location
+					   (jdibug-have-class-source-p jdibug-this class))
+				  (insert-button (format "%s.%s():%s"
+										 (jdi-class-name class)
+										 (jdi-method-name method)
+										 (if resolved-location
+											 (jdi-location-line-number resolved-location)))
+								 'class class
+								 'method method
+								 'location resolved-location
+								 'action (lambda (but) 
+										   (jdibug-goto-location jdibug-this 
+																 (button-get but 'class)
+																 (button-get but 'location)))
+								 'follow-link t)
+				(insert (format "%s.%s()" (jdi-class-name class) (jdi-method-name method))))
+			  (insert "\n"))))))))
 
 (defun jdibug-node-tostring ()
   (interactive)
   (let* ((wid (widget-at))
-	 (tree (widget-get wid :parent))
-	 (value (widget-get tree :jdi-value))
-	 (jdi (jdibug-jdi jdibug-this)))
+		 (tree (widget-get wid :parent))
+		 (value (widget-get tree :jdi-value))
+		 (jdi (jdibug-jdi jdibug-this)))
     (if (null value)
-	(message "not an object")
+		(message "not an object")
       (ado (jdi value)
-	(jdi-value-invoke-method jdi value "toString")
-	(let ((object-id (bindat-get-field (car ado-last-return-value) :return-value :u :value)))
-	  (ado (jdi value object-id) 
-	   (jdwp-send-command (jdi-jdwp jdi) "string-value" 
-			      `((:object . ,object-id)))
-	   (let ((reply (car ado-last-return-value)))
-	     (jdibug-trace "tostring-reply:%s" (jdwp-get-string reply :value))
-	     (message "%s" (jdwp-get-string reply :value)))))))))
+		(jdi-value-invoke-method jdi value "toString")
+		(let ((object-id (bindat-get-field (car ado-last-return-value) :return-value :u :value)))
+		  (ado (jdi value object-id) 
+			(jdwp-send-command (jdi-jdwp jdi) "string-value" 
+							   `((:object . ,object-id)))
+			(let ((reply (car ado-last-return-value)))
+			  (jdibug-trace "tostring-reply:%s" (jdwp-get-string reply :value))
+			  (message "%s" (jdwp-get-string reply :value)))))))))
 
 (defun jdibug-disconnect ()
   (interactive)
   (ado ()
     (if (jdibug-current-line-overlay jdibug-this)
-	(delete-overlay (jdibug-current-line-overlay jdibug-this)))
+		(delete-overlay (jdibug-current-line-overlay jdibug-this)))
     (mapc (lambda (bp) 
-	    (if (jdibug-breakpoint-overlay bp)
-		(delete-overlay (jdibug-breakpoint-overlay bp))))
-	  (jdibug-breakpoints jdibug-this))
+			(if (jdibug-breakpoint-overlay bp)
+				(delete-overlay (jdibug-breakpoint-overlay bp))))
+		  (jdibug-breakpoints jdibug-this))
 	(setf (jdibug-locals-tree jdibug-this) nil)
     (if (not (jdibug-connected-p))
-	(message "JDIbug already disconnected")
+		(message "JDIbug already disconnected")
       (jdi-disconnect (jdibug-jdi jdibug-this))
       (message "JDIBUG disconnected")
       (run-hooks 'jdibug-detached-hook))))
@@ -638,18 +638,18 @@ And position the point at the line number."
 (defun jdibug-toggle-breakpoint ()
   (interactive)
   (let* ((source-file (buffer-file-name))
-	 (line-number (line-number-at-pos))
-	 (jdi (jdibug-jdi jdibug-this))
-	 (bp (find-if (lambda (bp) 
-			(and (equal (jdibug-breakpoint-source-file bp) source-file)
-			     (equal (jdibug-breakpoint-line-number bp) line-number)))
-		      (jdibug-breakpoints jdibug-this))))
+		 (line-number (line-number-at-pos))
+		 (jdi (jdibug-jdi jdibug-this))
+		 (bp (find-if (lambda (bp) 
+						(and (equal (jdibug-breakpoint-source-file bp) source-file)
+							 (equal (jdibug-breakpoint-line-number bp) line-number)))
+					  (jdibug-breakpoints jdibug-this))))
     (cond ((and bp (member (jdibug-breakpoint-status bp) (list 'enabled 'unresolved)))
-	   (jdibug-disable-breakpoint jdibug-this bp))
-	  ((and bp (equal (jdibug-breakpoint-status bp) 'disabled))
-	   (jdibug-remove-breakpoint jdibug-this bp))
-	  (t 
-	   (jdibug-set-breakpoint jdibug-this (make-jdibug-breakpoint :source-file source-file :line-number line-number))))))
+		   (jdibug-disable-breakpoint jdibug-this bp))
+		  ((and bp (equal (jdibug-breakpoint-status bp) 'disabled))
+		   (jdibug-remove-breakpoint jdibug-this bp))
+		  (t 
+		   (jdibug-set-breakpoint jdibug-this (make-jdibug-breakpoint :source-file source-file :line-number line-number))))))
 
 (defun jdibug-breakpoint-update (bp)
   (jdibug-refresh-breakpoints-buffer jdibug-this)
