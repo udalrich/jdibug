@@ -661,12 +661,11 @@ commands for around 9000 classes")
 			(if cc (ado-continue cc nil error jdwp id)))
 		(if reply-spec
 			(let ((reply-data   (bindat-unpack reply-spec output 11)))
-			  (jdwp-info "received reply packet for id:%s command:%s len:%s error:%d packet:%s time:%s" 
+			  (jdwp-info "reply id:%5s command:%20s len:%5s error:%1d time:%s" 
 						 id 
 						 (getf protocol :name)
 						 (bindat-get-field packet :length) 
 						 (bindat-get-field packet :error) 
-						 packet 
 						 (float-time (time-subtract (current-time) (cdr (assoc :sent-time command-data)))))
 			  (if cc (ado-continue cc reply-data error jdwp id)))
 		  (if cc (ado-continue cc (substring output 11) error jdwp id))))
