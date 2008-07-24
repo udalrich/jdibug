@@ -790,7 +790,7 @@ named field-name, and call func with (jdi value field-value) after that."
 							 (:class . ,(jdi-class-id class))
 							 (:method-id . ,(jdi-method-id method))
 							 (:arguments . 0)
-							 (:options . 0)))))))
+							 (:options . ,jdwp-invoke-single-threaded)))))))
 
 (defun jdi-objects-find-by-id (jdi object-id)
   "Return the jdi-class for this object-id"
@@ -828,6 +828,7 @@ named field-name, and call func with (jdi value field-value) after that."
 				  (setf (jdi-value-string value) (jdi-class-name class)))))))))))
 
 (defun jdi-value-resolve-array (jdi value)
+  (jdi-info "jdi-value-resolve-array:%s:%s" (jdi-value-name value) (jdi-value-value value))
   (ado (jdi value)
     (setf (jdi-value-has-children-p value) t)
     (jdwp-send-command (jdi-jdwp jdi) "reference-type" `((:object . ,(jdi-value-value value))))
@@ -1136,7 +1137,7 @@ to populate the jdi-value-values of the jdi-value.")
        (setf (jdi-value-string value) "Boolean.TRUE")))))
 
 (defun jdi-value-custom-set-string-with-size (jdi value)
-  (jdi-trace "jdi-value-custom-set-string-with-size")
+  (jdi-trace "jdi-value-custom-set-string-with-size:%s" (jdi-class-name (jdi-value-class value)))
   (setf (jdi-value-has-children-p value) t)
   (ado (jdi value)
     (jdi-class-resolve-parent jdi (jdi-value-class value))
