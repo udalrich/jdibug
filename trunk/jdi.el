@@ -758,6 +758,10 @@
 		   (setf (jdi-value-string value) "class"))
 		  ((equal (jdi-value-type value) jdwp-tag-class-loader)
 		   (setf (jdi-value-string value) "class-loader"))
+		  ((equal (jdi-value-type value) jdwp-tag-thread)
+		   (setf (jdi-value-string value) "thread"))
+		  ((equal (jdi-value-type value) jdwp-tag-thread-group)
+		   (setf (jdi-value-string value) "thread-group"))
 		  (t 
 		   (jdi-error "fixme: do not know how to print value of type:%s name:%s" (jdi-value-type value) (jdi-value-name value))
 		   (setf (jdi-value-string value) "...")))))
