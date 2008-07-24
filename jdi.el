@@ -1100,6 +1100,7 @@ to populate the jdi-value-string of the jdi-value.")
 
 (setq jdi-value-custom-set-strings
       '(("Ljava/lang/Boolean;"    jdi-value-custom-set-string-boolean)
+		("Ljava/lang/Integer;"    jdi-value-custom-set-string-integer)
 		("Ljava/util/Collection;" jdi-value-custom-set-string-with-size)
 		("Ljava/util/Map;"        jdi-value-custom-set-string-with-size)))
 
@@ -1139,6 +1140,13 @@ to populate the jdi-value-values of the jdi-value.")
      (if (equal 0 field-value)
 		 (setf (jdi-value-string value) "Boolean.FALSE")
        (setf (jdi-value-string value) "Boolean.TRUE")))))
+
+(defun jdi-value-custom-set-string-integer (jdi value)
+  (setf (jdi-value-has-children-p value) nil)
+  (jdi-value-get-field-value 
+   jdi value "value"
+   (lambda (jdi value field-value)
+	 (setf (jdi-value-string value) (format "%d" field-value)))))
 
 (defun jdi-value-custom-set-string-with-size (jdi value)
   (jdi-trace "jdi-value-custom-set-string-with-size:%s" (jdi-class-name (jdi-value-class value)))
