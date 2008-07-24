@@ -36,7 +36,7 @@
 ;; Refer to the unit tests near the end of the file for fake usage examples.
 ;; Refer to jdibug for real usage examples. ;^)
 
-;; The module requires elog.el and elunit.el
+;; The module requires elog.el
 
 ;;; Code:
 
@@ -151,9 +151,7 @@
 
 
 ;;; Start of Unit Tests
-(eval-when-compile
-  (require 'elunit)
-
+(when (featurep 'elunit)
   (defvar ado-test-log nil)
   (defvar ado-test-alist nil)
 
