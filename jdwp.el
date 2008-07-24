@@ -28,7 +28,7 @@
 ;; http://java.sun.com/j2se/1.4.2/docs/guide/jpda/jdwp/jdwp-protocol.html
 ;; http://java.sun.com/j2se/1.4.2/docs/guide/jpda/jdwp-spec.html
 
-;; This module requires ado.el, elog.el and elunit.el
+;; This module requires ado.el and elog.el
 
 ;;; Code:
 
@@ -829,9 +829,7 @@ commands for around 9000 classes")
     (setq result (* result (expt 2 exponent)))
     result))
 
-(eval-when-compile
-  (require 'elunit)
-
+(when (featurep 'elunit)
   (defsuite jdwp-suite nil
     :teardown-hook (lambda () (message "done testing")))
 

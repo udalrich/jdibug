@@ -30,7 +30,7 @@
 ;; Look near the end of the file for customizing how special
 ;; objects (ArrayList, HashMap) are displayed in the locals buffer
 
-;; This module requires ado.el, elog.el, elunit.el and jdwp.el
+;; This module requires ado.el, elog.el and jdwp.el
 
 ;;; Code:
 
