@@ -106,7 +106,6 @@ jdibug-source-paths will be ignored if this is set to t."
 (require 'ado)
 (require 'elog)
 (require 'jdi)
-(require 'tree-mode)
 (require 'tree-widget-dynamic)
 
 (elog-make-logger jdibug)
@@ -172,6 +171,10 @@ jdibug-source-paths will be ignored if this is set to t."
 			  (with-current-buffer (jdibug-breakpoints-buffer jdibug-this)
 				(use-local-map jdibug-breakpoints-mode-map)
 				(toggle-read-only 1))
+			  (mapc (lambda (buf)
+					  (with-current-buffer buf
+						(toggle-read-only 1)))
+					(list jdibug-locals-buffer-name jdibug-threads-buffer-name))
 			  (jdibug-refresh-threads-buffer jdibug-this)
 			  (let ((bps (jdibug-breakpoints jdibug-this)))
 				(setf (jdibug-breakpoints jdibug-this) nil)
@@ -354,8 +357,7 @@ And position the point at the line number."
     (kill-all-local-variables)
     (let ((inhibit-read-only t))
       (erase-buffer))
-    (tree-mode)
-    (tree-mode-insert (jdibug-make-threads-tree jdibug))))
+	(widget-create (jdibug-make-threads-tree jdibug))))
 
 (defun jdibug-expand-locals-node (tree)
   "Expander function on the root node in the locals tree."
@@ -484,11 +486,10 @@ And position the point at the line number."
 		  (kill-all-local-variables)
 		  (let ((inhibit-read-only t))
 			(erase-buffer))
-		  (tree-mode)
 		  (local-set-key "s" 'jdibug-node-tostring)
 		  (jdibug-info "making the locals tree")
 		  (setf (jdibug-locals-tree jdibug)
-				(tree-mode-insert (jdibug-make-values-tree jdibug (jdi-locals (jdibug-jdi jdibug)))))
+				(widget-create (jdibug-make-values-tree jdibug (jdi-locals (jdibug-jdi jdibug)))))
 		  ;; default to open it the first time 
 		  (widget-apply-action (jdibug-locals-tree jdibug)))
 
