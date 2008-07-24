@@ -239,6 +239,7 @@
 		  (jdwp-set-event-handler (jdi-jdwp jdi) jdwp-event-vm-start 'jdi-handle-vm-start)
 		  (jdwp-set-event-handler (jdi-jdwp jdi) jdwp-event-vm-death 'jdi-handle-vm-death)
 		  (jdwp-set-event-handler (jdi-jdwp jdi) jdwp-event-thread-start 'jdi-handle-thread-start)
+		  (jdwp-set-event-handler (jdi-jdwp jdi) jdwp-event-thread-end 'jdi-handle-thread-end)
 		  (jdi-get-idsizes jdi)
 		  (progn
 			(mapc (lambda (event)
@@ -473,6 +474,9 @@
 
 (defun jdi-handle-thread-start (jdwp event)
   (jdi-info "jdi-handle-thread-start"))
+
+(defun jdi-handle-thread-end (jdwp event)
+  (jdi-info "jdi-handle-thread-end"))
 
 (defun jdi-disconnect (jdi)
   (setf (jdi-classes jdi) nil)
