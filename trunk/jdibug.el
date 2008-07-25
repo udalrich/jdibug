@@ -237,7 +237,7 @@ And position the point at the line number."
 (defun jdibug-goto-location (jdibug class location)
   (jdibug-info "jdibug-goto-location:%s:%s" (jdi-class-name class) location)
   (jdibug-show-file-and-line-number jdibug-this
-									(jdi-class-signature-to-source jdi (jdi-class-signature class))
+									(jdi-class-signature-to-source (jdibug-jdi jdibug-this) (jdi-class-signature class))
 									(jdi-location-line-number location)
 									t))
 
@@ -776,8 +776,14 @@ And position the point at the line number."
   (interactive)
   (delete-other-windows)
   (split-window-vertically -20)
+
+  (split-window-horizontally -50)
   (other-window 1)
   (switch-to-buffer jdibug-locals-buffer-name)
+  (set-window-dedicated-p (get-buffer-window (current-buffer)) t)
+
+  (other-window 1)
+  (switch-to-buffer jdibug-frames-buffer-name)
   (set-window-dedicated-p (get-buffer-window (current-buffer)) t)
   (split-window-horizontally)
   (other-window 1)
