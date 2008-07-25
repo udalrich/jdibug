@@ -66,7 +66,27 @@ commands for around 9000 classes")
   event-handlers-alist 
 
   ;; an alist with the command id as key and the continuation as value
+  ;;
+  ;; an item will be added everytime we send a command to the debuggee, and 
+  ;; it will be used to find our continuation when we received the reply.
   transactions-alist
+
+  ;; an alist with (command-name . command-data) as the key and the command id (which
+  ;; can be found in transactions-alist as the key
+  ;;
+  ;; when we want to send 10 commands over to the debuggee, if we do it one by one
+  ;; its going to be slow, its because there's some latency between the debuggee replying
+  ;; and emacs giving us the output, hence there's 10 times the latency. So what we do 
+  ;; is that we send the 10 commands (unrelated) together and wait for the 10 replies.
+  ;; BUT, by doing so, we might be sending duplicated commands, maybe two variables in the locals
+  ;; that share the same superclass, but we will be doing the resolving of the superclass
+  ;; twice. For this, whenever we have sent some commands over, and the debuggee have not replied
+  ;; yet, the next time the same command need to be sent, we won't really send it over, we will
+  ;; just wait for the first reply to come in and we will ado-continue both of the continuations.
+  ;;
+  ;; note that this is NOT caching, as if the reply came in, the items will be cleared from this list
+  ;; its up the higher order functions to implement caching.
+  current-commands-alist
 
   ;; place where you can store anything
   plist				 
@@ -625,6 +645,7 @@ commands for around 9000 classes")
     ;;(delete-process (jdwp-process jdwp))
     (setf (jdwp-process jdwp) nil)
     (setf (jdwp-handshaked-p jdwp) nil)
+	(setf (jdwp-current-commands-alist jdwp) nil)
     (setf (jdwp-sent-commands-alist jdwp) nil)))
 
 (defun jdwp-process-sentinel (proc string)
@@ -654,26 +675,28 @@ commands for around 9000 classes")
 		   (command-data (cdr (assoc id (jdwp-sent-commands-alist jdwp))))
 		   (protocol     (jdwp-get-protocol (cdr (assoc :name command-data))))
 		   (reply-spec   (getf protocol :reply-spec))
-		   (cc           (cdr (assoc id (jdwp-transactions-alist jdwp)))))
+		   (ccs          (cdr (assoc id (jdwp-transactions-alist jdwp)))))
       (if (not (= error 0))
 		  (progn
 			(if (member error (list jdwp-error-absent-information 
 									jdwp-error-thread-not-suspended))
 				(jdwp-info "received error:%d:%s for id:%d command:%s" error (jdwp-error-string error) id (getf protocol :name))
 			  (jdwp-error "received error:%d:%s for id:%d command:%s" error (jdwp-error-string error) id (getf protocol :name)))
-			(if cc (ado-continue cc nil error jdwp id)))
+			(if ccs (mapc (lambda (cc) (ado-continue cc nil error jdwp id) ) ccs)))
 		(if reply-spec
 			(let ((reply-data   (bindat-unpack reply-spec output 11)))
-			  (jdwp-info "reply id:%5s command:%20s len:%5s error:%1d time:%s" 
+			  (jdwp-info "reply id:%5s command:%20s time:%-6s len:%5s error:%1d ccs:%d" 
 						 id 
 						 (getf protocol :name)
+						 (float-time (time-subtract (current-time) (cdr (assoc :sent-time command-data))))
 						 (bindat-get-field packet :length) 
-						 (bindat-get-field packet :error) 
-						 (float-time (time-subtract (current-time) (cdr (assoc :sent-time command-data)))))
-			  (if cc (ado-continue cc reply-data error jdwp id)))
-		  (if cc (ado-continue cc (substring output 11) error jdwp id))))
-      (setf (jdwp-sent-commands-alist jdwp) (rassq-delete-all command-data (jdwp-sent-commands-alist jdwp)))
-      (setf (jdwp-transactions-alist jdwp) (rassq-delete-all cc (jdwp-transactions-alist jdwp)))
+						 (bindat-get-field packet :error)
+						 (length ccs))
+			  (if ccs (mapc (lambda (cc) (ado-continue cc reply-data error jdwp id)) ccs)))
+		  (if ccs (mapc (lambda (cc) (ado-continue cc (substring output 11) error jdwp id)) ccs))))
+	  (setf (jdwp-sent-commands-alist jdwp) (rassq-delete-all command-data (jdwp-sent-commands-alist jdwp)))
+      (setf (jdwp-transactions-alist jdwp) (rassq-delete-all ccs (jdwp-transactions-alist jdwp)))
+      (setf (jdwp-current-commands-alist jdwp) (rassq-delete-all id (jdwp-current-commands-alist jdwp)))
       )))
 
 (defun jdwp-process-command (jdwp)
@@ -874,12 +897,30 @@ commands for around 9000 classes")
 							 (:data        . ,data)
 							 (:outdata     . ,outdata)
 							 (:sent-time   . ,(if jdwp-info-flag (current-time) 0))))
-			 (command-packed (bindat-pack jdwp-command-spec command-data)))
-		(push `(,id . ,command-data) (jdwp-sent-commands-alist jdwp))
-		(jdwp-info "sending command [%s] id:%d len:%d data:%s" name id (+ 11 (length outdata)) (jdwp-string-to-hex outdata))
-		(push `(,id . ,(ado-get-cc)) (jdwp-transactions-alist jdwp))
-		(let ((inhibit-eol-conversion t))
-		  (process-send-string (jdwp-process jdwp) command-packed))))))
+			 (command-packed (bindat-pack jdwp-command-spec command-data))
+			 (ongoing-item   (assoc `(,name . ,outdata) (jdwp-current-commands-alist jdwp))))
+		(if ongoing-item
+			(let* ((ongoing-id (cdr ongoing-item))
+				   (transaction-item (assoc ongoing-id (jdwp-transactions-alist jdwp)))
+				   (transaction-cc (cdr transaction-item))
+				   (new-ccs (cons (ado-get-cc) transaction-cc)))
+			  (jdwp-info "command [%s] already ongoing in id:%d" name ongoing-id)
+			  (setf (jdwp-transactions-alist jdwp) (assq-delete-all (car transaction-item) (jdwp-transactions-alist jdwp)))
+			  (push `(,ongoing-id . ,(reverse new-ccs)) (jdwp-transactions-alist jdwp)))
+		  (push `(,id . ,command-data) (jdwp-sent-commands-alist jdwp))
+		  (jdwp-info "sending command [%-20s] id:%-4d len:%-4d data:%s" 
+					 name 
+					 id 
+					 (+ 11 (length outdata)) 
+					 (let ((outstr (jdwp-string-to-hex outdata)))
+					   (if (> (length outstr) 30)
+						   (substring outstr 0 30)
+						 outstr)))
+		  (push `(,id . ,(list (ado-get-cc))) (jdwp-transactions-alist jdwp))
+		  (if (member name (list "methods" "line-table" "reference-type" "superclass" "interfaces" "string-value" "object-get-values"))
+			  (push `((,name . ,outdata) . ,id) (jdwp-current-commands-alist jdwp)))
+		  (let ((inhibit-eol-conversion t))
+			(process-send-string (jdwp-process jdwp) command-packed)))))))
 
 (defun jdwp-class-status-string (status)
   (concat (if (zerop (logand status 1)) nil "[VERIFIED]")

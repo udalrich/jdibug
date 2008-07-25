@@ -241,36 +241,35 @@
 		  (jdwp-set-event-handler (jdi-jdwp jdi) jdwp-event-thread-start 'jdi-handle-thread-start)
 		  (jdwp-set-event-handler (jdi-jdwp jdi) jdwp-event-thread-end 'jdi-handle-thread-end)
 		  (jdi-get-idsizes jdi)
-		  (progn
-			(mapc (lambda (event)
-					(jdwp-send-command (jdi-jdwp jdi) "set" 
-									   `((:event-kind . ,event)
-										 (:suspend-policy . ,jdwp-suspend-policy-none)
-										 (:modifiers . 0))))
-				  (list jdwp-event-class-prepare
-						jdwp-event-class-unload
-						jdwp-event-thread-start
-						jdwp-event-thread-end
-						jdwp-event-vm-death))
+		  (mapc (lambda (event)
+				  (jdwp-send-command (jdi-jdwp jdi) "set" 
+									 `((:event-kind . ,event)
+									   (:suspend-policy . ,jdwp-suspend-policy-none)
+									   (:modifiers . 0))))
+				(list jdwp-event-class-prepare
+					  jdwp-event-class-unload
+					  jdwp-event-thread-start
+					  jdwp-event-thread-end
+					  jdwp-event-vm-death))
 
-			(jdwp-send-command (jdi-jdwp jdi) "set" `((:event-kind . ,jdwp-event-exception) 
-													  (:suspend-policy . ,jdwp-suspend-policy-none) 
-													  (:modifiers . 1)
-													  (:modifier
-													   ((:mod-kind . 8)
-														(:exception . [0 0 0 0 0 0 0 0])
-														(:caught . 0)
-														(:uncaught . 1)))))
+		  (jdwp-send-command (jdi-jdwp jdi) "set" `((:event-kind . ,jdwp-event-exception) 
+													(:suspend-policy . ,jdwp-suspend-policy-none) 
+													(:modifiers . 1)
+													(:modifier
+													 ((:mod-kind . 8)
+													  (:exception . [0 0 0 0 0 0 0 0])
+													  (:caught . 0)
+													  (:uncaught . 1)))))
 
-			(jdi-get-version jdi)
-			(jdwp-send-command (jdi-jdwp jdi) "capabilities-new" nil)
-			(jdi-trace "capabilities:%s" (car ado-last-return-value))
-			(jdi-info "getting classes")
-			(jdi-get-classes jdi)
-			(setf (jdi-objects jdi) (make-hash-table :test 'equal))
-			;; 			(jdi-info "getting top level threads")
-			;; 			(jdi-get-top-level-thread-groups jdi)
-			(jdi-info "setting event handlers")))
+		  (jdi-get-version jdi)
+		  (jdwp-send-command (jdi-jdwp jdi) "capabilities-new" nil)
+		  (jdi-trace "capabilities:%s" (car ado-last-return-value))
+		  (jdi-info "getting classes")
+		  (jdi-get-classes jdi)
+		  (setf (jdi-objects jdi) (make-hash-table :test 'equal))
+		  ;; 			(jdi-info "getting top level threads")
+		  ;; 			(jdi-get-top-level-thread-groups jdi)
+		  (jdi-info "setting event handlers"))
       (file-error (setf (jdi-last-error jdi) 'failed-to-connect))))
   )
 
