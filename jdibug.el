@@ -220,19 +220,16 @@ And position the point at the line number."
 	  ;; file is not open, try to find it
 	  (if (file-exists-p file-name)
 		  (if line-number
-			  (progn
-				(catch 'done
-				  (walk-windows (lambda (win)
-								  (when (not (window-dedicated-p win))
-									(select-window win)
-									(find-file file-name)
-									(run-with-idle-timer 0 nil (lambda (win line-number)
-																 (select-window win)
-																 (goto-line line-number))
-														 win line-number)
-									(throw 'done nil)))))
+			  (let ((win (catch 'done
+						   (walk-windows (lambda (win)
+										   (if (not (window-dedicated-p win))
+											   (throw 'done win)))))))
+				(select-window win)
+				(find-file file-name)
+
+				(goto-line line-number)
 				(if highlight
-					(with-current-buffer buffer-name
+					(with-current-buffer (window-buffer win)
 					  (jdibug-highlight-current-line jdi line-number))))
 			(message "JDIbug class %s does not have line number information" (jdi-class-name class)))
 		(message "JDIbug file %s not in source path" file-name)))))
