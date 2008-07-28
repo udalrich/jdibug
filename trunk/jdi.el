@@ -852,6 +852,7 @@ named field-name, and call func with (jdi value field-value) after that."
       (setf (jdi-value-string value) (format "%s[%d]" (jdi-class-name (jdi-value-class value)) (bindat-get-field reply :array-length))))))
 
 (defun jdi-value-resolve-string (jdi value)
+  (jdi-info "jdi-value-resolve-string:%s" (jdi-value-name value))
   (ado (jdi value) 
     (jdwp-send-command (jdi-jdwp jdi) "string-value" `((:object . ,(jdi-value-value value))))
     (let ((reply (car ado-last-return-value)))
