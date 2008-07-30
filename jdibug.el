@@ -198,6 +198,15 @@ jdibug-source-paths will be ignored if this is set to t."
 	  (if (equal file-name (buffer-file-name buf))
 		  (throw 'found buf)))))
 
+(defun jdibug-raise-window (window)
+  "Raise the frame that is showing this window."
+  (jdibug-info "jdibug-raise-window")
+  (let ((frame (window-frame window)))
+	(make-frame-visible frame)
+	(raise-frame frame)
+	(select-frame frame)
+	(select-window window)))
+
 (defun jdibug-show-file-and-line-number (jdibug file-name line-number &optional highlight)
   "Show the buffer containing the file, or open the file if there are no open buffer for this file.
 And position the point at the line number."
@@ -209,12 +218,7 @@ And position the point at the line number."
 	(if win
 		;; file is already open in a buffer, just show it
 		(progn
-		  (jdibug-info "raise-frame")
-		  (make-frame-visible frame)
-		  (raise-frame frame)
-		  (select-frame frame)
-		  (jdibug-info "select-window")
-		  (select-window win)
+		  (jdibug-raise-window win)
 		  (goto-line line-number)
 		  (if highlight
 			  (with-current-buffer buffer-name
@@ -228,7 +232,7 @@ And position the point at the line number."
 											   (throw 'done win)))))))
 				(select-window win)
 				(find-file file-name)
-
+				(jdibug-raise-window win)
 				(goto-line line-number)
 				(if highlight
 					(with-current-buffer (window-buffer win)
