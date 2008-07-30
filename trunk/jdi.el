@@ -49,7 +49,10 @@
   source-paths
 
   ;; hash table with the class-id as the key and jdi-class as the value
-  classes 
+  classes
+
+  ;; hash table with the signature as the key and the jdi-class as the value
+  classes-by-signature
 
   ;; the current thread-id that have suspended, will be set after a breakpoint
   ;; or step event, this is used for the step events that we will send over
@@ -373,13 +376,11 @@
     result))
 
 (defun jdi-classes-find-by-signature (jdi signature)
-  "Return the jdi-class with that class-id"
-  (catch 'found
-    (maphash (lambda (key value)
-			   (if (equal (jdi-class-signature value) signature)
-				   (throw 'found value)))
-			 (jdi-classes jdi))
-    nil))
+  "Return the jdi-class with that signature"
+  (let ((result (gethash signature (jdi-classes-by-signature jdi))))
+    (if (null result)
+		(jdi-error "failed to find class with signature:%s in %d classes" signature (hash-table-count (jdi-classes-by-signature jdi))))
+    result))
 
 (defun jdi-methods-find-by-id (class method-id)
   "Return the jdi-method with that method-id"
@@ -427,7 +428,9 @@
 	(jdi-trace "breakpoint-requests:%s" (jdi-breakpoint-requests jdi))
 	(if (gethash type-id (jdi-classes jdi))
 		(jdi-info "class already in cache, not doing anything")
-	  (puthash type-id (make-jdi-class :id type-id :signature signature) (jdi-classes jdi)))
+	  (let ((newclass (make-jdi-class :id type-id :signature signature)))
+		(puthash type-id newclass (jdi-classes jdi))
+		(puthash signature newclass (jdi-classes-by-signature jdi))))
     (let ((resolved-br nil))
       (mapc (lambda (br) 
 			  (if (equal (jdi-breakpoint-request-source-file br) (jdi-class-signature-to-source jdi signature))
@@ -453,6 +456,7 @@
   (let ((jdi (jdwp-get jdwp 'jdi)))
     (jdi-info "jdi-handle-vm-death")
     (setf (jdi-classes jdi) nil)
+    (setf (jdi-classes-by-signature jdi) nil)
     (setf (jdi-thread-groups jdi) nil)
     (setf (jdi-breakpoints jdi) nil)
     (setf (jdi-breakpoint-requests jdi) nil)
@@ -476,6 +480,7 @@
 
 (defun jdi-disconnect (jdi)
   (setf (jdi-classes jdi) nil)
+  (setf (jdi-classes-by-signature jdi) nil)
   (setf (jdi-thread-groups jdi) nil)
   (setf (jdi-breakpoints jdi) nil)
   (setf (jdi-breakpoint-requests jdi) nil)
@@ -513,11 +518,14 @@
       (setq reply (car ado-last-return-value))
       (jdi-info "number of classes loaded:%d" (bindat-get-field reply :classes))
       (setf (jdi-classes jdi) (make-hash-table :test 'equal))
+      (setf (jdi-classes-by-signature jdi) (make-hash-table :test 'equal))
       (loop for class in (bindat-get-field reply :class)
+			for type-id = (bindat-get-field class :type-id)
+			for signature = (jdwp-get-string class :signature)
+			for newclass = (make-jdi-class :id type-id	:signature signature)
 			do
-			(puthash (bindat-get-field class :type-id)
-					 (make-jdi-class :id (bindat-get-field class :type-id) :signature (jdwp-get-string class :signature))
-					 (jdi-classes jdi)))
+			(puthash type-id newclass (jdi-classes jdi))
+			(puthash signature newclass (jdi-classes-by-signature jdi)))
       (if jdi-trace-flag
 		  (maphash (lambda (key value)
 					 (jdi-trace "class key:%s" key))
