@@ -58,6 +58,9 @@
   ;; or step event, this is used for the step events that we will send over
   suspended-thread-id
 
+  ;; current frame that we are interesting to see the locals buffer
+  current-frame
+  
   ;; will have the current jdi-location if the debuggee is suspended, nil otherwise
   current-location
 
@@ -308,8 +311,7 @@
 					(null (jdi-frames jdi)))
 		  (jdi-trace "variable-table arg-count:%d slots:%d" (bindat-get-field reply :arg-cnt) (bindat-get-field reply :slots))
 		  (setf (jdi-locals jdi) nil)
-		  (let* ((current-frame (car (jdi-frames jdi)))
-				 (current-location (jdi-frame-location current-frame))
+		  (let* ((current-location (jdi-frame-location (jdi-current-frame jdi)))
 				 (current-frame-line-code (jdwp-vec-to-int (jdi-location-line-code-index current-location))))
 			(jdi-trace "current-frame-line-code:%d" current-frame-line-code)
 			(dolist (slot (bindat-get-field reply :slot))
@@ -329,7 +331,7 @@
 						(jdi-locals jdi)))))
 			(ado (jdi)
 			  (when (jdi-suspended-p jdi)
-				(jdi-values-slot-resolve jdi (jdi-suspended-thread-id jdi) (jdi-frame-id current-frame) (jdi-locals jdi)))
+				(jdi-values-slot-resolve jdi (jdi-suspended-thread-id jdi) (jdi-frame-id (jdi-current-frame jdi)) (jdi-locals jdi)))
 			  (setf (jdi-locals jdi) (sort (jdi-locals jdi)
 										   (lambda (a b) 
 											 (string< (jdi-value-name a) (jdi-value-name b))))))))))))
