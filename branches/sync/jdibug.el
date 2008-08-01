@@ -105,7 +105,7 @@ jdibug-source-paths will be ignored if this is set to t."
 (require 'bindat)
 (require 'elog)
 (require 'jdi)
-(require 'tree-widget-dynamic)
+(require 'tree-mode)
 
 (elog-make-logger jdibug)
 
@@ -121,7 +121,7 @@ jdibug-source-paths will be ignored if this is set to t."
   ;; buffer the shows a tree of the local variables
   locals-buffer
 
-  ;; the variable that hold the tree-widget-dynamic of the locals buffer
+  ;; the variable that hold the tree-widget of the locals buffer
   locals-tree
   )
 
@@ -423,19 +423,21 @@ And position the point at the line number."
 		:has-children t
 		:jdi-value ,value
 		:jdibug ,jdibug
+		:dynargs jdibug-expand-value-node
 		:expander jdibug-expand-value-node)
     `(item 
       :value 
       ,(format "%s: %s" (jdi-value-name value) (jdi-value-string value)))))
 
 (defun jdibug-make-values-tree (jdibug values)
-  `(tree-widget-dynamic
+  `(tree-widget
     :node (push-button
 		   :tag "Locals"
 		   :format "%[%t%]\n")
     :open nil
     :has-children t
 	:jdibug ,jdibug
+	:dynargs jdibug-expand-locals-node
 	:expander jdibug-expand-locals-node))
 
 (defun jdibug-refresh-locals-buffer (jdibug)
@@ -450,7 +452,7 @@ And position the point at the line number."
 			(jdibug-info "we already have the tree, just reopen it will do")
   			(let ((inhibit-read-only t))
   			  (erase-buffer))
-			(tree-widget-dynamic-refresh tree))
+			(tree-mode-reflesh-tree tree))
 
 		;; first time, create the buffer
 		(kill-all-local-variables)
@@ -459,7 +461,7 @@ And position the point at the line number."
 		(local-set-key "s" 'jdibug-node-tostring)
 		(jdibug-info "making the locals tree")
 		(setf (jdibug-locals-tree jdibug)
-			  (widget-create (jdibug-make-values-tree jdibug (jdi-locals (jdibug-jdi jdibug)))))
+			  (tree-mode-insert (jdibug-make-values-tree jdibug (jdi-locals (jdibug-jdi jdibug)))))
 		(jdibug-info "1:from=%s" (widget-get (jdibug-locals-tree jdibug) :from))
 		;; default to open it the first time 
 		(widget-apply-action (jdibug-locals-tree jdibug))))))
