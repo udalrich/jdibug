@@ -578,7 +578,7 @@ commands for around 9000 classes")
 (defun jdwp-string-to-hex (s &optional max)
   (let ((hex))
 	(loop for c in (string-to-list s)
-		  while (and max (< (length hex) max))
+		  while (or (null max) (< (length hex) max))
 		  do
 		  (setf hex (concat hex (format "%02x " c))))
     (if (= (length hex) 0)
