@@ -560,13 +560,14 @@ And position the point at the line number."
 		 (jdi (jdibug-jdi jdibug-this)))
     (if (null value)
 		(message "not an object")
-	  (jdi-value-invoke-method jdi value "toString")
-	  (let ((object-id (bindat-get-field (car ado-last-return-value) :return-value :u :value)))
-		(jdwp-send-command (jdi-jdwp jdi) "string-value" 
-						   `((:object . ,object-id)))
-		(let ((reply (car ado-last-return-value)))
-		  (jdibug-trace "tostring-reply:%s" (jdwp-get-string reply :value))
-		  (message "%s" (jdwp-get-string reply :value)))))))
+	  (multiple-value-bind (reply error jdwp id)
+		  (jdi-value-invoke-method jdi value "toString")
+		(let ((object-id (bindat-get-field reply :return-value :u :value)))
+		  (multiple-value-bind (reply error jdwp id)
+			  (jdwp-send-command (jdi-jdwp jdi) "string-value" 
+								 `((:object . ,object-id)))
+			(jdibug-trace "tostring-reply:%s" (jdwp-get-string reply :value))
+			(message "%s" (jdwp-get-string reply :value))))))))
 
 (defun jdibug-disconnect ()
   (interactive)
