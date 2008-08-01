@@ -91,6 +91,8 @@ commands for around 9000 classes")
   ;; place where you can store anything
   plist				 
 
+  current-reply
+
   ;; VM specific sizes that need to be set before any communication happens
   (field-id-size          4) 
   (method-id-size         4) 
@@ -603,10 +605,12 @@ commands for around 9000 classes")
 
 ;;; And the functions:
 
-(defun jdwp-string-to-hex (s)
+(defun jdwp-string-to-hex (s &optional max)
   (let ((hex))
-    (dolist (c (string-to-list s))
-      (setf hex (concat hex (format "%02x " c))))
+	(loop for c in (string-to-list s)
+		  while (and max (< (length hex) max))
+		  do
+		  (setf hex (concat hex (format "%02x " c))))
     (if (= (length hex) 0)
 		""
       (substring hex 0 -1))))
@@ -619,8 +623,17 @@ commands for around 9000 classes")
   (plist-get (jdwp-plist jdwp) key))
 
 (defun jdwp-send-handshake (jdwp)
-  (setf (jdwp-handshake-transaction jdwp) (ado-get-cc))
-  (process-send-string (jdwp-process jdwp) jdwp-handshake))
+  (process-send-string (jdwp-process jdwp) jdwp-handshake)
+  (catch 'done
+	(while t
+	  (accept-process-output (jdwp-process jdwp) 1 0 t)
+	  (jdwp-info "jdwp-residual-output:%s" (jdwp-residual-output jdwp))
+	  (if (and (>= (length (jdwp-residual-output jdwp)) (length jdwp-handshake))
+			   (string= jdwp-handshake (substring (jdwp-residual-output jdwp) 0 (length jdwp-handshake))))
+		  (throw 'done nil))))
+  (jdwp-info "received handshake")
+  (setf (jdwp-handshaked-p jdwp) t)
+  (jdwp-consume-output jdwp (length jdwp-handshake)))
 
 (defun jdwp-connect (jdwp server port)
   (let ((buf (get-buffer " jdwp-socket-buffer")))
@@ -665,26 +678,58 @@ commands for around 9000 classes")
 		 (jdwp-frame-id-size          (jdwp-frame-id-size          ,jdwp)))
      ,@body))
 
-(defun jdwp-process-reply (jdwp)
+;; (defun jdwp-process-reply (jdwp)
+;;   (jdwp-with-size 
+;;     jdwp
+;;     (let* ((output       (jdwp-residual-output jdwp))
+;; 		   (packet       (bindat-unpack jdwp-reply-spec (substring output 0 11)))
+;; 		   (id           (bindat-get-field packet :id))
+;; 		   (error        (bindat-get-field packet :error))
+;; 		   (command-data (cdr (assoc id (jdwp-sent-commands-alist jdwp))))
+;; 		   (protocol     (jdwp-get-protocol (cdr (assoc :name command-data))))
+;; 		   (reply-spec   (getf protocol :reply-spec))
+;; 		   (ccs          (cdr (assoc id (jdwp-transactions-alist jdwp)))))
+;;       (if (not (= error 0))
+;; 		  (progn
+;; 			(if (member error (list jdwp-error-absent-information 
+;; 									jdwp-error-thread-not-suspended))
+;; 				(jdwp-info "received error:%d:%s for id:%d command:%s" error (jdwp-error-string error) id (getf protocol :name))
+;; 			  (jdwp-error "received error:%d:%s for id:%d command:%s" error (jdwp-error-string error) id (getf protocol :name)))
+;; 			(if ccs (mapc (lambda (cc) (ado-continue cc nil error jdwp id) ) ccs)))
+;; 		(if reply-spec
+;; 			(let ((reply-data   (bindat-unpack reply-spec output 11)))
+;; 			  (jdwp-info "reply id:%5s command:%20s time:%-6s len:%5s error:%1d ccs:%d" 
+;; 						 id 
+;; 						 (getf protocol :name)
+;; 						 (float-time (time-subtract (current-time) (cdr (assoc :sent-time command-data))))
+;; 						 (bindat-get-field packet :length) 
+;; 						 (bindat-get-field packet :error)
+;; 						 (length ccs))
+;; 			  (if ccs (mapc (lambda (cc) (ado-continue cc reply-data error jdwp id)) ccs)))
+;; 		  (if ccs (mapc (lambda (cc) (ado-continue cc (substring output 11) error jdwp id)) ccs))))
+;; 	  (setf (jdwp-sent-commands-alist jdwp) (rassq-delete-all command-data (jdwp-sent-commands-alist jdwp)))
+;;       (setf (jdwp-transactions-alist jdwp) (rassq-delete-all ccs (jdwp-transactions-alist jdwp)))
+;;       (setf (jdwp-current-commands-alist jdwp) (rassq-delete-all id (jdwp-current-commands-alist jdwp)))
+;;       )))
+
+(defun jdwp-process-reply (jdwp str command-data)
   (jdwp-with-size 
     jdwp
-    (let* ((output       (jdwp-residual-output jdwp))
-		   (packet       (bindat-unpack jdwp-reply-spec (substring output 0 11)))
+    (let* ((packet       (bindat-unpack jdwp-reply-spec (substring str 0 11)))
 		   (id           (bindat-get-field packet :id))
 		   (error        (bindat-get-field packet :error))
-		   (command-data (cdr (assoc id (jdwp-sent-commands-alist jdwp))))
 		   (protocol     (jdwp-get-protocol (cdr (assoc :name command-data))))
 		   (reply-spec   (getf protocol :reply-spec))
 		   (ccs          (cdr (assoc id (jdwp-transactions-alist jdwp)))))
+	  (jdwp-info "process-reply packet-header:%s" packet)
       (if (not (= error 0))
 		  (progn
 			(if (member error (list jdwp-error-absent-information 
 									jdwp-error-thread-not-suspended))
 				(jdwp-info "received error:%d:%s for id:%d command:%s" error (jdwp-error-string error) id (getf protocol :name))
-			  (jdwp-error "received error:%d:%s for id:%d command:%s" error (jdwp-error-string error) id (getf protocol :name)))
-			(if ccs (mapc (lambda (cc) (ado-continue cc nil error jdwp id) ) ccs)))
+			  (jdwp-error "received error:%d:%s for id:%d command:%s" error (jdwp-error-string error) id (getf protocol :name))))
 		(if reply-spec
-			(let ((reply-data   (bindat-unpack reply-spec output 11)))
+			(let ((reply-data   (bindat-unpack reply-spec str 11)))
 			  (jdwp-info "reply id:%5s command:%20s time:%-6s len:%5s error:%1d ccs:%d" 
 						 id 
 						 (getf protocol :name)
@@ -692,24 +737,20 @@ commands for around 9000 classes")
 						 (bindat-get-field packet :length) 
 						 (bindat-get-field packet :error)
 						 (length ccs))
-			  (if ccs (mapc (lambda (cc) (ado-continue cc reply-data error jdwp id)) ccs)))
-		  (if ccs (mapc (lambda (cc) (ado-continue cc (substring output 11) error jdwp id)) ccs))))
-	  (setf (jdwp-sent-commands-alist jdwp) (rassq-delete-all command-data (jdwp-sent-commands-alist jdwp)))
-      (setf (jdwp-transactions-alist jdwp) (rassq-delete-all ccs (jdwp-transactions-alist jdwp)))
-      (setf (jdwp-current-commands-alist jdwp) (rassq-delete-all id (jdwp-current-commands-alist jdwp)))
-      )))
+			  (jdwp-trace "reply-data:%s" reply-data)
+			  (setq ado-last-return-value (list reply-data error jdwp id)))
+		  (setq ado-last-return-value (list (substring str 11) error jdwp id)) ccs)))))
 
-(defun jdwp-process-command (jdwp)
+(defun jdwp-process-command (jdwp str)
   (jdwp-with-size 
     jdwp
-    (let* ((output        (jdwp-residual-output jdwp))
-		   (packet        (bindat-unpack jdwp-command-spec output))
+    (let* ((packet        (bindat-unpack jdwp-command-spec str))
 		   (commandset    (bindat-get-field packet :commandset))
 		   (command       (bindat-get-field packet :command))
 		   (id            (bindat-get-field packet :id))
 		   (flags         (bindat-get-field packet :flags)))
       (if (and (= commandset 64) (= command 100))
-		  (let* ((packet          (bindat-unpack jdwp-event-spec output 11))
+		  (let* ((packet          (bindat-unpack jdwp-event-spec str 11))
 				 (suspend-policy  (bindat-get-field packet :suspend-policy))
 				 (events          (bindat-get-field packet :events)))
 			(jdwp-info "event suspend-policy:%d events:%d" suspend-policy events)
@@ -742,6 +783,23 @@ commands for around 9000 classes")
 				   (not jdwp-accepting-more-output))
 			  (run-with-timer 0 nil 'jdwp-accept-more-output jdwp))))
 	  len)))
+
+(defun jdwp-reply-packet-p (str)
+  (let* ((packet (bindat-unpack jdwp-packet-spec str))
+		 (flags (bindat-get-field packet :flags)))
+	(= flags #x80)))
+
+(defun jdwp-get-packet (jdwp)
+  (jdwp-with-size jdwp
+    (let ((packet nil)
+		  (total-length (jdwp-output-length jdwp))
+		  (first-packet-length (jdwp-output-first-packet-length jdwp)))
+	  (jdwp-info "jdwp-get-packet total-length=%d first-packet-length=%d" total-length first-packet-length)
+	  (when (and (>= total-length 11)
+				 (>= total-length first-packet-length)
+		  (setq packet (substring (jdwp-residual-output jdwp) 0 first-packet-length))
+		  (jdwp-consume-output jdwp first-packet-length)))
+	  packet)))
 
 (defvar jdwp-accepting-more-output nil
   "This will be true when we are 'in' jdwp-accept-more-output")
@@ -811,16 +869,18 @@ commands for around 9000 classes")
     (jdwp-append-output jdwp process string)
 	;;(jdi-trace "residual=%s" (jdwp-residual-output jdwp))
     (if (jdwp-handshaked-p jdwp)
-		(let ((consumed))
-		  (while (> (setq consumed (jdwp-process-command-or-reply jdwp)) 0) 
-			(jdwp-consume-output jdwp consumed)))
-      (if (and (>= (length (jdwp-residual-output jdwp)) (length jdwp-handshake))
-			   (string= jdwp-handshake (substring (jdwp-residual-output jdwp) 0 (length jdwp-handshake))))
-		  (progn (setf (jdwp-handshaked-p jdwp) t)
-				 (jdwp-consume-output jdwp (length jdwp-handshake))
-				 (jdwp-trace "received handshake")
-				 (ado-continue (jdwp-handshake-transaction jdwp))
-				 (setf (jdwp-handshake-transaction jdwp) nil))))))
+		(let ((packet))
+		  (while (setq packet (jdwp-get-packet jdwp))
+			(if (jdwp-reply-packet-p packet)
+				(progn
+				  (setf (jdwp-current-reply jdwp) packet)
+				  (jdwp-info "received reply packet"))
+;; 			  (run-with-idle-timer 0 nil
+;; 								   (lambda (jdwp packet)
+;; 									 (jdwp-process-command jdwp packet))
+;; 								   jdwp packet)
+			  (jdwp-process-command jdwp packet)
+			  (jdwp-info "received command packet")))))))
 
 (defun jdwp-get-string (s &rest fields)
   (concat (bindat-get-field (apply 'bindat-get-field s fields) :string)))
@@ -897,30 +957,25 @@ commands for around 9000 classes")
 							 (:data        . ,data)
 							 (:outdata     . ,outdata)
 							 (:sent-time   . ,(if jdwp-info-flag (current-time) 0))))
-			 (command-packed (bindat-pack jdwp-command-spec command-data))
-			 (ongoing-item   (assoc `(,name . ,outdata) (jdwp-current-commands-alist jdwp))))
-		(if ongoing-item
-			(let* ((ongoing-id (cdr ongoing-item))
-				   (transaction-item (assoc ongoing-id (jdwp-transactions-alist jdwp)))
-				   (transaction-cc (cdr transaction-item))
-				   (new-ccs (cons (ado-get-cc) transaction-cc)))
-			  (jdwp-info "command [%s] already ongoing in id:%d" name ongoing-id)
-			  (setf (jdwp-transactions-alist jdwp) (assq-delete-all (car transaction-item) (jdwp-transactions-alist jdwp)))
-			  (push `(,ongoing-id . ,(reverse new-ccs)) (jdwp-transactions-alist jdwp)))
-		  (push `(,id . ,command-data) (jdwp-sent-commands-alist jdwp))
-		  (jdwp-info "sending command [%-20s] id:%-4d len:%-4d data:%s" 
-					 name 
-					 id 
-					 (+ 11 (length outdata)) 
-					 (let ((outstr (jdwp-string-to-hex outdata)))
-					   (if (> (length outstr) 100)
-						   (substring outstr 0 100)
-						 outstr)))
-		  (push `(,id . ,(list (ado-get-cc))) (jdwp-transactions-alist jdwp))
-		  (if (member name (list "methods" "line-table" "reference-type" "superclass" "interfaces" "string-value" "object-get-values"))
-			  (push `((,name . ,outdata) . ,id) (jdwp-current-commands-alist jdwp)))
-		  (let ((inhibit-eol-conversion t))
-			(process-send-string (jdwp-process jdwp) command-packed)))))))
+			 (command-packed (bindat-pack jdwp-command-spec command-data)))
+		(jdwp-info "sending command [%-20s] id:%-4d len:%-4d data:%s" 
+				   name 
+				   id 
+				   (+ 11 (length outdata)) 
+				   (let ((outstr (jdwp-string-to-hex outdata)))
+					 (if (> (length outstr) 100)
+						 (substring outstr 0 100)
+					   outstr)))
+		(let ((inhibit-eol-conversion t))
+		  (setf (jdwp-current-reply jdwp) nil)
+		  (process-send-string (jdwp-process jdwp) command-packed)
+		  (catch 'done
+			(while t
+			  (accept-process-output (jdwp-process jdwp) 1 0 t)
+			  (when (jdwp-current-reply jdwp)
+				(jdwp-info "got reply:%s" (jdwp-string-to-hex (jdwp-current-reply jdwp) 100))
+				(jdwp-process-reply jdwp (jdwp-current-reply jdwp) command-data)
+				(throw 'done nil)))))))))
 
 (defun jdwp-class-status-string (status)
   (concat (if (zerop (logand status 1)) nil "[VERIFIED]")

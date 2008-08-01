@@ -107,7 +107,7 @@
   (let ((done nil))
 	(while (and cc (not done))
 	  (let ((ado-cc cc)
-			(ado-last-return-value (if (cdr args)
+			(adon-last-return-value (if (cdr args)
 									   args
 									 ;; if we have only one value, flatten it, don't have a list
 									 ;; of one value
