@@ -264,23 +264,25 @@ commands for around 9000 classes")
 
 (defun jdwp-unpack-arrayregion (packet)
   (jdwp-trace "unpacking array-region:%s" (jdwp-string-to-hex packet))
-  (let* ((header (bindat-unpack jdwp-arrayregion-header-spec packet))
-		 (type   (bindat-get-field header :type))
-		 (length (bindat-get-field header :length))
-		 repeater spec unpacked)
-    (setq repeater 
-		  (case type
-			(76 '(:value struct jdwp-value-spec))
-			(66 '(:value u8))
-			(67 '(:value u16))
-			(70 '(:value u32))
-			(68 '(:value vec 8))
-			(73 '(:value u32))
-			(74 '(:value vec 8))
-			(83 '(:value u16))
-			(90 '(:value u8))))
-    (setq spec `((:type u8) (:length u32) (:value repeat (:length) ,repeater)))
-    (bindat-unpack spec packet)))
+  (jdwp-with-size 
+    jdwp
+	(let* ((header (bindat-unpack jdwp-arrayregion-header-spec packet))
+		   (type   (bindat-get-field header :type))
+		   (length (bindat-get-field header :length))
+		   repeater spec unpacked)
+	  (setq repeater 
+			(case type
+			  (76 '(:value struct jdwp-value-spec))
+			  (66 '(:value u8))
+			  (67 '(:value u16))
+			  (70 '(:value u32))
+			  (68 '(:value vec 8))
+			  (73 '(:value u32))
+			  (74 '(:value vec 8))
+			  (83 '(:value u16))
+			  (90 '(:value u8))))
+	  (setq spec `((:type u8) (:length u32) (:value repeat (:length) ,repeater)))
+	  (bindat-unpack spec packet))))
 
 (setq jdwp-protocol
       `((:name         "version"
