@@ -987,20 +987,22 @@ named field-name, and call func with (jdi value field-value) after that."
 		 (values (mapcar (lambda (field) (make-jdi-value :name (jdi-field-name field)
 														 :signature (jdi-field-signature field)))
 						 fields)))
-	(multiple-value-bind (reply error jdwp id)
-		(jdwp-send-command (jdi-jdwp jdi) "object-get-values"
-						   `((:object . ,(jdi-value-value value))
-							 (:fields . ,(length fields))
-							 ,(nconc (list :field)
-									 (mapcar (lambda (field)
-											   `((:id . ,(jdi-field-id field))))
-											 fields))))
-	  (loop for jdi-value in values
-			for value in (bindat-get-field reply :value)
-			do
-			(setf (jdi-value-type jdi-value) (bindat-get-field value :value :type))
-			(setf (jdi-value-value jdi-value) (bindat-get-field value :value :u :value)))
-	  (setf (jdi-value-values value) (append (jdi-value-values value) values)))))
+	(jdi-info "number of nonstatic fields:%d" (length fields))
+	(if (> (length fields) 0)
+		(multiple-value-bind (reply error jdwp id)
+			(jdwp-send-command (jdi-jdwp jdi) "object-get-values"
+							   `((:object . ,(jdi-value-value value))
+								 (:fields . ,(length fields))
+								 ,(nconc (list :field)
+										 (mapcar (lambda (field)
+												   `((:id . ,(jdi-field-id field))))
+												 fields))))
+		  (loop for jdi-value in values
+				for value in (bindat-get-field reply :value)
+				do
+				(setf (jdi-value-type jdi-value) (bindat-get-field value :value :type))
+				(setf (jdi-value-value jdi-value) (bindat-get-field value :value :u :value)))
+		  (setf (jdi-value-values value) (append (jdi-value-values value) values))))))
 
 (defun jdi-value-get-static-values (jdi value)
   "Populate the values for the static fields in jdi-value"
@@ -1011,20 +1013,22 @@ named field-name, and call func with (jdi value field-value) after that."
 		 (values (mapcar (lambda (field) (make-jdi-value :name (jdi-field-name field)
 														 :signature (jdi-field-signature field)))
 						 fields)))
-	(multiple-value-bind (reply error jdwp id)
-		(jdwp-send-command (jdi-jdwp jdi) "reference-get-values"
-						   `((:ref-type . ,(jdi-class-id (jdi-value-class value)))
-							 (:fields . ,(length fields))
-							 ,(nconc (list :field)
-									 (mapcar (lambda (field)
-											   `((:id . ,(jdi-field-id field))))
-											 fields))))
-	  (loop for jdi-value in values
-			for value in (bindat-get-field reply :value)
-			do
-			(setf (jdi-value-type jdi-value) (bindat-get-field value :value :type))
-			(setf (jdi-value-value jdi-value) (bindat-get-field value :value :u :value)))
-	  (setf (jdi-value-values value) (append (jdi-value-values value) values)))))
+	(jdi-info "number of static fields:%d" (length fields))
+	(if (> (length fields) 0)
+		(multiple-value-bind (reply error jdwp id)
+			(jdwp-send-command (jdi-jdwp jdi) "reference-get-values"
+							   `((:ref-type . ,(jdi-class-id (jdi-value-class value)))
+								 (:fields . ,(length fields))
+								 ,(nconc (list :field)
+										 (mapcar (lambda (field)
+												   `((:id . ,(jdi-field-id field))))
+												 fields))))
+		  (loop for jdi-value in values
+				for value in (bindat-get-field reply :value)
+				do
+				(setf (jdi-value-type jdi-value) (bindat-get-field value :value :type))
+				(setf (jdi-value-value jdi-value) (bindat-get-field value :value :u :value)))
+		  (setf (jdi-value-values value) (append (jdi-value-values value) values))))))
 
 (defun jdi-value-get-array-values (jdi value)
   (jdi-info "jdi-value-get-array-values")
