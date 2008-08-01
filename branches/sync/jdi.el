@@ -806,6 +806,7 @@ named field-name, and call func with (jdi value field-value) after that."
 	  (multiple-value-bind (reply error jdwp id)
 		  (jdwp-send-command (jdi-jdwp jdi) "reference-type" `((:object . ,(jdi-value-value value))))
 		(let ((class (jdi-classes-find-by-id jdi (bindat-get-field reply :type-id))))
+		  (setf (jdi-value-has-children-p value) t)
 		  (setf (jdi-value-class value) class)
 		  (jdi-class-resolve-parent jdi class)
 		  (let ((set-string-func (jdi-value-custom-set-strings-find jdi value)))
