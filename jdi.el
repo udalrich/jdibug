@@ -788,19 +788,19 @@ named field-name, and call func with (jdi value field-value) after that."
 (defun jdi-value-resolve-ref-type (jdi value)
   (jdi-info "jdi-value-resolve-ref-type name=%s signature=%s value=%s" (jdi-value-name value) (jdi-value-signature value) (jdwp-string-to-hex (jdi-value-value value)))
   (unless (equal (jdi-value-value value) [0 0 0 0 0 0 0 0])
-	(if (jdi-value-signature value)
-		(let ((class (jdi-classes-find-by-signature jdi (jdi-value-signature value))))
-		  (if class
-			  (progn
-				(setf (jdi-value-class value) class)
-				(setf (jdi-value-has-children-p value) t)
-				(jdi-class-resolve-parent jdi class)
-				(let ((set-string-func (jdi-value-custom-set-strings-find jdi value)))
-				  (if set-string-func
-					  (funcall set-string-func jdi value)
-					(setf (jdi-value-string value) (jdi-class-name class)))))
-			;; should not happen
-			(jdi-error "failed to determine class from signature, name=%s" (jdi-value-name value))))
+;; 	(if (jdi-value-signature value)
+;; 		(let ((class (jdi-classes-find-by-signature jdi (jdi-value-signature value))))
+;; 		  (if class
+;; 			  (progn
+;; 				(setf (jdi-value-class value) class)
+;; 				(setf (jdi-value-has-children-p value) t)
+;; 				(jdi-class-resolve-parent jdi class)
+;; 				(let ((set-string-func (jdi-value-custom-set-strings-find jdi value)))
+;; 				  (if set-string-func
+;; 					  (funcall set-string-func jdi value)
+;; 					(setf (jdi-value-string value) (jdi-class-name class)))))
+;; 			;; should not happen
+;; 			(jdi-error "failed to determine class from signature, name=%s" (jdi-value-name value))))
 
 	  ;; we don't have the signature, ask for it
 	  (multiple-value-bind (reply error jdwp id)
@@ -812,7 +812,7 @@ named field-name, and call func with (jdi value field-value) after that."
 		  (let ((set-string-func (jdi-value-custom-set-strings-find jdi value)))
 			(if set-string-func
 				(funcall set-string-func jdi value)
-			  (setf (jdi-value-string value) (jdi-class-name class)))))))))
+			  (setf (jdi-value-string value) (jdi-class-name class))))))))
 
 (defun jdi-value-resolve-array (jdi value)
   (jdi-info "jdi-value-resolve-array:%s:%s" (jdi-value-name value) (jdi-value-value value))
