@@ -661,7 +661,8 @@ commands for around 9000 classes")
 			(if (member error (list jdwp-error-absent-information 
 									jdwp-error-thread-not-suspended))
 				(jdwp-info "received error:%d:%s for id:%d command:%s" error (jdwp-error-string error) id (getf protocol :name))
-			  (jdwp-error "received error:%d:%s for id:%d command:%s" error (jdwp-error-string error) id (getf protocol :name))))
+			  (jdwp-error "received error:%d:%s for id:%d command:%s" error (jdwp-error-string error) id (getf protocol :name)))
+			(list (substring str 11) error jdwp id))
 		(if reply-spec
 			(let ((reply-data   (bindat-unpack reply-spec str 11)))
 			  (jdwp-info "reply id:%5s command:%20s time:%-6s len:%5s error:%1d" 
