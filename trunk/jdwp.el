@@ -37,14 +37,6 @@
 
 (elog-make-logger jdwp)
 
-(defcustom jdwp-read-whole-packet t
-  "Emacs will read from processes in 4096 blocks, so when we get a really
-large packet from the debuggee, sometimes it takes a while to read the full
-package, setting this to t will try to speed up reading of large packets
-when we received partial packets. During benchmarking, it speeds up 
-connection by 0.5-1.0 second when retrieving reply for the all-classes
-commands for around 9000 classes")
-
 (defstruct jdwp
   ;; the elisp process that connects to the debuggee
   process		   
@@ -262,7 +254,7 @@ commands for around 9000 classes")
       '((:type    u8)
 		(:length  u32)))
 
-(defun jdwp-unpack-arrayregion (packet)
+(defun jdwp-unpack-arrayregion (jdwp packet)
   (jdwp-trace "unpacking array-region:%s" (jdwp-string-to-hex packet))
   (jdwp-with-size 
     jdwp
@@ -826,20 +818,21 @@ commands for around 9000 classes")
     (setq result (* result (expt 2 exponent)))
     result))
 
-(when (featurep 'elunit)
-  (defsuite jdwp-suite nil
-    :teardown-hook (lambda () (message "done testing")))
+(eval-when (eval)
+  (when (featurep 'elunit)
+	(defsuite jdwp-suite nil
+	  :teardown-hook (lambda () (message "done testing")))
 
-  (deftest jdwp-test-vec-to-float jdwp-suite
-    "Testing function jdwp-vec-to-float"
-    ;; these tests are from http://people.uncw.edu/tompkinsj/133/Numbers/Reals.htm
-    (assert-equal 1234.0000250339538 (jdwp-vec-to-float [#x44 #x9a #x40 #x00]))
-    (assert-equal 25431.124125376242 (jdwp-vec-to-float [#x46 #xc6 #xae #x3f]))
-    (assert-equal 25431.112406624845 (jdwp-vec-to-float [#x46 #xc6 #xae #x39]))
-    )
+	(deftest jdwp-test-vec-to-float jdwp-suite
+	  "Testing function jdwp-vec-to-float"
+	  ;; these tests are from http://people.uncw.edu/tompkinsj/133/Numbers/Reals.htm
+	  (assert-equal 1234.0000250339538 (jdwp-vec-to-float [#x44 #x9a #x40 #x00]))
+	  (assert-equal 25431.124125376242 (jdwp-vec-to-float [#x46 #xc6 #xae #x3f]))
+	  (assert-equal 25431.112406624845 (jdwp-vec-to-float [#x46 #xc6 #xae #x39]))
+	  )
 
-  ;;  (elunit "jdwp-suite")
-  )
+	;;  (elunit "jdwp-suite")
+	))
 
 (defun jdwp-get-protocol (name)
   (find-if (lambda (p)
