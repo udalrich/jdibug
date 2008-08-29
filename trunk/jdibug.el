@@ -46,7 +46,8 @@
 
 (defgroup jdibug nil
   "JDIbug options"
-  :prefix "jdibug")
+  :prefix "jdibug"
+  :group 'languages)
 
 (defcustom jdibug-connect-host ""
   "Host of the debuggee to connect to."
@@ -235,7 +236,7 @@ And position the point at the line number."
 				(if highlight
 					(with-current-buffer (window-buffer win)
 					  (jdibug-highlight-current-line jdi line-number))))
-			(message "JDIbug class %s does not have line number information" (jdi-class-name class)))
+			(message "JDIbug file %s does not have line number information" file-name))
 		(message "JDIbug file %s not in source path" file-name)))))
 
 (defun jdibug-goto-location (jdibug class location)
