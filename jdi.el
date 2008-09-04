@@ -1044,9 +1044,20 @@ named field-name, and call func with (jdi value field-value) after that."
 
 (defun jdi-value-get-array-values (jdi value)
   (jdi-info "jdi-value-get-array-values")
-  (setf (jdi-value-values value)
-		(loop for v from 0 to (- (jdi-value-array-length value) 1)
-			  collect (make-jdi-value :name (format "%s[%d]" (jdi-value-name value) v))))
+
+;; the following construct, seems to cause the compiled code to give an exception!
+;; I do not know why, maybe 'value' is a special name or something?
+;; just put an extra let and all works properly
+;;
+;;   (setf (jdi-value-values value)
+;; 		(loop for v from 0 to (- (jdi-value-array-length value) 1)
+;; 			  collect (make-jdi-value :name (format "%s[%d]" (jdi-value-name value) v))))
+
+  (let ((name (jdi-value-name value)))
+	(setf (jdi-value-values value)
+		  (loop for v from 0 to (- (jdi-value-array-length value) 1)
+				collect (make-jdi-value :name (format "%s[%d]" name v)))))
+
   (multiple-value-bind (reply error jdwp id)
 	  (jdwp-send-command (jdi-jdwp jdi) "array-get-values"
 						 `((:array-object . ,(jdi-value-value value))
