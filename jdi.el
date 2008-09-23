@@ -585,7 +585,7 @@
   "Converts a source file to a JNI class name."
   (let ((buf source))
     (mapc (lambda (sp)
-			(setf buf (replace-in-string buf sp "")))
+			(setf buf (replace-regexp-in-string sp "" buf)))
 		  (jdi-source-paths jdi))
     (setf buf (replace-regexp-in-string "^/" "" buf))
     (setf buf (replace-regexp-in-string ".java$" "" buf))
@@ -597,7 +597,7 @@
   "Converts a source file to a a.b.c class name."
   (let ((buf source))
     (mapc (lambda (sp)
-			(setf buf (replace-in-string buf sp "")))
+			(setf buf (replace-regexp-in-string sp "" buf)))
 		  (jdi-source-paths jdi))
     (setf buf (replace-regexp-in-string "^/" "" buf))
     (setf buf (replace-regexp-in-string ".java$" "" buf))
@@ -1089,7 +1089,7 @@ to populate the jdi-value-string of the jdi-value.")
 
 (setq jdi-value-custom-set-strings
       '(("Ljava/lang/Boolean;"    jdi-value-custom-set-string-boolean)
-		("Ljava/lang/Integer;"    jdi-value-custom-set-string-integer)
+		("Ljava/lang/Number;"     jdi-value-custom-set-string-number)
 		("Ljava/util/Collection;" jdi-value-custom-set-string-with-size)
 		("Ljava/util/Map;"        jdi-value-custom-set-string-with-size)))
 
@@ -1130,12 +1130,15 @@ to populate the jdi-value-values of the jdi-value.")
 		 (setf (jdi-value-string value) "Boolean.FALSE")
        (setf (jdi-value-string value) "Boolean.TRUE")))))
 
-(defun jdi-value-custom-set-string-integer (jdi value)
+(defun jdi-value-custom-set-string-number (jdi value)
   (setf (jdi-value-has-children-p value) nil)
-  (jdi-value-get-field-value 
-   jdi value "value"
-   (lambda (jdi value field-value)
-	 (setf (jdi-value-string value) (format "%d" field-value)))))
+  (multiple-value-bind (reply error jdwp id)
+	  (jdi-value-invoke-method jdi value "toString")
+	(let ((object-id (bindat-get-field reply :return-value :u :value)))
+	  (multiple-value-bind (reply error jdwp id)
+		  (jdwp-send-command (jdi-jdwp jdi) "string-value" 
+							 `((:object . ,object-id)))
+		(setf (jdi-value-string value) (format "%s" (jdwp-get-string reply :value)))))))
 
 (defun jdi-value-custom-set-string-with-size (jdi value)
   (jdi-trace "jdi-value-custom-set-string-with-size:%s" (jdi-class-name (jdi-value-class value)))
