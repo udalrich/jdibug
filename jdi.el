@@ -585,7 +585,7 @@
   "Converts a source file to a JNI class name."
   (let ((buf source))
     (mapc (lambda (sp)
-			(setf buf (replace-regexp-in-string sp "" buf)))
+			(setf buf (replace-regexp-in-string (expand-file-name sp) "" buf)))
 		  (jdi-source-paths jdi))
     (setf buf (replace-regexp-in-string "^/" "" buf))
     (setf buf (replace-regexp-in-string ".java$" "" buf))
@@ -597,7 +597,7 @@
   "Converts a source file to a a.b.c class name."
   (let ((buf source))
     (mapc (lambda (sp)
-			(setf buf (replace-regexp-in-string sp "" buf)))
+			(setf buf (replace-regexp-in-string (expand-file-name sp) "" buf)))
 		  (jdi-source-paths jdi))
     (setf buf (replace-regexp-in-string "^/" "" buf))
     (setf buf (replace-regexp-in-string ".java$" "" buf))
@@ -612,8 +612,8 @@
     (setf buf (replace-regexp-in-string ";$" "" buf))
     (setf buf (concat buf ".java"))
     (mapc (lambda (sp)
-			(if (file-exists-p (concat sp "/" buf))
-				(setf buf (concat sp "/" buf))))
+			(if (file-exists-p (concat (expand-file-name sp) "/" buf))
+				(setf buf (concat (expand-file-name sp) "/" buf))))
 		  (jdi-source-paths jdi))
     (jdi-trace "jdi-class-signature-to-source : %s -> %s" class-signature buf)
     buf))
@@ -988,7 +988,7 @@ named field-name, and call func with (jdi value field-value) after that."
 
 (defun jdi-file-in-source-paths-p (jdi file)
   (find-if (lambda (sp) 
-			 (string-match sp file))
+			 (string-match (expand-file-name sp) file))
 		   (jdi-source-paths jdi)))
 
 (defun jdi-value-get-nonstatic-values (jdi value)
