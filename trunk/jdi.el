@@ -812,7 +812,7 @@ named field-name, and call func with (jdi value field-value) after that."
 		  (let ((set-string-func (jdi-value-custom-set-strings-find jdi value)))
 			(if set-string-func
 				(funcall set-string-func jdi value)
-			  (setf (jdi-value-string value) (jdi-class-name class))))))))
+			  (setf (jdi-value-string value) (format "%s {id=%s}" (jdi-class-name class) (jdwp-vec-to-int (jdi-value-value value))))))))))
 
 (defun jdi-value-resolve-array (jdi value)
   (jdi-info "jdi-value-resolve-array:%s:%s" (jdi-value-name value) (jdi-value-value value))
