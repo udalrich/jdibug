@@ -1088,10 +1088,11 @@ set-string-func is a function that is passed (jdi jdi-value) and is expected
 to populate the jdi-value-string of the jdi-value.")
 
 (setq jdi-value-custom-set-strings
-      '(("Ljava/lang/Boolean;"    jdi-value-custom-set-string-boolean)
-		("Ljava/lang/Number;"     jdi-value-custom-set-string-number)
-		("Ljava/util/Collection;" jdi-value-custom-set-string-with-size)
-		("Ljava/util/Map;"        jdi-value-custom-set-string-with-size)))
+      '(("Ljava/lang/Boolean;"      jdi-value-custom-set-string-boolean)
+		("Ljava/lang/Number;"       jdi-value-custom-set-string-with-tostring)
+		("Ljava/lang/StringBuffer;" jdi-value-custom-set-string-with-tostring)
+		("Ljava/util/Collection;"   jdi-value-custom-set-string-with-size)
+		("Ljava/util/Map;"          jdi-value-custom-set-string-with-size)))
 
 (defvar jdi-value-custom-expanders nil
   "a list of (instance expander-func) where
@@ -1130,7 +1131,7 @@ to populate the jdi-value-values of the jdi-value.")
 		 (setf (jdi-value-string value) "Boolean.FALSE")
        (setf (jdi-value-string value) "Boolean.TRUE")))))
 
-(defun jdi-value-custom-set-string-number (jdi value)
+(defun jdi-value-custom-set-string-with-tostring (jdi value)
   (setf (jdi-value-has-children-p value) nil)
   (multiple-value-bind (reply error jdwp id)
 	  (jdi-value-invoke-method jdi value "toString")
@@ -1138,7 +1139,7 @@ to populate the jdi-value-values of the jdi-value.")
 	  (multiple-value-bind (reply error jdwp id)
 		  (jdwp-send-command (jdi-jdwp jdi) "string-value" 
 							 `((:object . ,object-id)))
-		(setf (jdi-value-string value) (format "%s" (jdwp-get-string reply :value)))))))
+		(setf (jdi-value-string value) (format "\"%s\"" (jdwp-get-string reply :value)))))))
 
 (defun jdi-value-custom-set-string-with-size (jdi value)
   (jdi-trace "jdi-value-custom-set-string-with-size:%s" (jdi-class-name (jdi-value-class value)))
