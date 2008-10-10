@@ -1091,6 +1091,7 @@ to populate the jdi-value-string of the jdi-value.")
       '(("Ljava/lang/Boolean;"      jdi-value-custom-set-string-boolean)
 		("Ljava/lang/Number;"       jdi-value-custom-set-string-with-tostring)
 		("Ljava/lang/StringBuffer;" jdi-value-custom-set-string-with-tostring)
+		("Ljava/util/Date;"         jdi-value-custom-set-string-with-tostring)
 		("Ljava/util/Collection;"   jdi-value-custom-set-string-with-size)
 		("Ljava/util/Map;"          jdi-value-custom-set-string-with-size)))
 
