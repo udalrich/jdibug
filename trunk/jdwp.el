@@ -35,6 +35,11 @@
 (require 'bindat)
 (require 'elog)
 
+(defcustom jdwp-timeout 3
+  "Number of seconds to timeout before replies arrive from the debuggee."
+  :group 'jdibug
+  :type 'integer)
+
 (elog-make-logger jdwp)
 
 (defstruct jdwp
@@ -877,11 +882,17 @@
 		  (setf (jdwp-current-reply jdwp) nil)
 		  (process-send-string (jdwp-process jdwp) command-packed)
 		  (catch 'done
-			(while t
-			  (accept-process-output (jdwp-process jdwp) 1 0 t)
-			  (when (jdwp-current-reply jdwp)
-				(jdwp-info "got reply:%s" (jdwp-string-to-hex (jdwp-current-reply jdwp) 100))
-				(throw 'done (jdwp-process-reply jdwp (jdwp-current-reply jdwp) command-data))))))))))
+			(with-timeout 
+				(jdwp-timeout
+				 ;; the callers do not have ways to handle this, just error for the moment
+				 (error "JDWP Timed Out"))
+			  (while t
+				(accept-process-output (jdwp-process jdwp) 1 0 t)
+				(if (jdwp-current-reply jdwp)
+					(progn
+					  (jdwp-info "got reply:%s" (jdwp-string-to-hex (jdwp-current-reply jdwp) 100))
+					  (throw 'done (jdwp-process-reply jdwp (jdwp-current-reply jdwp) command-data)))
+				  (sit-for 0.1))))))))))
 
 (defun jdwp-class-status-string (status)
   (concat (if (zerop (logand status 1)) nil "[VERIFIED]")
