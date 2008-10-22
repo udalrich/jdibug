@@ -892,7 +892,7 @@
 					(progn
 					  (jdwp-info "got reply:%s" (jdwp-string-to-hex (jdwp-current-reply jdwp) 100))
 					  (throw 'done (jdwp-process-reply jdwp (jdwp-current-reply jdwp) command-data)))
-				  (sit-for 0.1))))))))))
+				  (sit-for 0))))))))))
 
 (defun jdwp-class-status-string (status)
   (concat (if (zerop (logand status 1)) nil "[VERIFIED]")
