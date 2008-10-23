@@ -357,7 +357,6 @@ And position the point at the line number."
 
 (defun jdibug-refresh-threads-buffer (jdibug)
   (with-current-buffer (jdibug-threads-buffer jdibug)
-    (kill-all-local-variables)
     (let ((inhibit-read-only t))
       (erase-buffer))
 	(widget-create (jdibug-make-threads-tree jdibug))))
@@ -456,7 +455,6 @@ And position the point at the line number."
 			(tree-mode-reflesh-tree tree))
 
 		;; first time, create the buffer
-		(kill-all-local-variables)
  		(let ((inhibit-read-only t))
  		  (erase-buffer))
 		(local-set-key "s" 'jdibug-node-tostring)
@@ -775,6 +773,8 @@ And position the point at the line number."
   (split-window-horizontally -50)
   (other-window 1)
   (switch-to-buffer jdibug-locals-buffer-name)
+  ;; its much easier to see
+  (setq truncate-lines t)
   (set-window-dedicated-p (get-buffer-window (current-buffer)) t)
 
   (other-window 1)
