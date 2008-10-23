@@ -841,11 +841,19 @@ named field-name, and call func with (jdi value field-value) after that."
 		(setf (jdi-value-has-children-p value) (> size 0))
 		(setf (jdi-value-string value) (format "%s[%d]" (jdi-class-name (jdi-value-class value)) (bindat-get-field reply :array-length)))))))
 
+(defun jdi-format-string (str)
+  "Truncate and escape the string to be displayed."
+  (with-output-to-string
+	(let ((print-escape-newlines t)
+		  (print-escape-nonascii t))
+	  (prin1 str))))
+
 (defun jdi-value-resolve-string (jdi value)
   (jdi-info "jdi-value-resolve-string:%s" (jdi-value-name value))
   (multiple-value-bind (reply error jdwp id)
 	  (jdwp-send-command (jdi-jdwp jdi) "string-value" `((:object . ,(jdi-value-value value))))
-	(setf (jdi-value-string value) (format "\"%s\"" (jdwp-get-string reply :value)))))
+	(jdi-info "jdi-value-resolve-string:%s:%s" (jdwp-get-string reply :value) (jdi-format-string (jdwp-get-string reply :value)))
+	(setf (jdi-value-string value) (jdi-format-string (jdwp-get-string reply :value)))))
 
 ;; (defun jdi-resolve-thread-group (jdi thread-group)
 ;;   (=progn (jdi thread-group)
@@ -1153,7 +1161,7 @@ to populate the jdi-value-values of the jdi-value.")
 	  (multiple-value-bind (reply error jdwp id)
 		  (jdwp-send-command (jdi-jdwp jdi) "string-value" 
 							 `((:object . ,object-id)))
-		(setf (jdi-value-string value) (format "\"%s\"" (jdwp-get-string reply :value)))))))
+		(setf (jdi-value-string value) (jdi-format-string (jdwp-get-string reply :value)))))))
 
 (defun jdi-value-custom-set-string-with-size (jdi value)
   (jdi-trace "jdi-value-custom-set-string-with-size:%s" (jdi-class-name (jdi-value-class value)))
