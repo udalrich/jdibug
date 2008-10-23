@@ -676,11 +676,24 @@
 		   (setq class-name (replace-regexp-in-string ";" "" class-name))))
     class-name))
 
+(defun jdi-remove-duplicated (fields)
+  "Return a list of jdi-fields, without duplicated names, the first field is kept."
+  (let (names filtered)
+	(mapc (lambda (field)
+			(when (not (member (jdi-field-name field) names))
+			  (push (jdi-field-name field) names)
+			  (push field filtered)))
+		  fields)
+	filtered))
+	
 (defun jdi-class-all-fields (class)
   "Return a list of jdi-fields including those of parents."
   (let ((all-fields (append (jdi-class-fields class)
 							(if (jdi-class-super class)
 								(jdi-class-all-fields (jdi-class-super class))))))
+	;; since the children's field always comes first in the list, we can just remove the later duplicated ones
+	(setf all-fields (jdi-remove-duplicated all-fields))
+	(jdi-info "jdi-class-all-fields:%s" (mapcar 'jdi-field-name all-fields))
     (sort all-fields (lambda (a b)
 					   (string< (jdi-field-name a) (jdi-field-name b))))))
 
