@@ -790,13 +790,14 @@ named field-name, and call func with (jdi value field-value) after that."
 	(let ((method (find-if (lambda (method)
 							 (equal (jdi-method-name method) method-name))
 						   (jdi-class-all-methods class))))
-	  (jdwp-send-command (jdi-jdwp jdi) "object-invoke-method"
-						 `((:object . ,(jdi-value-value value))
-						   (:thread . ,(jdi-suspended-thread-id jdi))
-						   (:class . ,(jdi-class-id class))
-						   (:method-id . ,(jdi-method-id method))
-						   (:arguments . 0)
-						   (:options . ,jdwp-invoke-single-threaded))))))
+	  (if method
+		  (jdwp-send-command (jdi-jdwp jdi) "object-invoke-method"
+							 `((:object . ,(jdi-value-value value))
+							   (:thread . ,(jdi-suspended-thread-id jdi))
+							   (:class . ,(jdi-class-id class))
+							   (:method-id . ,(jdi-method-id method))
+							   (:arguments . 0)
+							   (:options . ,jdwp-invoke-single-threaded)))))))
 
 (defun jdi-value-resolve-ref-type (jdi value)
   (jdi-info "jdi-value-resolve-ref-type name=%s signature=%s value=%s" (jdi-value-name value) (jdi-value-signature value) (jdwp-string-to-hex (jdi-value-value value)))
@@ -822,9 +823,12 @@ named field-name, and call func with (jdi value field-value) after that."
 		  (setf (jdi-value-has-children-p value) t)
 		  (setf (jdi-value-class value) class)
 		  (jdi-class-resolve-parent jdi class)
-		  (let ((set-string-func (jdi-value-custom-set-strings-find jdi value)))
-			(if set-string-func
-				(funcall set-string-func jdi value)
+		  (let ((setter (jdi-value-custom-set-strings-find jdi value)))
+			(if setter
+				(cond ((functionp setter)
+					   (funcall setter jdi value))
+					  ((stringp setter)
+					   (jdi-value-custom-set-string-with-method jdi value setter)))
 			  (setf (jdi-value-string value) (format "%s {id=%s}" (jdi-class-name class) (jdwp-vec-to-int (jdi-value-value value))))))))))
 
 (defun jdi-value-resolve-array (jdi value)
@@ -1100,19 +1104,21 @@ named field-name, and call func with (jdi value field-value) after that."
 
 ;;; Customized display and expanders:
 (defvar jdi-value-custom-set-strings nil
-  "a list of (instance set-string-func) where
+  "a list of (instance setter) where
 
 instance is a string that is matched with jdi-value-instance-of-p with the 
 value
 
-set-string-func is a function that is passed (jdi jdi-value) and is expected
-to populate the jdi-value-string of the jdi-value.")
+setter is a function that is passed (jdi jdi-value) and is expected
+to populate the jdi-value-string of the jdi-value. If setter
+is a string, it will be the method that will be invoked on the java object
+and the value that is returned is shown.")
 
 (setq jdi-value-custom-set-strings
-      '(("Ljava/lang/Boolean;"      jdi-value-custom-set-string-boolean)
-		("Ljava/lang/Number;"       jdi-value-custom-set-string-with-tostring)
-		("Ljava/lang/StringBuffer;" jdi-value-custom-set-string-with-tostring)
-		("Ljava/util/Date;"         jdi-value-custom-set-string-with-tostring)
+      '(("Ljava/lang/Boolean;"      "toString")
+		("Ljava/lang/Number;"       "toString")
+		("Ljava/lang/StringBuffer;" "toString")
+		("Ljava/util/Date;"         "toString")
 		("Ljava/util/Collection;"   jdi-value-custom-set-string-with-size)
 		("Ljava/util/Map;"          jdi-value-custom-set-string-with-size)))
 
@@ -1153,15 +1159,16 @@ to populate the jdi-value-values of the jdi-value.")
 		 (setf (jdi-value-string value) "Boolean.FALSE")
        (setf (jdi-value-string value) "Boolean.TRUE")))))
 
-(defun jdi-value-custom-set-string-with-tostring (jdi value)
-  (setf (jdi-value-has-children-p value) nil)
+(defun jdi-value-custom-set-string-with-method (jdi value method)
   (multiple-value-bind (reply error jdwp id)
-	  (jdi-value-invoke-method jdi value "toString")
-	(let ((object-id (bindat-get-field reply :return-value :u :value)))
-	  (multiple-value-bind (reply error jdwp id)
-		  (jdwp-send-command (jdi-jdwp jdi) "string-value" 
-							 `((:object . ,object-id)))
-		(setf (jdi-value-string value) (jdi-format-string (jdwp-get-string reply :value)))))))
+	  (jdi-value-invoke-method jdi value method)
+	(if reply
+		(let ((object-id (bindat-get-field reply :return-value :u :value)))
+		  (multiple-value-bind (reply error jdwp id)
+			  (jdwp-send-command (jdi-jdwp jdi) "string-value" 
+								 `((:object . ,object-id)))
+			(setf (jdi-value-string value) (jdi-format-string (jdwp-get-string reply :value)))))
+	  (setf (jdi-value-string value) (format "setter %s not found" method)))))
 
 (defun jdi-value-custom-set-string-with-size (jdi value)
   (jdi-trace "jdi-value-custom-set-string-with-size:%s" (jdi-class-name (jdi-value-class value)))
