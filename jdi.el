@@ -618,6 +618,14 @@
     (jdi-trace "jdi-class-signature-to-source : %s -> %s" class-signature buf)
     buf))
 
+(defun jdi-class-name-to-class-signature (jdi class-name)
+  "Converts a.b.c class name to JNI class signature."
+  (let ((buf class-name))
+	(setf buf (replace-regexp-in-string "\\." "/" buf))
+	(setf buf (format "L%s;" buf))
+	(jdi-info "jdi-class-name-to-class-signature:%s:%s" class-name buf)
+	buf))
+
 (defun jdi-locations-find-by-line-code-index (method line-code-index)
   (jdi-trace "jdi-locations-find-by-line-code-index:%s:%s:%d" (jdi-method-name method) line-code-index (length (jdi-method-locations method)))
   (if jdi-trace-flag
@@ -1104,10 +1112,10 @@ named field-name, and call func with (jdi value field-value) after that."
 
 ;;; Customized display and expanders:
 (defvar jdi-value-custom-set-strings nil
-  "a list of (instance setter) where
+  "a list of (class setter) where
 
-instance is a string that is matched with jdi-value-instance-of-p with the 
-value
+class is a string which hold the class name of the object to be matched.
+The matching will be done using something like instance of.
 
 setter is a function that is passed (jdi jdi-value) and is expected
 to populate the jdi-value-string of the jdi-value. If setter
@@ -1115,12 +1123,12 @@ is a string, it will be the method that will be invoked on the java object
 and the value that is returned is shown.")
 
 (setq jdi-value-custom-set-strings
-      '(("Ljava/lang/Boolean;"      "toString")
-		("Ljava/lang/Number;"       "toString")
-		("Ljava/lang/StringBuffer;" "toString")
-		("Ljava/util/Date;"         "toString")
-		("Ljava/util/Collection;"   jdi-value-custom-set-string-with-size)
-		("Ljava/util/Map;"          jdi-value-custom-set-string-with-size)))
+      '(("java.lang.Boolean"      "toString")
+		("java.lang.Number"       "toString")
+		("java.lang.StringBuffer" "toString")
+		("java.util.Date"         "toString")
+		("java.util.Collection"   jdi-value-custom-set-string-with-size)
+		("java.util.Map"          jdi-value-custom-set-string-with-size)))
 
 (defvar jdi-value-custom-expanders nil
   "a list of (instance expander-func) where
@@ -1132,12 +1140,12 @@ expander-func is a function that is passed (jdi jdi-value) and is expected
 to populate the jdi-value-values of the jdi-value.")
 
 (setq jdi-value-custom-expanders
-      '(("Ljava/util/Collection;" jdi-value-custom-expand-collection)
-		("Ljava/util/Map;"        jdi-value-custom-expand-map)))
+      '(("java.util.Collection" jdi-value-custom-expand-collection)
+		("java.util.Map"        jdi-value-custom-expand-map)))
 
 (defun jdi-value-custom-set-strings-find (jdi value)
   (let ((element (find-if (lambda (custom)
-							(jdi-value-instance-of-p jdi value (car custom)))
+							(jdi-value-instance-of-p jdi value (jdi-class-name-to-class-signature jdi (car custom))))
 						  jdi-value-custom-set-strings)))
     (jdi-trace "jdi-value-custom-set-strings-find value:%s class:%s found:%s" value (jdi-value-class value) element)
     (if element
@@ -1145,7 +1153,7 @@ to populate the jdi-value-values of the jdi-value.")
 
 (defun jdi-value-custom-expanders-find (jdi value)
   (let ((element (find-if (lambda (custom)
-							(jdi-value-instance-of-p jdi value (car custom)))
+							(jdi-value-instance-of-p jdi value (jdi-class-name-to-class-signature jdi (car custom))))
 						  jdi-value-custom-expanders)))
     (if element
 		(cadr element))))
