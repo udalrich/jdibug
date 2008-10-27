@@ -27,9 +27,9 @@ One word, locals browser. As I started using JDE, there are two
 debuggers that are available, which are jdb and jdebug.
 
 jdb is too simple to be used as a debugger, I find myself doing
-``locals'' repeatedly while stepping through the codes, and the output
-of ``locals'' are not sorted! Its worse when I want to inspect the
-attributes of particular objects.
+@code{locals} repeatedly while stepping through the codes, and the
+output of @code{locals} are not sorted! Its worse when I want to
+inspect the attributes of particular objects.
 
 jdebug is too slow and buggy for my liking, stepping through the
 source files takes forever.
@@ -42,82 +42,87 @@ So I created JDIbug.
 @node Installation
 @chapter Installation
 
-JDIbug is hosted at googlecode, at http://code.google.com/p/jdibug/
+JDIbug is hosted at googlecode, at
+@uref{http://code.google.com/p/jdibug/}
 
-Download all the .el files and copy it to somewhere in your load-path.
+Download all the @file{.el} files and copy it to somewhere in your
+@code{load-path}.
 
-Then put (require 'jdibug) in your .emacs.
+Then put @code{(require 'jdibug)} in your @file{.emacs}.
 
 @node Configuration
 @chapter Configuration
 
-If you use JDE, there are only two parameters that you need to
-configure before you can start using JDIbug, which is the
-``jdibug-connect-host'' parameter and the ``jdibug-connect-port''
-parameter.
+Although JDIbug current does not rely on any data from JDE, a lot of
+things are made very simple when using JDIbug with JDE. So please
+install JDE if you have not yet done it.
 
-``jdibug-connect-host'' specifies the hostname of the debuggee process
-that you want to debug. And ``jdibug-connect-port'' specifies the port
-to connect to.
+There are only two parameters that you need to configure before you
+can start using JDIbug, which is the @code{jdibug-connect-host}
+parameter and the @code{jdibug-connect-port} parameter.
 
-If you have multiple projects set up using JDE's prj.el file, you can
-set the two parameters inside the prj.el file so that different
-projects can be connected using different host/ports by JDIbug. Having
-said that, JDIbug currently does not support more than one debugging
-session per emacs session.
+@code{jdibug-connect-host} specifies the hostname of the debuggee
+process that you want to debug. And @code{jdibug-connect-port}
+specifies the port to connect to.
 
-If you do not use JDE, you will need to set the custom variable
-``jdibug-use-jde-source-paths'' to nil, and then set the
-``jdibug-source-paths'' variable to a list of paths where your source
-codes are.
+If you have multiple projects set up using JDE's @file{prj.el} file,
+you can set the two parameters inside the @file{prj.el} file so that
+different projects can be connected using different host/ports by
+JDIbug. Having said that, JDIbug currently @emph{does not} support
+more than one debugging session per emacs session.
 
 @node Connecting
 @chapter Connecting
-After configuring JDIbug, use the key sequence C-c C-c C-c to connect
-to the debuggee process. By default, the screen will be splitted into
-4. With the java source file on the top left, the locals browser on
-the top right, the stack browser on the bottom left, and the
+After configuring JDIbug, use the key sequence @kbd{C-c C-c C-c} in a
+jde-mode buffer to connect to the debuggee process. By default, the
+frame will be splitted into windows each displaying different
+buffers. With the java source file on the top left, the locals browser
+on the top right, the stack browser on the bottom left, and the
 breakpoints list on the bottom right.
 
-To disconnect from the debuggee, use the key sequence C-c C-c C-d.
+To disconnect from the debuggee, use the key sequence @kbd{C-c C-c
+C-d}.
 
 @node Breakpoints
 @chapter Breakpoints
-You can only set the breakpoints AFTER you have made the connection to
-the debuggee.
+You can only set the breakpoints @emph{after} you have made the
+connection to the debuggee.
 
 To toggle the breakpoint on the current line of java source, use the
-key sequence C-c C-c C-b in the java source buffer. This toggles the
-breakpoints on the current line between, disabled, enabled, and no
+key sequence @kbd{C-c C-c C-b} in the java source buffer. This toggles
+the breakpoints on the current line between, disabled, enabled, and no
 breakpoint. The ``disabled'' status is just an easy way of remembering
 that line as a line of interest but you do not want the debugger to
 stop there.
+
+If the line of code is not loaded when the breakpoint is requested, it
+will be marked as pending. When the class is finally loaded, the
+breakpoint will be installed.
 
 @node Stepping
 @chapter Stepping
 When the debugger is suspended, you can use the following key
 sequences to step through the program.
 
-C-c C-c C-n to step over.
-
-C-c C-c C-i to step into.
-
+@example
+C-c C-c C-n to step over.  
+C-c C-c C-i to step into.  
 C-c C-c C-o to step out.
+@end example
 
 As these keys are used very often, I bind them to function keys for
 faster access. I have the following in my .emacs file:
 
-(define-key jde-mode-map [f8]   'jdibug-step-over)
-
-(define-key jde-mode-map [M-f8] 'jdibug-step-into)
-
-(define-key jde-mode-map [f7]   'jdibug-step-out)
-
+@example
+(define-key jde-mode-map [f8]   'jdibug-step-over) 
+(define-key jde-mode-map [M-f8] 'jdibug-step-into) 
+(define-key jde-mode-map [f7]   'jdibug-step-out) 
 (define-key jde-mode-map [M-f7] 'jdibug-resume)
+@end example
 
-When you are done, you can use the key sequence C-c C-c C-r to resume
-the debugger process. Or if you have added the snipplet above, you can
-just Meta-F7 for that.
+When you are done, you can use the key sequence @kbd{C-c C-c C-r} to
+resume the debugger process. Or if you have added the snipplet above,
+you can just @kbd{M-f7} for that.
 
 @node Locals Browser
 @chapter Locals Browser
@@ -126,8 +131,8 @@ variables. Each of the variables can be expanded to view the member
 variables by clicking on the expand icon.
 
 When the cursor is over any element in the tree, you can press the
-``s'' key to invoke the ``toString'' method on the variable under the
-cursor. The result will be printed in the echo-area.
+@kbd{s} key to invoke the @code{toString} method on the variable under
+the cursor. The result will be printed in the echo-area.
 
 One extra feature that is very useful in the Locals Browser is that it
 reduces the number of clicks that you have to do to inspect a
@@ -139,12 +144,15 @@ Collection of Map.
 
 If you like the above feature, there's more! You can define custom
 displayer functions for your own java objects, for example, if you
-have a class com.foo.Dog which have a getter called ``getName'', and
-you want to see the name of the dog displayed, you can just add the
-following line into your .emacs (after the require 'jdibug line) and
-viola, you will see the name of the dog instead of the ``Dog'' class name.
+have a class @code{com.foo.Dog} which have a getter called
+@code{getName}, and you want to see the name of the dog displayed, you
+can just add the following line into your @file{.emacs} (after the
+@code{(require 'jdibug)} line) and viola, you will see the name of the
+dog instead of the @code{Dog} class name.
 
+@example
 (add-to-list 'jdi-value-custom-set-strings '("com.foo.Dog" "getName"))
+@end example
 
 When expanding a Collection or Map, the locals browser will be
 displaying the contents as an array instead of having you to click one
@@ -153,17 +161,18 @@ or two more times to see the contents within the Collection or Map.
 
 @node Window Layout
 @chapter Window Layout
-The default 4 buffers layout is what I like the most on my screen. If
-you don't like it, you just have to create your own functions that
-create the window layout of your liking, and then add this in your
-.emacs file:
+The default four buffers layout is what I like the most on my
+screen. If you don't like it, you just have to create your own
+functions that create the window layout of your liking, and then add
+this in your @file{.emacs} file:
 
-(remove-hook 'jdibug-connected-hook 'jdibug-debug-view)
-
+@example
+(remove-hook 'jdibug-connected-hook 'jdibug-debug-view) 
 (remove-hook 'jdibug-detached-hook  'jdibug-undebug-view)
+@end example
 
 And then proceed to add your equivalent functions in the above
-hooks. You can refer to the two functions ``jdibug-debug-view'' and
-``jdibug-undebug-view'' for a start.
+hooks. You can refer to the two functions @code{jdibug-debug-view} and
+@code{jdibug-undebug-view} for a start.
 
 @bye
