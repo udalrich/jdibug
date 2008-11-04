@@ -10,14 +10,16 @@
 @end ifnottex
 
 @menu
-* Rationale::      Why I created JDIbug
-* Installation::   How to install JDIbug
-* Configuration::  Configuring JDIbug
-* Connecting::     Connecting to and Disconnecting from a debuggee
-* Breakpoints::    Setting and clearing breakpoints
-* Stepping::       Stepping into, over and out of source codes
-* Locals Browser:: Using the Locals Browser
-* Window Layout::  Changing the default window layout
+* Rationale::          Why I created JDIbug
+* Installation::       How to install JDIbug
+* Configuration::      Configuring JDIbug
+* Connecting::         Connecting to and Disconnecting from a debuggee
+* Breakpoints::        Setting and clearing breakpoints
+* Stepping::           Stepping into, over and out of source codes
+* Locals Browser::     Using the Locals Browser
+* Frames Browser::     Using the Frames Browser
+* Breakpoints Buffer:: Using the Breakpoint Buffer
+* Window Layout::      Changing the default window layout
 @end menu
 
 @node Rationale
@@ -45,10 +47,20 @@ So I created JDIbug.
 JDIbug is hosted at googlecode, at
 @uref{http://code.google.com/p/jdibug/}
 
-Download all the @file{.el} files and copy it to somewhere in your
-@code{load-path}.
+Download all the package file and untar them into somewhere within
+your @code{load-path}. For example, I keep all my emacs modules under
+my @file{~/emacs/site}, so the jdibug @file{.el} files will go into
+@file{~/emacs/site/jdibug-0.1}.
 
-Then put @code{(require 'jdibug)} in your @file{.emacs}.
+Then add the path into your @code{load-path}, and @code{require} it,
+for example, I have the following in my @file{.emacs} file:
+
+@example
+(add-to-list 'load-path (expand-file-name "~/emacs/site/jdibug-0.1"))
+(require 'jdibug)
+@end example
+
+That's it, you are good to go.
 
 @node Configuration
 @chapter Configuration
@@ -158,6 +170,25 @@ When expanding a Collection or Map, the locals browser will be
 displaying the contents as an array instead of having you to click one
 or two more times to see the contents within the Collection or Map.
 
+@node Frames Browser
+@chapter Frames Browser
+The frames buffer is a simple list of all the frames from the
+@code{main} up to the current function. It provides a simple
+caller/callee stack of the current breakpoint. If the frame points to
+a location which can be corresponded to a line of code in the source
+path, the frame will be clickable, and the source code buffer will be
+updated to show the file and line number. The locals browser will also
+be updated to show the locals of that particular frame.
+
+Please note that the current execution point does not change when you
+switch between the frames, so if you do @code{jdibug-step-over}, the
+stepping will go back to the original execution point.
+
+@node Breakpoints Buffer
+@chapter Breakpoints Buffer
+The breakpoints buffer shows a list of the current active and disabled
+breakpoints. Clicking on the breakpoints will show the line of code of
+the breakpoint in the source code buffer.
 
 @node Window Layout
 @chapter Window Layout
