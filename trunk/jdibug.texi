@@ -111,6 +111,13 @@ If the line of code is not loaded when the breakpoint is requested, it
 will be marked as pending. When the class is finally loaded, the
 breakpoint will be installed.
 
+You can also break on all the methods a class by positioning the
+cursor on the first line in the class (usually @code{^public class})
+and calling @code{jdibug-toggle-breakpoint} or @kbd{C-c C-c
+C-b}. Multiple breakpoints will be installed for the first line of
+every method in the class. Note that the pseudo method @code{<init>}
+will also be breakpoint-ed.
+
 @node Stepping
 @chapter Stepping
 When the debugger is suspended, you can use the following key
