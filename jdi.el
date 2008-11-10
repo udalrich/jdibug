@@ -131,7 +131,7 @@
 (defstruct jdi-breakpoint
   source-file
   line-number
-  request-id)
+  request-ids)
 
 (defstruct jdi-field
   id
@@ -395,6 +395,20 @@
     (jdi-info "class-all-locations:%d" (length result))
     result))
 
+(defun jdi-class-all-first-line-of-methods (class)
+  "Returns all the first line of all the methods."
+  (let ((result (loop for method in (jdi-class-methods class)
+					  collect (jdi-location-line-number (car (jdi-method-locations method))))))
+	(jdi-info "class-all-first-line-of-methods:%d" (length result))
+	result))
+
+(defun jdi-class-all-first-line-locations-of-methods (class)
+  "Returns all the first line locations of all the methods."
+  (let ((result (loop for method in (jdi-class-methods class)
+					  collect (car (jdi-method-locations method)))))
+	(jdi-info "class-all-first-line-locations-of-methods:%d" (length result))
+	result))
+
 (defun jdi-handle-step-event (jdwp event)
   (jdi-info "jdi-handle-step-event")
   (let* ((jdi (jdwp-get jdwp 'jdi))
@@ -531,10 +545,11 @@
 	(jdi-trace "vm-name:%s" (jdwp-get-string reply :vm-name))))
 
 (defun jdi-set-breakpoint (jdi source-file line-number)
-  (jdi-info "jdi-set-breakpoint:%s:%d" source-file line-number)
+  (jdi-info "jdi-set-breakpoint:%s:%s" source-file line-number)
   (let* ((sig (jdi-source-to-class-signature jdi source-file))
 		 (class (jdi-classes-find-by-signature jdi sig)))
     (if (null class)
+		;; the class is not loaded yet, just install a class-prepare event 
 		(let* ((class-name (jdi-source-to-class-name jdi source-file)))
 		  (jdi-info "could not find class %s in loaded class list" sig)
 		  (setf (jdi-last-error jdi) 'not-loaded)
@@ -550,27 +565,37 @@
 										 (:class-pattern . ((:length . ,(length class-pattern))
 															(:string . ,class-pattern))))))))
 				(list class-name (concat class-name ".*") (concat class-name "$*"))))
+
+	  ;; the class is loaded! yay!
 	  (jdi-class-resolve-all-locations jdi class)
-	  (let ((location	(find-if (lambda (location)
-								   (equal (jdi-location-line-number location) line-number))
-								 (jdi-class-all-locations class))))
-		(if (null location)
+	  (let ((locations (if (null line-number)
+						   (jdi-class-all-first-line-locations-of-methods class)
+						 (list (find-if (lambda (location)
+										  (equal (jdi-location-line-number location) line-number))
+										(jdi-class-all-locations class))))))
+		(if (null locations)
 			(setf (jdi-last-error jdi) 'no-code-at-line)
-		  (jdi-trace "found location:%s" location)
-		  (let* ((location-data `((:type .   1)
-								  (:class-id . ,(jdi-location-class-id location))
-								  (:method-id . ,(jdi-location-method-id location))
-								  (:index     . ,(jdi-location-line-code-index location))))
-				 (data `((:event-kind     . ,jdwp-event-breakpoint)
-						 (:suspend-policy . ,jdwp-suspend-policy-all)
-						 (:modifiers      . 1)
-						 (:modifier       ((:mod-kind .  7)
-										   (:location .  ,location-data))))))
-			(multiple-value-bind (reply error jdwp id)
-				(jdwp-send-command (jdi-jdwp jdi) "set" data)
-			  (push (make-jdi-breakpoint :source-file source-file :line-number line-number :request-id (bindat-get-field reply :request-id))
-					(jdi-breakpoints jdi))
-			  (jdi-trace "received requestid:%d" (bindat-get-field reply :request-id)))))))))
+		  (jdi-trace "found locations:%s" locations)
+		  (push (make-jdi-breakpoint :source-file source-file 
+									 :line-number line-number 
+									 :request-ids (mapcar (lambda (location) (jdi-set-breakpoint-location jdi location)) locations))
+				(jdi-breakpoints jdi)))))))
+
+(defun jdi-set-breakpoint-location (jdi location)
+  "Set the breakpoint at the location, return the request-id."
+  (let* ((location-data `((:type .   1)
+						  (:class-id . ,(jdi-location-class-id location))
+						  (:method-id . ,(jdi-location-method-id location))
+						  (:index     . ,(jdi-location-line-code-index location))))
+		 (data `((:event-kind     . ,jdwp-event-breakpoint)
+				 (:suspend-policy . ,jdwp-suspend-policy-all)
+				 (:modifiers      . 1)
+				 (:modifier       ((:mod-kind .  7)
+								   (:location .  ,location-data))))))
+	(multiple-value-bind (reply error jdwp id)
+		(jdwp-send-command (jdi-jdwp jdi) "set" data)
+	  (jdi-trace "received requestid:%d" (bindat-get-field reply :request-id))
+	  (bindat-get-field reply :request-id))))
 
 (defun jdi-clear-breakpoint (jdi source-file line-number)
   (let* ((bp (find-if (lambda (bp)
@@ -578,7 +603,9 @@
 							 (equal (jdi-breakpoint-line-number bp) line-number)))
 					  (jdi-breakpoints jdi))))
     (if bp
-		(jdwp-clear-breakpoint (jdi-jdwp jdi) (jdi-breakpoint-request-id bp))
+		(mapc (lambda (request-id)
+				(jdwp-clear-breakpoint (jdi-jdwp jdi) request-id))
+			  (jdi-breakpoint-request-ids bp))
       (jdwp-error "failed to find breakpoint %s:%s" source-file line-number))))
 
 (defun jdi-source-to-class-signature (jdi source)
