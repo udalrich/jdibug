@@ -4,10 +4,10 @@
 
 ** Break on all methods within a class
 Now you can break on all the methods a class by positioning the cursor
-on the first line in the class (usually "^public class...") at calling
-jdibug-toggle-breakpoint or C-c C-c C-b. Multiple breakpoints will be
-installed for the first line of every method in the class. Note that
-the pseudo method <init> will also be breakpoint-ed.
+on the first line in the class (usually "^public class...") and
+calling jdibug-toggle-breakpoint or C-c C-c C-b. Multiple breakpoints
+will be installed for the first line of every method in the
+class. Note that the pseudo method <init> will also be breakpoint-ed.
 
 * 0.1 (2008-11-04)
 Initial Release
