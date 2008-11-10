@@ -91,6 +91,11 @@ jdibug-source-paths will be ignored if this is set to t."
   :group 'jdibug
   :type 'string)
 
+(defcustom jdibug-break-on-class-regexp "^public class"
+  "The regexp that will be used to identify whether you want to break on all the methods in the class."
+  :group 'jdibug
+  :type 'string)
+
 (defvar jdibug-connected-hook nil
   "Hook to run when we are connected to the debuggee.")
 
@@ -628,19 +633,29 @@ And position the point at the line number."
 
 (defun jdibug-toggle-breakpoint ()
   (interactive)
-  (let* ((source-file (buffer-file-name))
-		 (line-number (line-number-at-pos))
-		 (jdi (jdibug-jdi jdibug-this))
+  (let* ((current-line-text (buffer-substring-no-properties (line-beginning-position) (line-end-position)))
+		 (source-file (buffer-file-name))
+		 (line-number (if (string-match jdibug-break-on-class-regexp current-line-text)
+						  nil
+						(line-number-at-pos)))
 		 (bp (find-if (lambda (bp) 
 						(and (equal (jdibug-breakpoint-source-file bp) source-file)
 							 (equal (jdibug-breakpoint-line-number bp) line-number)))
 					  (jdibug-breakpoints jdibug-this))))
-    (cond ((and bp (member (jdibug-breakpoint-status bp) (list 'enabled 'unresolved)))
+	(jdibug-info "line-number:%s,current-line-text:%s" line-number current-line-text)
+	(cond ((and bp (member (jdibug-breakpoint-status bp) (list 'enabled 'unresolved)))
 		   (jdibug-disable-breakpoint jdibug-this bp))
 		  ((and bp (equal (jdibug-breakpoint-status bp) 'disabled))
 		   (jdibug-remove-breakpoint jdibug-this bp))
 		  (t 
 		   (jdibug-set-breakpoint jdibug-this (make-jdibug-breakpoint :source-file source-file :line-number line-number))))))
+
+(defun jdibug-get-class-line-number ()
+  "Get the line number of the class declaration."
+  (save-excursion
+	(goto-char (point-min))
+	(search-forward-regexp jdibug-break-on-class-regexp)
+	(line-number-at-pos)))
 
 (defun jdibug-breakpoint-update (bp)
   (jdibug-refresh-breakpoints-buffer jdibug-this)
@@ -649,7 +664,7 @@ And position the point at the line number."
 						 (buffer-list))))
 	(if buffer
 		(with-current-buffer buffer
-		  (goto-line (jdibug-breakpoint-line-number bp))
+		  (goto-line (or (jdibug-breakpoint-line-number bp) (jdibug-get-class-line-number)))
 		  (if (jdibug-breakpoint-overlay bp)
 			  (delete-overlay (jdibug-breakpoint-overlay bp)))
 		  (setf (jdibug-breakpoint-overlay bp) (make-overlay (point) (1+ (line-end-position))))
