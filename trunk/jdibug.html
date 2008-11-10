@@ -72,6 +72,8 @@ ul.toc {list-style: none}
 </td></tr>
 <tr><td align="left" valign="top"><a href="#SEC10">10. Window Layout</a></td><td>&nbsp;&nbsp;</td><td align="left" valign="top">      Changing the default window layout
 </td></tr>
+<tr><td align="left" valign="top"><a href="#SEC11">11. Bug Reporting</a></td><td>&nbsp;&nbsp;</td><td align="left" valign="top">      When you think there's a bug in JDIbug
+</td></tr>
 </table>
 
 
@@ -417,11 +419,11 @@ the breakpoint in the source code buffer.
 <a name="SEC10"></a>
 <table cellpadding="1" cellspacing="1" border="0">
 <tr><td valign="middle" align="left">[<a href="#SEC9" title="Previous section in reading order"> &lt; </a>]</td>
-<td valign="middle" align="left">[ &gt; ]</td>
+<td valign="middle" align="left">[<a href="#SEC11" title="Next section in reading order"> &gt; </a>]</td>
 <td valign="middle" align="left"> &nbsp; </td>
 <td valign="middle" align="left">[<a href="#SEC9" title="Beginning of this chapter or previous chapter"> &lt;&lt; </a>]</td>
 <td valign="middle" align="left">[<a href="#SEC_Top" title="Up section"> Up </a>]</td>
-<td valign="middle" align="left">[ &gt;&gt; ]</td>
+<td valign="middle" align="left">[<a href="#SEC11" title="Next chapter"> &gt;&gt; </a>]</td>
 <td valign="middle" align="left"> &nbsp; </td>
 <td valign="middle" align="left"> &nbsp; </td>
 <td valign="middle" align="left"> &nbsp; </td>
@@ -445,6 +447,55 @@ this in your &lsquo;<tt>.emacs</tt>&rsquo; file:
 <p>And then proceed to add your equivalent functions in the above
 hooks. You can refer to the two functions <code>jdibug-debug-view</code> and
 <code>jdibug-undebug-view</code> for a start.
+</p>
+<hr size="6">
+<a name="Bug-Reporting"></a>
+<a name="SEC11"></a>
+<table cellpadding="1" cellspacing="1" border="0">
+<tr><td valign="middle" align="left">[<a href="#SEC10" title="Previous section in reading order"> &lt; </a>]</td>
+<td valign="middle" align="left">[ &gt; ]</td>
+<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left">[<a href="#SEC10" title="Beginning of this chapter or previous chapter"> &lt;&lt; </a>]</td>
+<td valign="middle" align="left">[<a href="#SEC_Top" title="Up section"> Up </a>]</td>
+<td valign="middle" align="left">[ &gt;&gt; ]</td>
+<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left">[<a href="#SEC_Top" title="Cover (top) of document">Top</a>]</td>
+<td valign="middle" align="left">[Contents]</td>
+<td valign="middle" align="left">[Index]</td>
+<td valign="middle" align="left">[<a href="#SEC_About" title="About (help)"> ? </a>]</td>
+</tr></table>
+<h1 class="chapter"> 11. Bug Reporting </h1>
+<p>If you think there's a bug in JDIbug, please submit the log together
+with a description of what you have done.
+</p>
+<p>JDIbug uses the &lsquo;<tt>elog.el</tt>&rsquo; module that I have written for this
+purpose.
+</p>
+<p>Run the following piece of code
+</p><table><tr><td>&nbsp;</td><td><pre class="example">(elog-set-appenders
+ (list 
+  (make-elog-appender :category 'jdwp 
+					  :priority 'trace
+					  :layout &quot;%H:%M:%S [%p] %c : %m%n&quot; 
+					  :output &quot;*jdwp-log*&quot;)
+  (make-elog-appender :category 'jdi
+					  :priority 'trace
+					  :layout &quot;%H:%M:%S [%p] %c : %m%n&quot; 
+					  :output &quot;*jdwp-log*&quot;)
+  (make-elog-appender :category 'jdibug
+					  :priority 'trace
+					  :layout &quot;%H:%M:%S [%p] %c : %m%n&quot; 
+					  :output &quot;*jdwp-log*&quot;)))
+</pre></td></tr></table>
+
+
+<p>Then redo the actions that have generated the bug.
+</p>
+<p>Then save the content of the <code>*jdwp-log*</code> buffer into a file and
+then send it to me, prefably compressed, as it can be quite huge.
 </p>
 <hr size="6">
 <a name="SEC_About"></a>
