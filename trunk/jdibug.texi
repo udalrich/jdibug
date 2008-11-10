@@ -20,6 +20,7 @@
 * Frames Browser::     Using the Frames Browser
 * Breakpoints Buffer:: Using the Breakpoint Buffer
 * Window Layout::      Changing the default window layout
+* Bug Reporting::      When you think there's a bug in JDIbug
 @end menu
 
 @node Rationale
@@ -212,5 +213,36 @@ this in your @file{.emacs} file:
 And then proceed to add your equivalent functions in the above
 hooks. You can refer to the two functions @code{jdibug-debug-view} and
 @code{jdibug-undebug-view} for a start.
+
+@node Bug Reporting
+@chapter Bug Reporting
+If you think there's a bug in JDIbug, please submit the log together
+with a description of what you have done.
+
+JDIbug uses the @file{elog.el} module that I have written for this
+purpose.
+
+Run the following piece of code
+@example
+(elog-set-appenders
+ (list 
+  (make-elog-appender :category 'jdwp 
+					  :priority 'trace
+					  :layout "%H:%M:%S [%p] %c : %m%n" 
+					  :output "*jdwp-log*")
+  (make-elog-appender :category 'jdi
+					  :priority 'trace
+					  :layout "%H:%M:%S [%p] %c : %m%n" 
+					  :output "*jdwp-log*")
+  (make-elog-appender :category 'jdibug
+					  :priority 'trace
+					  :layout "%H:%M:%S [%p] %c : %m%n" 
+					  :output "*jdwp-log*")))
+@end example
+
+Then redo the actions that have generated the bug.
+
+Then save the content of the @code{*jdwp-log*} buffer into a file and
+then send it to me, prefably compressed, as it can be quite huge.
 
 @bye
