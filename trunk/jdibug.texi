@@ -97,8 +97,8 @@ C-d}.
 
 @node Breakpoints
 @chapter Breakpoints
-You can only set the breakpoints @emph{after} you have made the
-connection to the debuggee.
+You can set breakpoints before or after you have made the connection
+to the debuggee.
 
 To toggle the breakpoint on the current line of java source, use the
 key sequence @kbd{C-c C-c C-b} in the java source buffer. This toggles
