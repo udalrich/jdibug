@@ -9,5 +9,8 @@ calling jdibug-toggle-breakpoint or C-c C-c C-b. Multiple breakpoints
 will be installed for the first line of every method in the
 class. Note that the pseudo method <init> will also be breakpoint-ed.
 
+** Setting breakpoint before debuggee is connected
+You can now set the breakpoints before connecting to the debuggee.
+
 * 0.1 (2008-11-04)
 Initial Release
