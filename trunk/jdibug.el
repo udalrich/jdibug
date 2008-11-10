@@ -730,7 +730,9 @@ And position the point at the line number."
 							 (cond ((equal (jdibug-breakpoint-status bp) 'enabled) " E")
 								   ((equal (jdibug-breakpoint-status bp) 'unresolved) " P")
 								   (t "  "))
-							 (jdibug-breakpoint-short-source-file bp) (jdibug-breakpoint-line-number bp))))
+							 (jdibug-breakpoint-short-source-file bp) 
+							 (or (jdibug-breakpoint-line-number bp)
+								 "class"))))
 			(insert (propertize str 'breakpoint bp))))))
 	(goto-line orig-line)))
 
