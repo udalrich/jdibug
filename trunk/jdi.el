@@ -942,9 +942,9 @@ named field-name, and call func with (jdi value field-value) after that."
 										   :signature (jdwp-get-string method :signature)
 										   :mod-bits (bindat-get-field method :mod-bits))))
 	  (dolist (method (jdi-class-methods class))
-		(jdi-trace "method name:%s signature:%s id:%s" (jdi-method-name method) (jdi-method-signature method) (jdi-method-id method)))
-	  (if (jdi-class-super class)
-		  (jdi-class-resolve-methods jdi (jdi-class-super class))))))
+		(jdi-trace "method name:%s signature:%s id:%s" (jdi-method-name method) (jdi-method-signature method) (jdi-method-id method)))))
+  (if (jdi-class-super class)
+	  (jdi-class-resolve-methods jdi (jdi-class-super class))))
 
 (defun jdi-method-resolve-locations (jdi method)
   (unless (or (jdi-method-resolved-flag method) (jdi-method-native-p method))
