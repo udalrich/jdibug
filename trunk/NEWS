@@ -2,6 +2,12 @@
 
 * 0.2 (in development)
 
+** Invoking methods
+When an object is expanded, there will be a pseudo node named
+"methods" at the end of the list. Expanding the node will invoke the
+method on the object. Only methods which do not need arguments can be
+invoked.
+
 ** Break on all methods within a class
 Now you can break on all the methods a class by positioning the cursor
 on the first line in the class (usually "^public class...") and
