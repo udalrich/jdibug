@@ -416,7 +416,69 @@ And position the point at the line number."
 		   (jdi-values-resolve jdi (jdi-value-values value))))
 	(jdibug-trace "setting into the tree")
 
-	(mapcar (lambda (value) (jdibug-make-value-node jdibug value)) (jdi-value-values value))))
+	(append
+	 (mapcar (lambda (value) (jdibug-make-value-node jdibug value)) (jdi-value-values value))
+	 (list (jdibug-make-methods-node jdibug value class)))))
+
+(defun jdibug-expand-method-node (tree)
+  (jdibug-trace "jdibug-expand-method-node")
+  (let* ((jdibug (widget-get tree :jdibug))
+		 (jdi    (jdibug-jdi jdibug))
+		 (value  (widget-get tree :jdi-value))
+		 (method (widget-get tree :jdi-method))
+		 (class (widget-get tree :jdi-class)))
+	(multiple-value-bind (reply error jdwp id)
+		(if (jdi-method-static-p method)
+			(jdi-class-invoke-method jdi class (jdi-method-name method))
+		  (jdi-value-invoke-method jdi value (jdi-method-name method)))
+	  (jdibug-info "type:%s,value:%s" 
+				   (bindat-get-field reply :return-value :type)
+				   (bindat-get-field reply :return-value :u :value))
+	  (let ((value (make-jdi-value :name "returns"
+								   :type (bindat-get-field reply :return-value :type) 
+								   :value (bindat-get-field reply :return-value :u :value))))
+		(jdi-value-resolve jdi value)
+		(jdibug-info "running method %s returned %s" (jdi-method-name method) (jdi-value-string value))
+		(list (jdibug-make-value-node jdibug value))))))
+
+(defun jdibug-make-method-node (jdibug value class method)
+  `(tree-widget
+	:node (push-button
+		   :tag ,(format "%s: %s" (jdi-method-name method) (jdi-method-signature method))
+		   :format "%[%t%]\n")
+	:open nil
+	:has-children t
+	:jdi-value  ,value
+	:jdi-method ,method
+	:jdi-class ,class
+	:jdibug ,jdibug
+	:dynargs jdibug-expand-method-node
+	:expander jdibug-expand-method-node))
+
+
+(defun jdibug-expand-methods (tree)
+  (let* ((jdibug (widget-get tree :jdibug))
+		 (jdi   (jdibug-jdi jdibug))
+		 (value (widget-get tree :jdi-value))
+		 (class (widget-get tree :jdi-class)))
+	(when (jdi-suspended-p jdi)
+	  (jdi-class-resolve-parent jdi class)
+	  (jdi-class-resolve-methods jdi class)
+	  (mapcar (lambda (method) (jdibug-make-method-node jdibug value class method)) 
+			  (jdi-class-all-methods class)))))
+
+(defun jdibug-make-methods-node (jdibug value class)
+  `(tree-widget
+	:node (push-button
+		   :tag "methods"
+		   :format "%[%t%]\n")
+	:open nil
+	:has-children t
+	:jdi-value ,value
+	:jdi-class ,class
+	:jdibug ,jdibug
+	:dynargs jdibug-expand-methods
+	:expander jdibug-expand-methods))
 
 (defun jdibug-make-value-node (jdibug value)
   (if (jdi-value-has-children-p value)
