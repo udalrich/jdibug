@@ -178,6 +178,13 @@ When expanding a Collection or Map, the locals browser will be
 displaying the contents as an array instead of having you to click one
 or two more times to see the contents within the Collection or Map.
 
+At the end of every object, there's a pseudo node named @code{methods}
+that can be expanded to show all the methods for that object and also
+static methods of the object's class. Expanding any of the methods
+will invoke the method and the results of the invocation will be shown
+in the expanded node. Currently only methods which does not need
+arguments can be invoked.
+
 @node Frames Browser
 @chapter Frames Browser
 The frames buffer is a simple list of all the frames from the
