@@ -364,6 +364,22 @@
 		  (jdi-info "class do not have debug information")
 		(jdi-error "failed to look line-code-index %s in class %s" line-code-index (jdi-class-name class))))))
 
+(defun jdi-class-invoke-method (jdi class method-name)
+  "Invoke a simple method (do not require arguments) in the class."
+  (jdi-info "jdi-class-invoke-method:%s" method-name)
+  (jdi-class-resolve-parent jdi class)
+  (jdi-class-resolve-methods jdi class)
+  (let ((method (find-if (lambda (method)
+						   (equal (jdi-method-name method) method-name))
+						 (jdi-class-all-methods class))))
+	(if method
+		(jdwp-send-command (jdi-jdwp jdi) "class-invoke-method"
+						   `((:class . ,(jdi-class-id class))
+							 (:thread . ,(jdi-suspended-thread-id jdi))
+							 (:method-id . ,(jdi-method-id method))
+							 (:arguments . 0)
+							 (:options . ,jdwp-invoke-single-threaded))))))
+
 (defun jdi-classes-find-by-id (jdi class-id)
   "Return the jdi-class with that class-id"
   (let ((result (gethash class-id (jdi-classes jdi))))
@@ -700,6 +716,9 @@
 (defun jdi-method-native-p (method)
   (not (equal (logand (jdi-method-mod-bits method) jdi-access-native) 0)))
 
+(defun jdi-method-static-p (method)
+  (not (equal (logand (jdi-method-mod-bits method) jdi-access-static) 0)))
+
 (defun jdi-class-name (class)
   (jdi-trace "jdi-class-name:%s" (jdi-class-signature class))
   (let* ((class-name (jdi-class-signature class)))
@@ -764,41 +783,47 @@
 			(incf i)))
 		(jdi-values-resolve jdi values)))))
 
+(defun jdi-value-resolve (jdi value)
+  "Resolve a single jdi-value."
+  (jdi-trace "resolving value:%s:%d:%s" (jdi-value-name value) (jdi-value-type value) (jdi-value-value value))
+  (setf (jdi-value-has-children-p value) nil)
+  (cond ((or (equal (jdi-value-type value) jdwp-tag-int)
+			 (equal (jdi-value-type value) jdwp-tag-byte)
+			 (equal (jdi-value-type value) jdwp-tag-char)
+			 (equal (jdi-value-type value) jdwp-tag-short))
+		 (setf (jdi-value-string value) (format "%d" (jdi-value-value value))))
+		((equal (jdi-value-type value) jdwp-tag-long)
+		 (setf (jdi-value-string value) (format "%d" (jdwp-vec-to-int (jdi-value-value value)))))
+		((equal (jdi-value-type value) jdwp-tag-float)
+		 (setf (jdi-value-string value) (format "%f" (jdwp-vec-to-float (jdi-value-value value)))))
+		((equal (jdi-value-type value) jdwp-tag-object)
+		 (jdi-value-resolve-ref-type jdi value))
+		((equal (jdi-value-type value) jdwp-tag-array)
+		 (jdi-value-resolve-array jdi value))
+		((equal (jdi-value-type value) jdwp-tag-string)
+		 (jdi-value-resolve-string jdi value))
+		((equal (jdi-value-type value) jdwp-tag-void)
+		 (setf (jdi-value-string value) "void"))
+		((equal (jdi-value-type value) jdwp-tag-boolean)
+		 (setf (jdi-value-string value) (if (= 0 (jdi-value-value value)) "false" "true")))
+		((equal (jdi-value-type value) jdwp-tag-class-object)
+		 ;; TODO: put in the class name
+		 (setf (jdi-value-string value) "class"))
+		((equal (jdi-value-type value) jdwp-tag-class-loader)
+		 (setf (jdi-value-string value) "class-loader"))
+		((equal (jdi-value-type value) jdwp-tag-thread)
+		 (setf (jdi-value-string value) "thread"))
+		((equal (jdi-value-type value) jdwp-tag-thread-group)
+		 (setf (jdi-value-string value) "thread-group"))
+		(t 
+		 (jdi-error "fixme: do not know how to print value of type:%s name:%s" (jdi-value-type value) (jdi-value-name value))
+		 (setf (jdi-value-string value) "..."))))
+
+
 (defun jdi-values-resolve (jdi values)
   "Resolve a list of jdi-values."
   (jdi-info "jdi-values-resolve %d values" (length values))
-  (dolist (value values)
-    (jdi-trace "resolving values:%s:%d:%s" (jdi-value-name value) (jdi-value-type value) (jdi-value-value value))
-    (setf (jdi-value-has-children-p value) nil)
-    (cond ((or (equal (jdi-value-type value) jdwp-tag-int)
-			   (equal (jdi-value-type value) jdwp-tag-byte)
-			   (equal (jdi-value-type value) jdwp-tag-char)
-			   (equal (jdi-value-type value) jdwp-tag-short))
-		   (setf (jdi-value-string value) (format "%d" (jdi-value-value value))))
-		  ((equal (jdi-value-type value) jdwp-tag-long)
-		   (setf (jdi-value-string value) (format "%d" (jdwp-vec-to-int (jdi-value-value value)))))
-		  ((equal (jdi-value-type value) jdwp-tag-float)
-		   (setf (jdi-value-string value) (format "%f" (jdwp-vec-to-float (jdi-value-value value)))))
-		  ((equal (jdi-value-type value) jdwp-tag-object)
-		   (jdi-value-resolve-ref-type jdi value))
-		  ((equal (jdi-value-type value) jdwp-tag-array)
-		   (jdi-value-resolve-array jdi value))
-		  ((equal (jdi-value-type value) jdwp-tag-string)
-		   (jdi-value-resolve-string jdi value))
-		  ((equal (jdi-value-type value) jdwp-tag-boolean)
-		   (setf (jdi-value-string value) (if (= 0 (jdi-value-value value)) "false" "true")))
-		  ((equal (jdi-value-type value) jdwp-tag-class-object)
-		   ;; TODO: put in the class name
-		   (setf (jdi-value-string value) "class"))
-		  ((equal (jdi-value-type value) jdwp-tag-class-loader)
-		   (setf (jdi-value-string value) "class-loader"))
-		  ((equal (jdi-value-type value) jdwp-tag-thread)
-		   (setf (jdi-value-string value) "thread"))
-		  ((equal (jdi-value-type value) jdwp-tag-thread-group)
-		   (setf (jdi-value-string value) "thread-group"))
-		  (t 
-		   (jdi-error "fixme: do not know how to print value of type:%s name:%s" (jdi-value-type value) (jdi-value-name value))
-		   (setf (jdi-value-string value) "...")))))
+  (mapc (lambda (value) (jdi-value-resolve jdi value)) values))
 
 
 (defun jdi-value-get-field-value (jdi value field-name func)
