@@ -420,6 +420,19 @@
 					   :command      1
 					   :command-spec ((:class         vec (eval jdwp-reference-type-id-size)))
 					   :reply-spec   ((:superclass    vec (eval jdwp-reference-type-id-size))))
+		(:name         "class-invoke-method"
+					   :commandset   3
+					   :command      3
+					   :command-spec ((:class         vec (eval jdwp-reference-type-id-size))
+									  (:thread        vec (eval jdwp-object-id-size))
+									  (:method-id     vec (eval jdwp-method-id-size))
+									  (:arguments     u32)
+									  (:argument      repeat (:arguments)
+													  (:value struct jdwp-value-spec))
+									  (:options       u32))
+					   :reply-spec   ((:return-value     struct jdwp-value-spec)
+									  (:exception-type   u8)
+									  (:exception-object vec (eval jdwp-object-id-size))))
 		(:name         "line-table"
 					   :commandset   6
 					   :command      1
