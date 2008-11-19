@@ -168,7 +168,8 @@ have a class @code{com.foo.Dog} which have a getter called
 @code{getName}, and you want to see the name of the dog displayed, you
 can just add the following line into your @file{.emacs} (after the
 @code{(require 'jdibug)} line) and viola, you will see the name of the
-dog instead of the @code{Dog} class name.
+dog instead of the @code{Dog} class name. The method that is specified
+must receive no arguments and returns a @code{java.lang.String}.
 
 @example
 (add-to-list 'jdi-value-custom-set-strings '("com.foo.Dog" "getName"))
