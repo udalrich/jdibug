@@ -18,5 +18,12 @@ class. Note that the pseudo method <init> will also be breakpoint-ed.
 ** Setting breakpoint before debuggee is connected
 You can now set the breakpoints before connecting to the debuggee.
 
+** Fixed bug where expanding HttpServletRequest causes JBOSS to crash
+As reported by Lei Wang <tendant@gmail.com>, when expanding
+HttpServletRequest under JBOSS, it causes JBOSS to crash, the reason
+being that there are several toString methods within the Integer
+object, and we were invoking the wrong one. The fix makes sure we only
+invoke those methods that takes no argument and returns a string.
+
 * 0.1 (2008-11-04)
 Initial Release
