@@ -841,14 +841,16 @@ named field-name, and call func with (jdi value field-value) after that."
 							 (:field  ((:id . ,(jdi-field-id wanted-field-id))))))
 	  (funcall func jdi value (bindat-get-field (car (bindat-get-field reply :value)) :value :u :value)))))
 
-(defun jdi-value-invoke-method (jdi value method-name)
+(defun jdi-value-invoke-method (jdi value method-name &optional method-signature)
   "Invoke a simple method (do not require arguments) in the object in jdi-value."
   (jdi-info "jdi-value-invoke-method:%s" method-name)
   (let ((class (jdi-value-class value)))
 	(jdi-class-resolve-parent jdi class)
 	(jdi-class-resolve-methods jdi class)
 	(let ((method (find-if (lambda (method)
-							 (equal (jdi-method-name method) method-name))
+							 (and (string= (jdi-method-name method) method-name)
+								  (or (null method-signature)
+									  (string= (jdi-method-signature method) method-signature))))
 						   (jdi-class-all-methods class))))
 	  (if method
 		  (jdwp-send-command (jdi-jdwp jdi) "object-invoke-method"
@@ -1221,7 +1223,7 @@ to populate the jdi-value-values of the jdi-value.")
 
 (defun jdi-value-custom-set-string-with-method (jdi value method)
   (multiple-value-bind (reply error jdwp id)
-	  (jdi-value-invoke-method jdi value method)
+	  (jdi-value-invoke-method jdi value method "()Ljava/lang/String;")
 	(if reply
 		(let ((object-id (bindat-get-field reply :return-value :u :value)))
 		  (multiple-value-bind (reply error jdwp id)
