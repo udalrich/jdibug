@@ -589,7 +589,8 @@
 						 (list (find-if (lambda (location)
 										  (equal (jdi-location-line-number location) line-number))
 										(jdi-class-all-locations class))))))
-		(if (null locations)
+		(if (or (null locations)
+				(null (car locations)))
 			(setf (jdi-last-error jdi) 'no-code-at-line)
 		  (jdi-trace "found locations:%s" locations)
 		  (push (make-jdi-breakpoint :source-file source-file 
