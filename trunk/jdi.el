@@ -1227,10 +1227,12 @@ to populate the jdi-value-values of the jdi-value.")
 	  (jdi-value-invoke-method jdi value method "()Ljava/lang/String;")
 	(if reply
 		(let ((object-id (bindat-get-field reply :return-value :u :value)))
-		  (multiple-value-bind (reply error jdwp id)
-			  (jdwp-send-command (jdi-jdwp jdi) "string-value" 
-								 `((:object . ,object-id)))
-			(setf (jdi-value-string value) (jdi-format-string (jdwp-get-string reply :value)))))
+		  (if (equal object-id [0 0 0 0 0 0 0 0])
+			  (setf (jdi-value-string value) "null")
+			(multiple-value-bind (reply error jdwp id)
+				(jdwp-send-command (jdi-jdwp jdi) "string-value" 
+								   `((:object . ,object-id)))
+			  (setf (jdi-value-string value) (jdi-format-string (jdwp-get-string reply :value))))))
 	  (setf (jdi-value-string value) (format "setter %s not found" method)))))
 
 (defun jdi-value-custom-set-string-with-size (jdi value)
