@@ -880,7 +880,8 @@ And position the point at the line number."
   (mapc (lambda (buffer)
 		  (let ((win (get-buffer-window buffer t)))
 			(if win (delete-window win)))
-		  (kill-buffer buffer))
+		  (if (get-buffer buffer)
+			  (kill-buffer buffer)))
 		(list jdibug-locals-buffer-name jdibug-frames-buffer-name jdibug-breakpoints-buffer-name)))
 
 (add-hook 'jdibug-connected-hook 'jdibug-debug-view)
