@@ -158,6 +158,8 @@
   id
   ;; jni-style
   signature 
+  ref-type-tag
+  status
   ;; list of nonstatic jdi-field
   fields    
   ;; parent jdi-class
@@ -388,10 +390,11 @@
     result))
 
 (defun jdi-classes-find-by-signature (jdi signature)
-  "Return the jdi-class with that signature"
+  "Return a list (because they might be loaded by different class loaders) of jdi-class with that signature"
   (let ((result (gethash signature (jdi-classes-by-signature jdi))))
     (if (null result)
 		(jdi-error "failed to find class with signature:%s in %d classes" signature (hash-table-count (jdi-classes-by-signature jdi))))
+	(jdi-info "jdi-classes-find-by-signature:%s:found:%d" signature (length result))
     result))
 
 (defun jdi-methods-find-by-id (class method-id)
@@ -453,22 +456,24 @@
 	(jdi-trace "breakpoint-requests:%s" (jdi-breakpoint-requests jdi))
 	(if (gethash type-id (jdi-classes jdi))
 		(jdi-info "class already in cache, not doing anything")
+	  ;; add the class into our hash tables
 	  (let ((newclass (make-jdi-class :id type-id :signature signature)))
 		(puthash type-id newclass (jdi-classes jdi))
-		(puthash signature newclass (jdi-classes-by-signature jdi))))
-    (let ((resolved-br nil))
-      (mapc (lambda (br) 
-			  (if (equal (jdi-breakpoint-request-source-file br) (jdi-class-signature-to-source jdi signature))
-				  (push br resolved-br)))
-			(jdi-breakpoint-requests jdi))
-      (mapc (lambda (rbr)
-			  (setf (jdi-breakpoint-requests jdi) 
-					(delete rbr (jdi-breakpoint-requests jdi))))
-			resolved-br)
-	  (dolist (br resolved-br)
-		(jdi-set-breakpoint jdi (jdi-breakpoint-request-source-file br) (jdi-breakpoint-request-line-number br))
-		(jdi-resume jdi)
-		(funcall (jdi-breakpoint-resolved-handler jdi) jdi br)))))
+		(let ((l (gethash signature (jdi-classes-by-signature jdi))))
+		  (if l
+			  (puthash signature (cons newclass l) (jdi-classes-by-signature jdi))
+			(puthash signature (list newclass) (jdi-classes-by-signature jdi)))))
+
+	  ;; check whether we have any pending breakpoints for this class
+	  ;; we never delete the breakpoints requests, as even though we might
+	  ;; have installed it for the class, the class might be loaded again
+	  ;; later by another class loader, and we want to install the breakpoint
+	  ;; for THAT class as well
+	  (dolist (br (jdi-breakpoint-requests jdi))
+		(when (equal (jdi-breakpoint-request-source-file br) (jdi-class-signature-to-source jdi signature))
+		  (jdi-resume jdi)
+		  (jdi-set-breakpoint jdi (jdi-breakpoint-request-source-file br) (jdi-breakpoint-request-line-number br))
+		  (funcall (jdi-breakpoint-resolved-handler jdi) jdi br))))))
 
 (defun jdi-handle-class-unload (jdwp event)
   (let ((jdi (jdwp-get jdwp 'jdi))
@@ -541,13 +546,25 @@
 	(loop for class in (bindat-get-field reply :class)
 		  for type-id = (bindat-get-field class :type-id)
 		  for signature = (jdwp-get-string class :signature)
-		  for newclass = (make-jdi-class :id type-id	:signature signature)
+		  for ref-type-tag = (bindat-get-field class :ref-type-tag)
+		  for status = (bindat-get-field class :status)
+		  for newclass = (make-jdi-class :id type-id	
+										 :signature signature
+										 :ref-type-tag ref-type-tag
+										 :status status)
 		  do
 		  (puthash type-id newclass (jdi-classes jdi))
-		  (puthash signature newclass (jdi-classes-by-signature jdi)))
+		  (let ((l (gethash signature (jdi-classes-by-signature jdi))))
+			(if l
+				(puthash signature (cons newclass l) (jdi-classes-by-signature jdi))
+			  (puthash signature (list newclass) (jdi-classes-by-signature jdi)))))
 	(if jdi-trace-flag
 		(maphash (lambda (key value)
-				   (jdi-trace "class key:%s" key))
+				   (jdi-trace "class id:%s signature:%s ref-type-tag:%s status:%s" 
+							  key 
+							  (jdi-class-signature value)
+							  (jdi-class-ref-type-tag value)
+							  (jdi-class-status value)))
 				 (jdi-classes jdi)))
 	(jdwp-send-command (jdi-jdwp jdi) "resume" nil)))
 
@@ -563,8 +580,8 @@
 (defun jdi-set-breakpoint (jdi source-file line-number)
   (jdi-info "jdi-set-breakpoint:%s:%s" source-file line-number)
   (let* ((sig (jdi-source-to-class-signature jdi source-file))
-		 (class (jdi-classes-find-by-signature jdi sig)))
-    (if (null class)
+		 (classes (jdi-classes-find-by-signature jdi sig)))
+    (if (null classes)
 		;; the class is not loaded yet, just install a class-prepare event 
 		(let* ((class-name (jdi-source-to-class-name jdi source-file)))
 		  (jdi-info "could not find class %s in loaded class list" sig)
@@ -583,20 +600,21 @@
 				(list class-name (concat class-name ".*") (concat class-name "$*"))))
 
 	  ;; the class is loaded! yay!
-	  (jdi-class-resolve-all-locations jdi class)
-	  (let ((locations (if (null line-number)
-						   (jdi-class-all-first-line-locations-of-methods class)
-						 (list (find-if (lambda (location)
-										  (equal (jdi-location-line-number location) line-number))
-										(jdi-class-all-locations class))))))
-		(if (or (null locations)
-				(null (car locations)))
-			(setf (jdi-last-error jdi) 'no-code-at-line)
-		  (jdi-trace "found locations:%s" locations)
-		  (push (make-jdi-breakpoint :source-file source-file 
-									 :line-number line-number 
-									 :request-ids (mapcar (lambda (location) (jdi-set-breakpoint-location jdi location)) locations))
-				(jdi-breakpoints jdi)))))))
+	  (dolist (class classes)
+		(jdi-class-resolve-all-locations jdi class)
+		(let ((locations (if (null line-number)
+							 (jdi-class-all-first-line-locations-of-methods class)
+						   (list (find-if (lambda (location)
+											(equal (jdi-location-line-number location) line-number))
+										  (jdi-class-all-locations class))))))
+		  (if (or (null locations)
+				  (null (car locations)))
+			  (setf (jdi-last-error jdi) 'no-code-at-line)
+			(jdi-trace "jdi-set-breakpoint:found locations:%s" locations)
+			(push (make-jdi-breakpoint :source-file source-file 
+									   :line-number line-number 
+									   :request-ids (mapcar (lambda (location) (jdi-set-breakpoint-location jdi location)) locations))
+				  (jdi-breakpoints jdi))))))))
 
 (defun jdi-set-breakpoint-location (jdi location)
   "Set the breakpoint at the location, return the request-id."
@@ -615,14 +633,24 @@
 	  (bindat-get-field reply :request-id))))
 
 (defun jdi-clear-breakpoint (jdi source-file line-number)
-  (let* ((bp (find-if (lambda (bp)
-						(and (equal (jdi-breakpoint-source-file bp) source-file)
-							 (equal (jdi-breakpoint-line-number bp) line-number)))
-					  (jdi-breakpoints jdi))))
-    (if bp
-		(mapc (lambda (request-id)
-				(jdwp-clear-breakpoint (jdi-jdwp jdi) request-id))
-			  (jdi-breakpoint-request-ids bp))
+  (jdi-trace "jdi-clear-breakpoint, total number of breakpoints:%d" (length (jdi-breakpoints jdi)))
+  (let* ((breakpoints
+		  (loop for bp in (jdi-breakpoints jdi)
+				if (and (equal (jdi-breakpoint-source-file bp) source-file)
+						(equal (jdi-breakpoint-line-number bp) line-number))
+				collect bp))
+		 (request-ids
+		  (loop for bp in breakpoints
+				append (jdi-breakpoint-request-ids bp))))
+    (if breakpoints
+		(progn
+		  (jdi-trace "jdi-clear-breakpoint, found number of breakpoints:%d, number of request-ids:%d" (length breakpoints) (length request-ids))
+		  (mapc (lambda (request-id)
+				  (jdwp-clear-breakpoint (jdi-jdwp jdi) request-id))
+				request-ids)
+		  (mapc (lambda (bp)
+				  (setf (jdi-breakpoints jdi) (delete bp (jdi-breakpoints jdi))))
+				breakpoints))
       (jdwp-error "failed to find breakpoint %s:%s" source-file line-number))))
 
 (defun jdi-source-to-class-signature (jdi source)
@@ -1264,7 +1292,7 @@ to populate the jdi-value-values of the jdi-value.")
 		(jdi-value-invoke-method jdi value "keySet")
 	  (setf keyset-value (make-jdi-value :value 
 										 (bindat-get-field reply :return-value :u :value))))
-	(setf (jdi-value-class keyset-value) (jdi-classes-find-by-signature jdi "Ljava/util/Set;"))
+	(setf (jdi-value-class keyset-value) (car (jdi-classes-find-by-signature jdi "Ljava/util/Set;")))
 	(jdi-trace "keyset-value:%s" keyset-value)
 	(multiple-value-bind (reply error jdwp id)
 		(jdi-value-invoke-method jdi keyset-value "toArray")
@@ -1279,7 +1307,7 @@ to populate the jdi-value-values of the jdi-value.")
 	  (setf values-value (make-jdi-value :value 
 										 (bindat-get-field reply :return-value :u :value))))
 
-	(setf (jdi-value-class values-value) (jdi-classes-find-by-signature jdi "Ljava/util/Collection;"))
+	(setf (jdi-value-class values-value) (car (jdi-classes-find-by-signature jdi "Ljava/util/Collection;")))
 	(jdi-trace "values-value:%s" values-value)
 	(multiple-value-bind (reply error jdwp id)
 		(jdi-value-invoke-method jdi values-value "toArray")
