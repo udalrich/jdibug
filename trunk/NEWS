@@ -2,6 +2,11 @@
 
 * 0.2 (in development)
 
+** Class loaded by multiple class loaders
+Previously, if a class is loaded by that once by different class
+loaders, setting breakpoint on the class might not work
+properly. Fixed it.
+
 ** Invoking methods
 When an object is expanded, there will be a pseudo node named
 "methods" at the end of the list. Expanding the node will invoke the
