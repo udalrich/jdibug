@@ -407,7 +407,7 @@ And position the point at the line number."
 
 			 (jdibug-info "expanders took %s seconds" (float-time (time-subtract (current-time) start-time)))
 
-			 (jdi-values-resolve jdi (jdi-value-values value))
+			 (jdi-values-resolve jdi (jdi-value-values value) value)
 			 (jdibug-info "resolving took %s seconds" (float-time (time-subtract (current-time) start-time)))
 			 (jdibug-info "done resolving values")))
 		  ((= (jdi-value-type value) jdwp-tag-array)
