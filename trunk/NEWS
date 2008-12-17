@@ -2,6 +2,12 @@
 
 * 0.2 (in development)
 
+** Class that contains attributes pointing back to itself
+If an attribute in a class contain a reference to itself, now the node
+will just display as "this" and it will not be expandable, this is to
+prevent confusion to the user because the attribute will be infinitely
+expandable. 
+
 ** Class loaded by multiple class loaders
 Previously, if a class is loaded by that once by different class
 loaders, setting breakpoint on the class might not work
