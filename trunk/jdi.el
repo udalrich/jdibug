@@ -812,7 +812,7 @@
 			(incf i)))
 		(jdi-values-resolve jdi values)))))
 
-(defun jdi-value-resolve (jdi value)
+(defun jdi-value-resolve (jdi value &optional parent)
   "Resolve a single jdi-value."
   (jdi-trace "resolving value:%s:%d:%s" (jdi-value-name value) (jdi-value-type value) (jdi-value-value value))
   (setf (jdi-value-has-children-p value) nil)
@@ -825,6 +825,11 @@
 		 (setf (jdi-value-string value) (format "%d" (jdwp-vec-to-int (jdi-value-value value)))))
 		((equal (jdi-value-type value) jdwp-tag-float)
 		 (setf (jdi-value-string value) (format "%f" (jdwp-vec-to-float (jdi-value-value value)))))
+		((and parent
+			  (equal (jdi-value-type parent) jdwp-tag-object)
+			  (equal (jdi-value-type value) jdwp-tag-object)
+			  (equal (jdi-value-value parent) (jdi-value-value value)))
+		 (setf (jdi-value-string value) "this"))
 		((equal (jdi-value-type value) jdwp-tag-object)
 		 (jdi-value-resolve-ref-type jdi value))
 		((equal (jdi-value-type value) jdwp-tag-array)
@@ -849,10 +854,10 @@
 		 (setf (jdi-value-string value) "..."))))
 
 
-(defun jdi-values-resolve (jdi values)
+(defun jdi-values-resolve (jdi values &optional parent)
   "Resolve a list of jdi-values."
   (jdi-info "jdi-values-resolve %d values" (length values))
-  (mapc (lambda (value) (jdi-value-resolve jdi value)) values))
+  (mapc (lambda (value) (jdi-value-resolve jdi value parent)) values))
 
 
 (defun jdi-value-get-field-value (jdi value field-name func)
