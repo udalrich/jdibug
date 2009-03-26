@@ -1,27 +1,27 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html401/loose.dtd">
 <html>
-<!-- Created on November, 19 2008 by texi2html 1.78 -->
-<!--
-Written by: Lionel Cons <Lionel.Cons@cern.ch> (original author)
+<!-- Created on March 26, 2009 by texi2html 1.82
+texi2html was written by: 
+            Lionel Cons <Lionel.Cons@cern.ch> (original author)
             Karl Berry  <karl@freefriends.org>
             Olaf Bachmann <obachman@mathematik.uni-kl.de>
             and many others.
 Maintained by: Many creative people.
 Send bugs and suggestions to <texi2html-bug@nongnu.org>
-
 -->
 <head>
-<title>JDIbug User Manual</title>
+<title>JDIbug User Manual</title>
 
-<meta name="description" content="JDIbug User Manual">
-<meta name="keywords" content="JDIbug User Manual">
+<meta name="description" content="JDIbug User Manual">
+<meta name="keywords" content="JDIbug User Manual">
 <meta name="resource-type" content="document">
 <meta name="distribution" content="global">
-<meta name="Generator" content="texi2html 1.78">
+<meta name="Generator" content="texi2html 1.82">
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <style type="text/css">
 <!--
 a.summary-letter {text-decoration: none}
+blockquote.smallquotation {font-size: smaller}
 pre.display {font-family: serif}
 pre.format {font-family: serif}
 pre.menu-comment {font-family: serif}
@@ -42,61 +42,61 @@ ul.toc {list-style: none}
 <body lang="en" bgcolor="#FFFFFF" text="#000000" link="#0000FF" vlink="#800080" alink="#FF0000">
 
 <a name="Top"></a>
-<a name="SEC_Top"></a>
 <table cellpadding="1" cellspacing="1" border="0">
-<tr><td valign="middle" align="left">[<a href="#SEC_Top" title="Cover (top) of document">Top</a>]</td>
+<tr><td valign="middle" align="left">[<a href="#Top" title="Cover (top) of document">Top</a>]</td>
 <td valign="middle" align="left">[Contents]</td>
 <td valign="middle" align="left">[Index]</td>
 <td valign="middle" align="left">[<a href="#SEC_About" title="About (help)"> ? </a>]</td>
 </tr></table>
+<a name="JDIbug-User-Manual"></a>
 <h1 class="settitle">JDIbug User Manual</h1>
 
 <table class="menu" border="0" cellspacing="0">
-<tr><td align="left" valign="top"><a href="#SEC1">1. Rationale</a></td><td>&nbsp;&nbsp;</td><td align="left" valign="top">          Why I created JDIbug
+<tr><td align="left" valign="top"><a href="#Rationale">1. Rationale</a></td><td>&nbsp;&nbsp;</td><td align="left" valign="top">          Why I created JDIbug
 </td></tr>
-<tr><td align="left" valign="top"><a href="#SEC2">2. Installation</a></td><td>&nbsp;&nbsp;</td><td align="left" valign="top">       How to install JDIbug
+<tr><td align="left" valign="top"><a href="#Installation">2. Installation</a></td><td>&nbsp;&nbsp;</td><td align="left" valign="top">       How to install JDIbug
 </td></tr>
-<tr><td align="left" valign="top"><a href="#SEC3">3. Configuration</a></td><td>&nbsp;&nbsp;</td><td align="left" valign="top">      Configuring JDIbug
+<tr><td align="left" valign="top"><a href="#Configuration">3. Configuration</a></td><td>&nbsp;&nbsp;</td><td align="left" valign="top">      Configuring JDIbug
 </td></tr>
-<tr><td align="left" valign="top"><a href="#SEC4">4. Connecting</a></td><td>&nbsp;&nbsp;</td><td align="left" valign="top">         Connecting to and Disconnecting from a debuggee
+<tr><td align="left" valign="top"><a href="#Connecting">4. Connecting</a></td><td>&nbsp;&nbsp;</td><td align="left" valign="top">         Connecting to and Disconnecting from a debuggee
 </td></tr>
-<tr><td align="left" valign="top"><a href="#SEC5">5. Breakpoints</a></td><td>&nbsp;&nbsp;</td><td align="left" valign="top">        Setting and clearing breakpoints
+<tr><td align="left" valign="top"><a href="#Breakpoints">5. Breakpoints</a></td><td>&nbsp;&nbsp;</td><td align="left" valign="top">        Setting and clearing breakpoints
 </td></tr>
-<tr><td align="left" valign="top"><a href="#SEC6">6. Stepping</a></td><td>&nbsp;&nbsp;</td><td align="left" valign="top">           Stepping into, over and out of source codes
+<tr><td align="left" valign="top"><a href="#Stepping">6. Stepping</a></td><td>&nbsp;&nbsp;</td><td align="left" valign="top">           Stepping into, over and out of source codes
 </td></tr>
-<tr><td align="left" valign="top"><a href="#SEC7">7. Locals Browser</a></td><td>&nbsp;&nbsp;</td><td align="left" valign="top">     Using the Locals Browser
+<tr><td align="left" valign="top"><a href="#Locals-Browser">7. Locals Browser</a></td><td>&nbsp;&nbsp;</td><td align="left" valign="top">     Using the Locals Browser
 </td></tr>
-<tr><td align="left" valign="top"><a href="#SEC8">8. Frames Browser</a></td><td>&nbsp;&nbsp;</td><td align="left" valign="top">     Using the Frames Browser
+<tr><td align="left" valign="top"><a href="#Frames-Browser">8. Frames Browser</a></td><td>&nbsp;&nbsp;</td><td align="left" valign="top">     Using the Frames Browser
 </td></tr>
-<tr><td align="left" valign="top"><a href="#SEC9">9. Breakpoints Buffer</a></td><td>&nbsp;&nbsp;</td><td align="left" valign="top"> Using the Breakpoint Buffer
+<tr><td align="left" valign="top"><a href="#Breakpoints-Buffer">9. Breakpoints Buffer</a></td><td>&nbsp;&nbsp;</td><td align="left" valign="top"> Using the Breakpoint Buffer
 </td></tr>
-<tr><td align="left" valign="top"><a href="#SEC10">10. Window Layout</a></td><td>&nbsp;&nbsp;</td><td align="left" valign="top">      Changing the default window layout
+<tr><td align="left" valign="top"><a href="#Window-Layout">10. Window Layout</a></td><td>&nbsp;&nbsp;</td><td align="left" valign="top">      Changing the default window layout
 </td></tr>
-<tr><td align="left" valign="top"><a href="#SEC11">11. Bug Reporting</a></td><td>&nbsp;&nbsp;</td><td align="left" valign="top">      When you think there's a bug in JDIbug
+<tr><td align="left" valign="top"><a href="#Bug-Reporting">11. Bug Reporting</a></td><td>&nbsp;&nbsp;</td><td align="left" valign="top">      When you think there&rsquo;s a bug in JDIbug
 </td></tr>
 </table>
 
 
 <hr size="1">
 <a name="Rationale"></a>
-<a name="SEC1"></a>
 <table cellpadding="1" cellspacing="1" border="0">
-<tr><td valign="middle" align="left">[<a href="#SEC_Top" title="Previous section in reading order"> &lt; </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC2" title="Next section in reading order"> &gt; </a>]</td>
+<tr><td valign="middle" align="left">[<a href="#Top" title="Previous section in reading order"> &lt; </a>]</td>
+<td valign="middle" align="left">[<a href="#Installation" title="Next section in reading order"> &gt; </a>]</td>
 <td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left">[ &lt;&lt; ]</td>
-<td valign="middle" align="left">[<a href="#SEC_Top" title="Up section"> Up </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC2" title="Next chapter"> &gt;&gt; </a>]</td>
-<td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left">[<a href="#Top" title="Beginning of this chapter or previous chapter"> &lt;&lt; </a>]</td>
+<td valign="middle" align="left">[<a href="#Top" title="Up section"> Up </a>]</td>
+<td valign="middle" align="left">[<a href="#Installation" title="Next chapter"> &gt;&gt; </a>]</td>
 <td valign="middle" align="left"> &nbsp; </td>
 <td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left">[<a href="#SEC_Top" title="Cover (top) of document">Top</a>]</td>
+<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left">[<a href="#Top" title="Cover (top) of document">Top</a>]</td>
 <td valign="middle" align="left">[Contents]</td>
 <td valign="middle" align="left">[Index]</td>
 <td valign="middle" align="left">[<a href="#SEC_About" title="About (help)"> ? </a>]</td>
 </tr></table>
-<h1 class="chapter"> 1. Rationale </h1>
+<a name="Rationale-1"></a>
+<h1 class="chapter">1. Rationale</h1>
 
 <p>One word, locals browser. As I started using JDE, there are two
 debuggers that are available, which are jdb and jdebug.
@@ -110,30 +110,30 @@ inspect the attributes of particular objects.
 source files takes forever.
 </p>
 <p>I then started using jswat, which is very user friendly. But it
-doesn't integrate with Emacs.
+doesn&rsquo;t integrate with Emacs.
 </p>
 <p>So I created JDIbug.
 </p>
 <hr size="6">
 <a name="Installation"></a>
-<a name="SEC2"></a>
 <table cellpadding="1" cellspacing="1" border="0">
-<tr><td valign="middle" align="left">[<a href="#SEC1" title="Previous section in reading order"> &lt; </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC3" title="Next section in reading order"> &gt; </a>]</td>
+<tr><td valign="middle" align="left">[<a href="#Rationale" title="Previous section in reading order"> &lt; </a>]</td>
+<td valign="middle" align="left">[<a href="#Configuration" title="Next section in reading order"> &gt; </a>]</td>
 <td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left">[<a href="#SEC1" title="Beginning of this chapter or previous chapter"> &lt;&lt; </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC_Top" title="Up section"> Up </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC3" title="Next chapter"> &gt;&gt; </a>]</td>
-<td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left">[<a href="#Rationale" title="Beginning of this chapter or previous chapter"> &lt;&lt; </a>]</td>
+<td valign="middle" align="left">[<a href="#Top" title="Up section"> Up </a>]</td>
+<td valign="middle" align="left">[<a href="#Configuration" title="Next chapter"> &gt;&gt; </a>]</td>
 <td valign="middle" align="left"> &nbsp; </td>
 <td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left">[<a href="#SEC_Top" title="Cover (top) of document">Top</a>]</td>
+<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left">[<a href="#Top" title="Cover (top) of document">Top</a>]</td>
 <td valign="middle" align="left">[Contents]</td>
 <td valign="middle" align="left">[Index]</td>
 <td valign="middle" align="left">[<a href="#SEC_About" title="About (help)"> ? </a>]</td>
 </tr></table>
-<h1 class="chapter"> 2. Installation </h1>
+<a name="Installation-1"></a>
+<h1 class="chapter">2. Installation</h1>
 
 <p>JDIbug is hosted at googlecode, at
 <a href="http://code.google.com/p/jdibug/">http://code.google.com/p/jdibug/</a>
@@ -151,28 +151,28 @@ for example, I have the following in my &lsquo;<tt>.emacs</tt>&rsquo; file:
 </pre></td></tr></table>
 
 
-<p>That's it, you are good to go.
+<p>That&rsquo;s it, you are good to go.
 </p>
 <hr size="6">
 <a name="Configuration"></a>
-<a name="SEC3"></a>
 <table cellpadding="1" cellspacing="1" border="0">
-<tr><td valign="middle" align="left">[<a href="#SEC2" title="Previous section in reading order"> &lt; </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC4" title="Next section in reading order"> &gt; </a>]</td>
+<tr><td valign="middle" align="left">[<a href="#Installation" title="Previous section in reading order"> &lt; </a>]</td>
+<td valign="middle" align="left">[<a href="#Connecting" title="Next section in reading order"> &gt; </a>]</td>
 <td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left">[<a href="#SEC2" title="Beginning of this chapter or previous chapter"> &lt;&lt; </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC_Top" title="Up section"> Up </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC4" title="Next chapter"> &gt;&gt; </a>]</td>
-<td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left">[<a href="#Installation" title="Beginning of this chapter or previous chapter"> &lt;&lt; </a>]</td>
+<td valign="middle" align="left">[<a href="#Top" title="Up section"> Up </a>]</td>
+<td valign="middle" align="left">[<a href="#Connecting" title="Next chapter"> &gt;&gt; </a>]</td>
 <td valign="middle" align="left"> &nbsp; </td>
 <td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left">[<a href="#SEC_Top" title="Cover (top) of document">Top</a>]</td>
+<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left">[<a href="#Top" title="Cover (top) of document">Top</a>]</td>
 <td valign="middle" align="left">[Contents]</td>
 <td valign="middle" align="left">[Index]</td>
 <td valign="middle" align="left">[<a href="#SEC_About" title="About (help)"> ? </a>]</td>
 </tr></table>
-<h1 class="chapter"> 3. Configuration </h1>
+<a name="Configuration-1"></a>
+<h1 class="chapter">3. Configuration</h1>
 
 <p>Although JDIbug current does not rely on any data from JDE, a lot of
 things are made very simple when using JDIbug with JDE. So please
@@ -186,7 +186,7 @@ parameter and the <code>jdibug-connect-port</code> parameter.
 process that you want to debug. And <code>jdibug-connect-port</code>
 specifies the port to connect to.
 </p>
-<p>If you have multiple projects set up using JDE's &lsquo;<tt>prj.el</tt>&rsquo; file,
+<p>If you have multiple projects set up using JDE&rsquo;s &lsquo;<tt>prj.el</tt>&rsquo; file,
 you can set the two parameters inside the &lsquo;<tt>prj.el</tt>&rsquo; file so that
 different projects can be connected using different host/ports by
 JDIbug. Having said that, JDIbug currently <em>does not</em> support
@@ -194,24 +194,24 @@ more than one debugging session per emacs session.
 </p>
 <hr size="6">
 <a name="Connecting"></a>
-<a name="SEC4"></a>
 <table cellpadding="1" cellspacing="1" border="0">
-<tr><td valign="middle" align="left">[<a href="#SEC3" title="Previous section in reading order"> &lt; </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC5" title="Next section in reading order"> &gt; </a>]</td>
+<tr><td valign="middle" align="left">[<a href="#Configuration" title="Previous section in reading order"> &lt; </a>]</td>
+<td valign="middle" align="left">[<a href="#Breakpoints" title="Next section in reading order"> &gt; </a>]</td>
 <td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left">[<a href="#SEC3" title="Beginning of this chapter or previous chapter"> &lt;&lt; </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC_Top" title="Up section"> Up </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC5" title="Next chapter"> &gt;&gt; </a>]</td>
-<td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left">[<a href="#Configuration" title="Beginning of this chapter or previous chapter"> &lt;&lt; </a>]</td>
+<td valign="middle" align="left">[<a href="#Top" title="Up section"> Up </a>]</td>
+<td valign="middle" align="left">[<a href="#Breakpoints" title="Next chapter"> &gt;&gt; </a>]</td>
 <td valign="middle" align="left"> &nbsp; </td>
 <td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left">[<a href="#SEC_Top" title="Cover (top) of document">Top</a>]</td>
+<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left">[<a href="#Top" title="Cover (top) of document">Top</a>]</td>
 <td valign="middle" align="left">[Contents]</td>
 <td valign="middle" align="left">[Index]</td>
 <td valign="middle" align="left">[<a href="#SEC_About" title="About (help)"> ? </a>]</td>
 </tr></table>
-<h1 class="chapter"> 4. Connecting </h1>
+<a name="Connecting-1"></a>
+<h1 class="chapter">4. Connecting</h1>
 <p>After configuring JDIbug, use the key sequence <kbd>C-c C-c C-c</kbd> in a
 jde-mode buffer to connect to the debuggee process. By default, the
 frame will be splitted into windows each displaying different
@@ -224,24 +224,24 @@ C-d</kbd>.
 </p>
 <hr size="6">
 <a name="Breakpoints"></a>
-<a name="SEC5"></a>
 <table cellpadding="1" cellspacing="1" border="0">
-<tr><td valign="middle" align="left">[<a href="#SEC4" title="Previous section in reading order"> &lt; </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC6" title="Next section in reading order"> &gt; </a>]</td>
+<tr><td valign="middle" align="left">[<a href="#Connecting" title="Previous section in reading order"> &lt; </a>]</td>
+<td valign="middle" align="left">[<a href="#Stepping" title="Next section in reading order"> &gt; </a>]</td>
 <td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left">[<a href="#SEC4" title="Beginning of this chapter or previous chapter"> &lt;&lt; </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC_Top" title="Up section"> Up </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC6" title="Next chapter"> &gt;&gt; </a>]</td>
-<td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left">[<a href="#Connecting" title="Beginning of this chapter or previous chapter"> &lt;&lt; </a>]</td>
+<td valign="middle" align="left">[<a href="#Top" title="Up section"> Up </a>]</td>
+<td valign="middle" align="left">[<a href="#Stepping" title="Next chapter"> &gt;&gt; </a>]</td>
 <td valign="middle" align="left"> &nbsp; </td>
 <td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left">[<a href="#SEC_Top" title="Cover (top) of document">Top</a>]</td>
+<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left">[<a href="#Top" title="Cover (top) of document">Top</a>]</td>
 <td valign="middle" align="left">[Contents]</td>
 <td valign="middle" align="left">[Index]</td>
 <td valign="middle" align="left">[<a href="#SEC_About" title="About (help)"> ? </a>]</td>
 </tr></table>
-<h1 class="chapter"> 5. Breakpoints </h1>
+<a name="Breakpoints-1"></a>
+<h1 class="chapter">5. Breakpoints</h1>
 <p>You can set breakpoints before or after you have made the connection
 to the debuggee.
 </p>
@@ -265,24 +265,24 @@ will also be breakpoint-ed.
 </p>
 <hr size="6">
 <a name="Stepping"></a>
-<a name="SEC6"></a>
 <table cellpadding="1" cellspacing="1" border="0">
-<tr><td valign="middle" align="left">[<a href="#SEC5" title="Previous section in reading order"> &lt; </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC7" title="Next section in reading order"> &gt; </a>]</td>
+<tr><td valign="middle" align="left">[<a href="#Breakpoints" title="Previous section in reading order"> &lt; </a>]</td>
+<td valign="middle" align="left">[<a href="#Locals-Browser" title="Next section in reading order"> &gt; </a>]</td>
 <td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left">[<a href="#SEC5" title="Beginning of this chapter or previous chapter"> &lt;&lt; </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC_Top" title="Up section"> Up </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC7" title="Next chapter"> &gt;&gt; </a>]</td>
-<td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left">[<a href="#Breakpoints" title="Beginning of this chapter or previous chapter"> &lt;&lt; </a>]</td>
+<td valign="middle" align="left">[<a href="#Top" title="Up section"> Up </a>]</td>
+<td valign="middle" align="left">[<a href="#Locals-Browser" title="Next chapter"> &gt;&gt; </a>]</td>
 <td valign="middle" align="left"> &nbsp; </td>
 <td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left">[<a href="#SEC_Top" title="Cover (top) of document">Top</a>]</td>
+<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left">[<a href="#Top" title="Cover (top) of document">Top</a>]</td>
 <td valign="middle" align="left">[Contents]</td>
 <td valign="middle" align="left">[Index]</td>
 <td valign="middle" align="left">[<a href="#SEC_About" title="About (help)"> ? </a>]</td>
 </tr></table>
-<h1 class="chapter"> 6. Stepping </h1>
+<a name="Stepping-1"></a>
+<h1 class="chapter">6. Stepping</h1>
 <p>When the debugger is suspended, you can use the following key
 sequences to step through the program.
 </p>
@@ -308,31 +308,33 @@ you can just <kbd>M-f7</kbd> for that.
 </p>
 <hr size="6">
 <a name="Locals-Browser"></a>
-<a name="SEC7"></a>
 <table cellpadding="1" cellspacing="1" border="0">
-<tr><td valign="middle" align="left">[<a href="#SEC6" title="Previous section in reading order"> &lt; </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC8" title="Next section in reading order"> &gt; </a>]</td>
+<tr><td valign="middle" align="left">[<a href="#Stepping" title="Previous section in reading order"> &lt; </a>]</td>
+<td valign="middle" align="left">[<a href="#Frames-Browser" title="Next section in reading order"> &gt; </a>]</td>
 <td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left">[<a href="#SEC6" title="Beginning of this chapter or previous chapter"> &lt;&lt; </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC_Top" title="Up section"> Up </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC8" title="Next chapter"> &gt;&gt; </a>]</td>
-<td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left">[<a href="#Stepping" title="Beginning of this chapter or previous chapter"> &lt;&lt; </a>]</td>
+<td valign="middle" align="left">[<a href="#Top" title="Up section"> Up </a>]</td>
+<td valign="middle" align="left">[<a href="#Frames-Browser" title="Next chapter"> &gt;&gt; </a>]</td>
 <td valign="middle" align="left"> &nbsp; </td>
 <td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left">[<a href="#SEC_Top" title="Cover (top) of document">Top</a>]</td>
+<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left">[<a href="#Top" title="Cover (top) of document">Top</a>]</td>
 <td valign="middle" align="left">[Contents]</td>
 <td valign="middle" align="left">[Index]</td>
 <td valign="middle" align="left">[<a href="#SEC_About" title="About (help)"> ? </a>]</td>
 </tr></table>
-<h1 class="chapter"> 7. Locals Browser </h1>
+<a name="Locals-Browser-1"></a>
+<h1 class="chapter">7. Locals Browser</h1>
 <p>The locals browser uses the emacs tree-mode to display the local
 variables. Each of the variables can be expanded to view the member
 variables by clicking on the expand icon.
 </p>
 <p>When the cursor is over any element in the tree, you can press the
 <kbd>s</kbd> key to invoke the <code>toString</code> method on the variable under
-the cursor. The result will be printed in the echo-area.
+the cursor. The result will be printed in the echo-area. You can also 
+press the <kbd>c</kbd> key to print the class name of the object under the
+cursor in the echo area.
 </p>
 <p>One extra feature that is very useful in the Locals Browser is that it
 reduces the number of clicks that you have to do to inspect a
@@ -342,7 +344,7 @@ etc. For decendants of Collection and Map, there will be extra
 information displayed about the number of items that are within the
 Collection of Map.
 </p>
-<p>If you like the above feature, there's more! You can define custom
+<p>If you like the above feature, there&rsquo;s more! You can define custom
 displayer functions for your own java objects, for example, if you
 have a class <code>com.foo.Dog</code> which have a getter called
 <code>getName</code>, and you want to see the name of the dog displayed, you
@@ -359,33 +361,33 @@ must receive no arguments and returns a <code>java.lang.String</code>.
 displaying the contents as an array instead of having you to click one
 or two more times to see the contents within the Collection or Map.
 </p>
-<p>At the end of every object, there's a pseudo node named <code>methods</code>
+<p>At the end of every object, there&rsquo;s a pseudo node named <code>methods</code>
 that can be expanded to show all the methods for that object and also
-static methods of the object's class. Expanding any of the methods
+static methods of the object&rsquo;s class. Expanding any of the methods
 will invoke the method and the results of the invocation will be shown
 in the expanded node. Currently only methods which does not need
 arguments can be invoked.
 </p>
 <hr size="6">
 <a name="Frames-Browser"></a>
-<a name="SEC8"></a>
 <table cellpadding="1" cellspacing="1" border="0">
-<tr><td valign="middle" align="left">[<a href="#SEC7" title="Previous section in reading order"> &lt; </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC9" title="Next section in reading order"> &gt; </a>]</td>
+<tr><td valign="middle" align="left">[<a href="#Locals-Browser" title="Previous section in reading order"> &lt; </a>]</td>
+<td valign="middle" align="left">[<a href="#Breakpoints-Buffer" title="Next section in reading order"> &gt; </a>]</td>
 <td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left">[<a href="#SEC7" title="Beginning of this chapter or previous chapter"> &lt;&lt; </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC_Top" title="Up section"> Up </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC9" title="Next chapter"> &gt;&gt; </a>]</td>
-<td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left">[<a href="#Locals-Browser" title="Beginning of this chapter or previous chapter"> &lt;&lt; </a>]</td>
+<td valign="middle" align="left">[<a href="#Top" title="Up section"> Up </a>]</td>
+<td valign="middle" align="left">[<a href="#Breakpoints-Buffer" title="Next chapter"> &gt;&gt; </a>]</td>
 <td valign="middle" align="left"> &nbsp; </td>
 <td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left">[<a href="#SEC_Top" title="Cover (top) of document">Top</a>]</td>
+<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left">[<a href="#Top" title="Cover (top) of document">Top</a>]</td>
 <td valign="middle" align="left">[Contents]</td>
 <td valign="middle" align="left">[Index]</td>
 <td valign="middle" align="left">[<a href="#SEC_About" title="About (help)"> ? </a>]</td>
 </tr></table>
-<h1 class="chapter"> 8. Frames Browser </h1>
+<a name="Frames-Browser-1"></a>
+<h1 class="chapter">8. Frames Browser</h1>
 <p>The frames buffer is a simple list of all the frames from the
 <code>main</code> up to the current function. It provides a simple
 caller/callee stack of the current breakpoint. If the frame points to
@@ -400,50 +402,50 @@ stepping will go back to the original execution point.
 </p>
 <hr size="6">
 <a name="Breakpoints-Buffer"></a>
-<a name="SEC9"></a>
 <table cellpadding="1" cellspacing="1" border="0">
-<tr><td valign="middle" align="left">[<a href="#SEC8" title="Previous section in reading order"> &lt; </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC10" title="Next section in reading order"> &gt; </a>]</td>
+<tr><td valign="middle" align="left">[<a href="#Frames-Browser" title="Previous section in reading order"> &lt; </a>]</td>
+<td valign="middle" align="left">[<a href="#Window-Layout" title="Next section in reading order"> &gt; </a>]</td>
 <td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left">[<a href="#SEC8" title="Beginning of this chapter or previous chapter"> &lt;&lt; </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC_Top" title="Up section"> Up </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC10" title="Next chapter"> &gt;&gt; </a>]</td>
-<td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left">[<a href="#Frames-Browser" title="Beginning of this chapter or previous chapter"> &lt;&lt; </a>]</td>
+<td valign="middle" align="left">[<a href="#Top" title="Up section"> Up </a>]</td>
+<td valign="middle" align="left">[<a href="#Window-Layout" title="Next chapter"> &gt;&gt; </a>]</td>
 <td valign="middle" align="left"> &nbsp; </td>
 <td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left">[<a href="#SEC_Top" title="Cover (top) of document">Top</a>]</td>
+<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left">[<a href="#Top" title="Cover (top) of document">Top</a>]</td>
 <td valign="middle" align="left">[Contents]</td>
 <td valign="middle" align="left">[Index]</td>
 <td valign="middle" align="left">[<a href="#SEC_About" title="About (help)"> ? </a>]</td>
 </tr></table>
-<h1 class="chapter"> 9. Breakpoints Buffer </h1>
+<a name="Breakpoints-Buffer-1"></a>
+<h1 class="chapter">9. Breakpoints Buffer</h1>
 <p>The breakpoints buffer shows a list of the current active and disabled
 breakpoints. Clicking on the breakpoints will show the line of code of
 the breakpoint in the source code buffer.
 </p>
 <hr size="6">
 <a name="Window-Layout"></a>
-<a name="SEC10"></a>
 <table cellpadding="1" cellspacing="1" border="0">
-<tr><td valign="middle" align="left">[<a href="#SEC9" title="Previous section in reading order"> &lt; </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC11" title="Next section in reading order"> &gt; </a>]</td>
+<tr><td valign="middle" align="left">[<a href="#Breakpoints-Buffer" title="Previous section in reading order"> &lt; </a>]</td>
+<td valign="middle" align="left">[<a href="#Bug-Reporting" title="Next section in reading order"> &gt; </a>]</td>
 <td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left">[<a href="#SEC9" title="Beginning of this chapter or previous chapter"> &lt;&lt; </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC_Top" title="Up section"> Up </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC11" title="Next chapter"> &gt;&gt; </a>]</td>
-<td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left">[<a href="#Breakpoints-Buffer" title="Beginning of this chapter or previous chapter"> &lt;&lt; </a>]</td>
+<td valign="middle" align="left">[<a href="#Top" title="Up section"> Up </a>]</td>
+<td valign="middle" align="left">[<a href="#Bug-Reporting" title="Next chapter"> &gt;&gt; </a>]</td>
 <td valign="middle" align="left"> &nbsp; </td>
 <td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left">[<a href="#SEC_Top" title="Cover (top) of document">Top</a>]</td>
+<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left"> &nbsp; </td>
+<td valign="middle" align="left">[<a href="#Top" title="Cover (top) of document">Top</a>]</td>
 <td valign="middle" align="left">[Contents]</td>
 <td valign="middle" align="left">[Index]</td>
 <td valign="middle" align="left">[<a href="#SEC_About" title="About (help)"> ? </a>]</td>
 </tr></table>
-<h1 class="chapter"> 10. Window Layout </h1>
+<a name="Window-Layout-1"></a>
+<h1 class="chapter">10. Window Layout</h1>
 <p>The default four buffers layout is what I like the most on my
-screen. If you don't like it, you just have to create your own
+screen. If you don&rsquo;t like it, you just have to create your own
 functions that create the window layout of your liking, and then add
 this in your &lsquo;<tt>.emacs</tt>&rsquo; file:
 </p>
@@ -458,25 +460,25 @@ hooks. You can refer to the two functions <code>jdibug-debug-view</code> and
 </p>
 <hr size="6">
 <a name="Bug-Reporting"></a>
-<a name="SEC11"></a>
 <table cellpadding="1" cellspacing="1" border="0">
-<tr><td valign="middle" align="left">[<a href="#SEC10" title="Previous section in reading order"> &lt; </a>]</td>
+<tr><td valign="middle" align="left">[<a href="#Window-Layout" title="Previous section in reading order"> &lt; </a>]</td>
 <td valign="middle" align="left">[ &gt; ]</td>
 <td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left">[<a href="#SEC10" title="Beginning of this chapter or previous chapter"> &lt;&lt; </a>]</td>
-<td valign="middle" align="left">[<a href="#SEC_Top" title="Up section"> Up </a>]</td>
+<td valign="middle" align="left">[<a href="#Window-Layout" title="Beginning of this chapter or previous chapter"> &lt;&lt; </a>]</td>
+<td valign="middle" align="left">[<a href="#Top" title="Up section"> Up </a>]</td>
 <td valign="middle" align="left">[ &gt;&gt; ]</td>
 <td valign="middle" align="left"> &nbsp; </td>
 <td valign="middle" align="left"> &nbsp; </td>
 <td valign="middle" align="left"> &nbsp; </td>
 <td valign="middle" align="left"> &nbsp; </td>
-<td valign="middle" align="left">[<a href="#SEC_Top" title="Cover (top) of document">Top</a>]</td>
+<td valign="middle" align="left">[<a href="#Top" title="Cover (top) of document">Top</a>]</td>
 <td valign="middle" align="left">[Contents]</td>
 <td valign="middle" align="left">[Index]</td>
 <td valign="middle" align="left">[<a href="#SEC_About" title="About (help)"> ? </a>]</td>
 </tr></table>
-<h1 class="chapter"> 11. Bug Reporting </h1>
-<p>If you think there's a bug in JDIbug, please submit the log together
+<a name="Bug-Reporting-1"></a>
+<h1 class="chapter">11. Bug Reporting</h1>
+<p>If you think there&rsquo;s a bug in JDIbug, please submit the log together
 with a description of what you have done.
 </p>
 <p>JDIbug uses the &lsquo;<tt>elog.el</tt>&rsquo; module that I have written for this
@@ -508,14 +510,14 @@ then send it to me, prefably compressed, as it can be quite huge.
 <hr size="6">
 <a name="SEC_About"></a>
 <table cellpadding="1" cellspacing="1" border="0">
-<tr><td valign="middle" align="left">[<a href="#SEC_Top" title="Cover (top) of document">Top</a>]</td>
+<tr><td valign="middle" align="left">[<a href="#Top" title="Cover (top) of document">Top</a>]</td>
 <td valign="middle" align="left">[Contents]</td>
 <td valign="middle" align="left">[Index]</td>
 <td valign="middle" align="left">[<a href="#SEC_About" title="About (help)"> ? </a>]</td>
 </tr></table>
 <h1>About This Document</h1>
 <p>
-  This document was generated by <em>PhuahY</em> on <em>November, 19 2008</em> using <a href="http://www.nongnu.org/texi2html/"><em>texi2html 1.78</em></a>.
+  This document was generated by <em>PhuahY</em> on <em>March 26, 2009</em> using <a href="http://www.nongnu.org/texi2html/"><em>texi2html 1.82</em></a>.
 </p>
 <p>
   The buttons in the navigation panels have the following meaning:
@@ -617,7 +619,7 @@ then send it to me, prefably compressed, as it can be quite huge.
 <hr size="1">
 <p>
  <font size="-1">
-  This document was generated by <em>PhuahY</em> on <em>November, 19 2008</em> using <a href="http://www.nongnu.org/texi2html/"><em>texi2html 1.78</em></a>.
+  This document was generated by <em>PhuahY</em> on <em>March 26, 2009</em> using <a href="http://www.nongnu.org/texi2html/"><em>texi2html 1.82</em></a>.
  </font>
  <br>
 
