@@ -2,6 +2,9 @@
 
 * 0.2 (in development)
 
+** Supports relative paths in jde-source-paths
+Thanks to Len Trigg <len@netvalue.net.nz>
+
 ** Class that contains attributes pointing back to itself
 If an attribute in a class contain a reference to itself, now the node
 will just display as "this" and it will not be expandable, this is to
