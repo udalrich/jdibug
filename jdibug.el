@@ -49,7 +49,7 @@
   :prefix "jdibug"
   :group 'languages)
 
-(defcustom jdibug-connect-host ""
+(defcustom jdibug-connect-host "localhost"
   "Host of the debuggee to connect to."
   :group 'jdibug
   :type 'string)
