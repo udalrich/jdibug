@@ -152,7 +152,9 @@ variables by clicking on the expand icon.
 
 When the cursor is over any element in the tree, you can press the
 @kbd{s} key to invoke the @code{toString} method on the variable under
-the cursor. The result will be printed in the echo-area.
+the cursor. The result will be printed in the echo-area. You can also 
+press the @kbd{c} key to print the class name of the object under the
+cursor in the echo area.
 
 One extra feature that is very useful in the Locals Browser is that it
 reduces the number of clicks that you have to do to inspect a
