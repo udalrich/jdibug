@@ -151,7 +151,10 @@ jdibug-source-paths will be ignored if this is set to t."
   (lexical-let ((host jdibug-connect-host)
 				(port jdibug-connect-port)
 				(source-paths (if jdibug-use-jde-source-paths
-								  jde-sourcepath
+								  (mapcar 
+								   (lambda (path)
+									 (jde-normalize-path path 'jde-sourcepath))
+								   jde-sourcepath)
 								jdibug-source-paths))
 				(start-time (current-time)))
     (let ((invalid-source-paths (loop for sp in source-paths
@@ -525,6 +528,7 @@ And position the point at the line number."
  		(let ((inhibit-read-only t))
  		  (erase-buffer))
 		(local-set-key "s" 'jdibug-node-tostring)
+		(local-set-key "c" 'jdibug-node-classname)
 		(jdibug-info "making the locals tree")
 		(setf (jdibug-locals-tree jdibug)
 			  (tree-mode-insert (jdibug-make-values-tree jdibug (jdi-locals (jdibug-jdi jdibug)))))
@@ -636,6 +640,16 @@ And position the point at the line number."
 								 `((:object . ,object-id)))
 			(jdibug-trace "tostring-reply:%s" (jdwp-get-string reply :value))
 			(message "%s" (jdwp-get-string reply :value))))))))
+
+(defun jdibug-node-classname ()
+  (interactive)
+  (let* ((wid (widget-at))
+		 (tree (widget-get wid :parent))
+		 (value (widget-get tree :jdi-value))
+		 (jdi (jdibug-jdi jdibug-this)))
+    (if (null value)
+		(message "not an object")
+	  (message "Class: %s" (jdi-class-signature (jdi-value-class value))))))
 
 (defun jdibug-disconnect ()
   (interactive)
