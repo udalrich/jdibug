@@ -861,6 +861,19 @@
   (incf (jdwp-current-id jdwp))
   (incf (jdwp-current-id jdwp)))
 
+;; this is a modified version of the bindat-pack in emacs23
+;; which returns multibyte string
+;; it should be removed when bug#2878 is fixed
+(defun jdwp-bindat-pack (spec struct &optional bindat-raw bindat-idx)
+  (when (multibyte-string-p bindat-raw)
+    (error "Pre-allocated string is multibyte"))
+  (let ((no-return bindat-raw))
+    (unless bindat-idx (setq bindat-idx 0))
+    (unless bindat-raw
+      (setq bindat-raw (make-string (+ bindat-idx (bindat-length spec struct)) 0)))
+    (bindat--pack-group struct spec)
+    (if no-return nil bindat-raw)))
+
 (defun jdwp-send-command (jdwp name data)
   (jdwp-with-size 
     jdwp
@@ -871,7 +884,7 @@
 			 (command-spec (getf protocol :command-spec))
 			 (commandset   (getf protocol :commandset))
 			 (command      (getf protocol :command))
-			 (outdata      (bindat-pack command-spec data))
+			 (outdata      (jdwp-bindat-pack command-spec data))
 			 (id           (jdwp-get-next-id jdwp))
 			 (command-data `((:name        . ,name)
 							 (:length      . ,(+ 11 (length outdata)))
@@ -882,7 +895,7 @@
 							 (:data        . ,data)
 							 (:outdata     . ,outdata)
 							 (:sent-time   . ,(if jdwp-info-flag (current-time) 0))))
-			 (command-packed (bindat-pack jdwp-command-spec command-data)))
+			 (command-packed (jdwp-bindat-pack jdwp-command-spec command-data)))
 		(jdwp-info "sending command [%-20s] id:%-4d len:%-4d data:%s" 
 				   name 
 				   id 
