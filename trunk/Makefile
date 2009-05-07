@@ -1,4 +1,4 @@
-VERSION=0.1
+VERSION=0.2
 PROJECT=jdibug
 
 DIST_EL_FILES=tree-mode.el \
