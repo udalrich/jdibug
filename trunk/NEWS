@@ -1,5 +1,14 @@
 * JDIbug News                  -*- outline -*-
 
+* 0.3 (Current)
+
+** Supports connecting to multiple debuggee
+Now JDIbug can connect to multiple debuggee on different host:port. 
+The configuration parameter jdibug-connect-host and jdibug-connect-port
+have been merged into a jdibug-connect-hosts which should be set
+to a list, containing strings of "host:port". You can then set 
+breakpoints in any of the files in any of the debuggee.
+
 * 0.2 (2009-05-07)
 
 ** Supports relative paths in jde-source-paths

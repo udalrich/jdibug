@@ -620,7 +620,7 @@
 (defun jdwp-connect (jdwp server port)
   (let ((buf (get-buffer " jdwp-socket-buffer")))
 	(if buf (kill-buffer buf)))
-  (setf (jdwp-process jdwp) (open-network-stream "jdwp" " jdwp-socket-buffer" server port))
+  (setf (jdwp-process jdwp) (open-network-stream "jdwp" (concat " jdwp-socket-buffer-" server "-" (number-to-string port))  server port))
   (when (jdwp-process jdwp)
     (process-put               (jdwp-process jdwp) 'jdwp jdwp)
     (set-process-filter        (jdwp-process jdwp) 'jdwp-process-filter)

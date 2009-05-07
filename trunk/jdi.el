@@ -386,14 +386,14 @@
   "Return the jdi-class with that class-id"
   (let ((result (gethash class-id (jdi-classes jdi))))
     (if (null result)
-		(jdi-error "failed to find class with id:%s in %d classes" class-id (hash-table-count (jdi-classes jdi))))
+		(jdi-info "failed to find class with id:%s in %d classes" class-id (hash-table-count (jdi-classes jdi))))
     result))
 
 (defun jdi-classes-find-by-signature (jdi signature)
   "Return a list (because they might be loaded by different class loaders) of jdi-class with that signature"
   (let ((result (gethash signature (jdi-classes-by-signature jdi))))
     (if (null result)
-		(jdi-error "failed to find class with signature:%s in %d classes" signature (hash-table-count (jdi-classes-by-signature jdi))))
+		(jdi-info "failed to find class with signature:%s in %d classes" signature (hash-table-count (jdi-classes-by-signature jdi))))
 	(jdi-info "jdi-classes-find-by-signature:%s:found:%d" signature (length result))
     result))
 
@@ -651,7 +651,7 @@
 		  (mapc (lambda (bp)
 				  (setf (jdi-breakpoints jdi) (delete bp (jdi-breakpoints jdi))))
 				breakpoints))
-      (jdwp-error "failed to find breakpoint %s:%s" source-file line-number))))
+      (jdi-error "failed to find breakpoint %s:%s" source-file line-number))))
 
 (defun jdi-source-to-class-signature (jdi source)
   "Converts a source file to a JNI class name."
@@ -877,7 +877,7 @@ named field-name, and call func with (jdi value field-value) after that."
 
 (defun jdi-value-invoke-method (jdi value method-name &optional method-signature)
   "Invoke a simple method (do not require arguments) in the object in jdi-value."
-  (jdi-info "jdi-value-invoke-method:%s" method-name)
+  (jdi-info "jdi-value-invoke-method:%s:%s" method-name method-signature)
   (let ((class (jdi-value-class value)))
 	(jdi-class-resolve-parent jdi class)
 	(jdi-class-resolve-methods jdi class)
@@ -1108,9 +1108,13 @@ named field-name, and call func with (jdi value field-value) after that."
   (jdwp-send-command (jdi-jdwp jdi) "resume" nil))
 
 (defun jdi-file-in-source-paths-p (jdi file)
-  (find-if (lambda (sp) 
-			 (string-match (expand-file-name sp) file))
-		   (jdi-source-paths jdi)))
+  (jdi-debug "jdi-file-in-source-paths-p:%s" file)
+  (let ((result (find-if (lambda (sp) 
+						   (string-match (expand-file-name sp) file))
+						 (jdi-source-paths jdi))))
+	(jdi-debug (if result "found" "not found"))
+	result))
+		
 
 (defun jdi-value-get-nonstatic-values (jdi value)
   (jdi-info "jdi-value-get-nonstatic-values")
