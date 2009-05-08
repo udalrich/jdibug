@@ -234,7 +234,8 @@
 																			  (:signature     struct jdwp-string-spec)
 																			  (:status        u32))
 												  (,jdwp-event-class-unload   (:request-id    u32)
-																			  (:signature     struct jdwp-string-spec))))))
+																			  (:signature     struct jdwp-string-spec))
+												  (,jdwp-event-vm-death       (:request-id    u32))))))
 
 
 
@@ -704,6 +705,7 @@
 				 (suspend-policy  (bindat-get-field packet :suspend-policy))
 				 (events          (bindat-get-field packet :events)))
 			(jdwp-info "event suspend-policy:%d events:%d" suspend-policy events)
+			(jdwp-trace "event:%s" (bindat-get-field packet :event))
 			(dolist (event (bindat-get-field packet :event))
 			  (let ((handler (cdr (assoc (bindat-get-field event :event-kind) (jdwp-event-handlers-alist jdwp)))))
 				(if handler
