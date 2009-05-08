@@ -141,16 +141,23 @@ jdibug-source-paths will be ignored if this is set to t."
 (defvar jdibug-this (make-jdibug)
   "The current instance of jdibug, we can only have one jdibug running.")
 
+(defvar jdibug-current-message "")
+
+(defun jdibug-message (message &optional append)
+  (if append
+	  (setf jdibug-current-message (concat jdibug-current-message message))
+	(setf jdibug-current-message message))
+  (message jdibug-current-message))
+  
 (defun jdibug-connect ()
   (interactive)
-  (message "JDIbug connecting...")
+  (jdibug-message "JDIbug connecting... ")
   (setf (jdibug-jdi jdibug-this) nil)
-  (if (jdibug-connected-p)
-	  (condition-case err
-		  (jdibug-disconnect)))
+  (jdibug-disconnect)
   (let ((start-time (current-time)))
 	(mapc 
 	 (lambda (connect-host-and-port)
+	   (jdibug-message connect-host-and-port t)
 	   (let* ((host (nth 0 (split-string connect-host-and-port ":")))
 			  (port (string-to-number (nth 1 (split-string connect-host-and-port ":"))))
 			  (source-paths (if jdibug-use-jde-source-paths
@@ -158,7 +165,8 @@ jdibug-source-paths will be ignored if this is set to t."
 								 (lambda (path)
 								   (jde-normalize-path path 'jde-sourcepath))
 								 jde-sourcepath)
-							  jdibug-source-paths)))
+							  jdibug-source-paths))
+			  (start-time (current-time)))
 		 (let ((invalid-source-paths (loop for sp in source-paths
 										   when (not (file-exists-p sp)) 
 										   collect sp)))
@@ -169,7 +177,7 @@ jdibug-source-paths will be ignored if this is set to t."
 					 (cons jdi (jdibug-jdi jdibug-this)))
 			   (jdi-connect jdi host port source-paths)
 			   (if (equal (jdi-get-last-error jdi) 'failed-to-connect)
-				   (message "JDIbug connecting...failed to connect to %s:%d" host port)
+				   (jdibug-message "(failed) " t)
 				 (setf (jdi-breakpoint-handler jdi) 'jdibug-handle-breakpoint)
 				 (setf (jdi-step-handler jdi) 'jdibug-handle-step)
 				 (setf (jdi-breakpoint-resolved-handler jdi) 'jdibug-handle-resolved-breakpoint)
@@ -191,10 +199,9 @@ jdibug-source-paths will be ignored if this is set to t."
 				   (mapc (lambda (bp) 
 						   (jdibug-set-breakpoint jdibug-this bp))
 						 bps))
+				 (jdibug-message (format "(%s seconds) " (float-time (time-subtract (current-time) start-time))) t)
 				 (run-hooks 'jdibug-connected-hook)))))))
-	 jdibug-connect-hosts)
-	(message "JDIbug connecting...done in %s seconds"
-			 (float-time (time-subtract (current-time) start-time)))))
+	 jdibug-connect-hosts)))
 
 (defun jdibug-have-class-source-p (jdibug class)
   (find-if (lambda (jdi)
@@ -665,15 +672,18 @@ And position the point at the line number."
 			  (delete-overlay (jdibug-breakpoint-overlay bp))))
 		(jdibug-breakpoints jdibug-this))
   (setf (jdibug-locals-tree jdibug-this) nil)
-  (if (not (jdibug-connected-p))
-	  (message "JDIbug already disconnected")
-	(jdibug-trace "number of debuggee:%d" (length (jdibug-jdi jdibug-this)))
-	(mapc (lambda (jdi)
-			(jdibug-trace "disconnecting %s" jdi)
-			(jdi-disconnect jdi))
-		  (jdibug-jdi jdibug-this))
-	(message "JDIBUG disconnected")
-	(run-hooks 'jdibug-detached-hook)))
+  (jdibug-trace "number of debuggee:%d" (length (jdibug-jdi jdibug-this)))
+  (jdibug-message "JDIbug disconnecting... ")
+  (mapc (lambda (jdi)
+		  (let ((jdwp (jdi-jdwp jdi)))
+			(jdibug-message (format "%s:%s" (jdwp-server jdwp) (jdwp-port jdwp)) t)
+			(if (jdwp-process jdwp)
+				(progn
+				  (jdi-disconnect jdi)
+				  (jdibug-message "(disconnected) " t))
+			  (jdibug-message "(not connected) " t))))
+		(jdibug-jdi jdibug-this))
+  (run-hooks 'jdibug-detached-hook))
 
 (defun jdibug-find-jdi-for-source-file (jdibug source-file)
   "Return the correct JDI that contains the source file. Currently do not handle same source file for multiple Debuggee!"
