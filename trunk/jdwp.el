@@ -65,7 +65,10 @@
   (method-id-size         4) 
   (object-id-size         4)
   (reference-type-id-size 4)
-  (frame-id-size          4))
+  (frame-id-size          4)
+
+  server
+  port)
 
 ;;; Constants:
 (defconst jdwp-event-single-step         1)
@@ -620,6 +623,8 @@
 (defun jdwp-connect (jdwp server port)
   (let ((buf (get-buffer " jdwp-socket-buffer")))
 	(if buf (kill-buffer buf)))
+  (setf (jdwp-server jdwp) server)
+  (setf (jdwp-port jdwp) port)
   (setf (jdwp-process jdwp) (open-network-stream "jdwp" (concat " jdwp-socket-buffer-" server "-" (number-to-string port))  server port))
   (when (jdwp-process jdwp)
     (process-put               (jdwp-process jdwp) 'jdwp jdwp)
@@ -634,8 +639,9 @@
   (condition-case err
 	  (jdwp-send-command jdwp "dispose" nil)
 	(error nil))
-  (setf (process-sentinel (jdwp-process jdwp)) nil)
-  (kill-buffer (process-buffer (jdwp-process jdwp)))
+  (when (jdwp-process jdwp)
+	(setf (process-sentinel (jdwp-process jdwp)) nil)
+	(kill-buffer (process-buffer (jdwp-process jdwp))))
   ;;(delete-process (jdwp-process jdwp))
   (setf (jdwp-process jdwp) nil)
   (setf (jdwp-handshaked-p jdwp) nil))
