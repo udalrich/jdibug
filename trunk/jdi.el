@@ -489,8 +489,9 @@
     (setf (jdi-breakpoints jdi) nil)
     (setf (jdi-breakpoint-requests jdi) nil)
 
-    (setf (process-sentinel (jdwp-process jdwp)) nil)
-    (kill-buffer (process-buffer (jdwp-process jdwp)))
+	(when (jdwp-process jdwp)
+	  (setf (process-sentinel (jdwp-process jdwp)) nil)
+	  (kill-buffer (process-buffer (jdwp-process jdwp))))
     (setf (jdwp-process jdwp) nil)
     (setf (jdwp-handshaked-p jdwp) nil)
 
