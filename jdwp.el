@@ -724,7 +724,7 @@
     (let ((packet nil)
 		  (total-length (jdwp-output-length jdwp))
 		  (first-packet-length (jdwp-output-first-packet-length jdwp)))
-	  (jdwp-info "jdwp-get-packet total-length=%d first-packet-length=%d" total-length first-packet-length)
+	  (jdwp-info "jdwp-get-packet total-length=%s first-packet-length=%s" total-length first-packet-length)
 	  (when (and (>= total-length 11)
 				 (>= total-length first-packet-length)
 		  (setq packet (substring (jdwp-residual-output jdwp) 0 first-packet-length))
