@@ -154,7 +154,7 @@ jdibug-source-paths will be ignored if this is set to t."
   (jdibug-message "JDIbug connecting... ")
   (setf (jdibug-jdi jdibug-this) nil)
   (jdibug-disconnect)
-  (let ((start-time (current-time)))
+  (let ((one-connected nil))
 	(mapc 
 	 (lambda (connect-host-and-port)
 	   (jdibug-message connect-host-and-port t)
@@ -167,7 +167,7 @@ jdibug-source-paths will be ignored if this is set to t."
 								 jde-sourcepath)
 							  jdibug-source-paths))
 			  (start-time (current-time)))
-		 (let ((invalid-source-paths (loop for sp in source-paths
+				 (let ((invalid-source-paths (loop for sp in source-paths
 										   when (not (file-exists-p sp)) 
 										   collect sp)))
 		   (if invalid-source-paths
@@ -200,8 +200,10 @@ jdibug-source-paths will be ignored if this is set to t."
 						   (jdibug-set-breakpoint jdibug-this bp))
 						 bps))
 				 (jdibug-message (format "(%s seconds) " (float-time (time-subtract (current-time) start-time))) t)
-				 (run-hooks 'jdibug-connected-hook)))))))
-	 jdibug-connect-hosts)))
+				 (setf one-connected t)))))))
+	 jdibug-connect-hosts)
+	(if one-connected
+		(run-hooks 'jdibug-connected-hook))))
 
 (defun jdibug-have-class-source-p (jdibug class)
   (find-if (lambda (jdi)
@@ -300,8 +302,9 @@ And position the point at the line number."
 		  (if (jdibug-breakpoint-overlay bp)
 			  (delete-overlay (jdibug-breakpoint-overlay bp))))
 		(jdibug-breakpoints jdibug-this))
-  (message "JDIBUG vm detached")
-  (run-hooks 'jdibug-detached-hook))
+  (message "JDIbug %s:%s vm detached" (jdwp-server (jdi-jdwp jdi)) (jdwp-port (jdi-jdwp jdi)))
+  (unless (jdibug-connected-p)
+	(run-hooks 'jdibug-detached-hook)))
 
 (defun jdibug-handle-resolved-breakpoint (jdi resolved-breakpoint)
   (jdibug-info "jdibug-handle-resolved-breakpoint")
@@ -900,10 +903,14 @@ And position the point at the line number."
 
 (defun jdibug-connected-p ()
   (interactive)
-  (if (and (jdibug-jdi jdibug-this)
-		   (jdwp-process (jdi-jdwp (car (jdibug-jdi jdibug-this)))))
-      t
-    nil))
+  (let ((connected 0))
+	(mapc (lambda (jdi) 
+			(if (jdwp-process (jdi-jdwp jdi))
+				(incf connected)))
+		  (jdibug-jdi jdibug-this))
+	(if (equal connected 0)
+		nil
+	  connected)))
 
 (defun jdibug-debug-view ()
   "Change into debug view."
