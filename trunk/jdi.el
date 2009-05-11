@@ -90,7 +90,10 @@
   breakpoints 
 
   last-error
-  
+
+  jdwp-major
+  jdwp-minor
+
   ;; you can store anything here
   plist)
 
@@ -137,6 +140,7 @@
   id
   name
   signature
+  generic-signature
   mod-bits)
 
 (defstruct jdi-method
@@ -177,6 +181,7 @@
 (defstruct jdi-value
   name
   signature
+  generic-signature
   type
   value
   (string "null")
@@ -304,8 +309,12 @@
   (unless (or (jdi-locals jdi)
 			  (null (jdi-frames jdi)))
 	(multiple-value-bind (reply error jdwp id)
-		(jdwp-send-command (jdi-jdwp jdi) "variable-table" `((:ref-type . ,class-id)
-															 (:method-id . ,method-id)))
+		(jdwp-send-command (jdi-jdwp jdi) 
+						   (if (jdi-have-generic-p jdi)
+							   "variable-table-with-generic"
+							 "variable-table")
+						   `((:ref-type . ,class-id)
+							 (:method-id . ,method-id)))
 	  (unless (or (= error jdwp-error-absent-information)
 				  (null (jdi-frames jdi)))
 		(jdi-trace "variable-table arg-count:%d slots:%d" (bindat-get-field reply :arg-cnt) (bindat-get-field reply :slots))
@@ -316,17 +325,19 @@
 		  (dolist (slot (bindat-get-field reply :slot))
 			(let ((start-valid-line-code (jdwp-get-int slot :code-index))
 				  (line-code-length      (bindat-get-field slot :length)))
-			  (jdi-trace "slot:%d code-index:%d length:%d name:%s signature:%s" 
+			  (jdi-trace "slot:%d code-index:%d length:%d name:%s signature:%s generic-signature:%s" 
 						 (bindat-get-field slot :slot) 
 						 start-valid-line-code
 						 line-code-length
 						 (jdwp-get-string slot :name) 
-						 (jdwp-get-string slot :signature))
+						 (jdwp-get-string slot :signature)
+						 (jdwp-get-string slot :generic-signature))
 			  (when (and (>= current-frame-line-code start-valid-line-code)
 						 (<  current-frame-line-code (+ start-valid-line-code line-code-length)))
 				(push (make-jdi-value :slot (bindat-get-field slot :slot)
 									  :name (jdwp-get-string slot :name)
-									  :signature (jdwp-get-string slot :signature))
+									  :signature (jdwp-get-string slot :signature)
+									  :generic-signature (jdwp-get-string slot :generic-signature))
 					  (jdi-locals jdi)))))
 		  (when (jdi-suspended-p jdi)
 			(jdi-values-slot-resolve jdi (jdi-suspended-thread-id jdi) (jdi-frame-id (jdi-current-frame jdi)) (jdi-locals jdi)))
@@ -537,6 +548,9 @@
 ;; 				  (=bind (jdwp id status reply) (jdi thread) (jdwp-send-command (jdi-jdwp jdi) "thread-name" `((:thread . ,(bindat-get-field thread :id))))
 ;; 						 (jdi-trace "thread:%s:%s" (bindat-get-field thread :id) (jdwp-get-string reply :thread-name))))))
 
+(defun jdi-have-generic-p (jdi)
+  (>= (jdi-jdwp-minor jdi) 5))
+
 (defun jdi-get-classes (jdi)
   (jdwp-send-command (jdi-jdwp jdi) "suspend" nil)
   (multiple-value-bind (reply error jdwp id)
@@ -573,7 +587,9 @@
   (multiple-value-bind (reply error jdwp id)
 	  (jdwp-send-command (jdi-jdwp jdi) "version" nil)
 	(jdi-trace "description:%s" (jdwp-get-string reply :description))
+	(setf (jdi-jdwp-major jdi) (bindat-get-field reply :jdwp-major))
 	(jdi-trace "jdwp-major:%d" (bindat-get-field reply :jdwp-major))
+	(setf (jdi-jdwp-minor jdi) (bindat-get-field reply :jdwp-minor))
 	(jdi-trace "jdwp-minor:%d" (bindat-get-field reply :jdwp-minor))
 	(jdi-trace "vm-version:%s" (jdwp-get-string reply :vm-version))
 	(jdi-trace "vm-name:%s" (jdwp-get-string reply :vm-name))))
@@ -896,6 +912,17 @@ named field-name, and call func with (jdi value field-value) after that."
 							   (:arguments . 0)
 							   (:options . ,jdwp-invoke-single-threaded)))))))
 
+(defun jdi-value-extract-generic-class-name (generic-signature)
+  (string-match "<L.*/\\(.*\\);>" generic-signature)
+  (match-string 1 generic-signature))
+
+(defun jdi-value-type-with-generic (value)
+  (let ((class (jdi-value-class value))
+		(gs (jdi-value-generic-signature value)))
+	(if (and gs (not (string= gs "")))
+		(format "%s<%s>" (jdi-class-name class) (jdi-value-extract-generic-class-name (jdi-value-generic-signature value)))
+	  (jdi-class-name class))))
+
 (defun jdi-value-resolve-ref-type (jdi value)
   (jdi-info "jdi-value-resolve-ref-type name=%s signature=%s value=%s" (jdi-value-name value) (jdi-value-signature value) (jdwp-string-to-hex (jdi-value-value value)))
   (unless (equal (jdi-value-value value) [0 0 0 0 0 0 0 0])
@@ -1075,17 +1102,23 @@ named field-name, and call func with (jdi value field-value) after that."
   (unless (jdi-class-fields class)
     (jdi-info "jdi-class-resolve-fields for %s" (jdi-class-name class))
 	(multiple-value-bind (reply error jdwp id)
-		(jdwp-send-command (jdi-jdwp jdi) "fields" `((:ref-type . ,(jdi-class-id class))))
+		(jdwp-send-command (jdi-jdwp jdi) 
+						   (if (jdi-have-generic-p jdi)
+							   "fields-with-generic" 
+							 "fields")
+						   `((:ref-type . ,(jdi-class-id class))))
 	  (jdi-trace "%s's fields:%d" (jdi-class-name class) (bindat-get-field reply :declared))
 	  (dolist (field (bindat-get-field reply :field))
 		(let ((new-field (make-jdi-field :id (bindat-get-field field :id)
 										 :name (jdwp-get-string field :name)
 										 :signature (jdwp-get-string field :signature)
+										 :generic-signature (jdwp-get-string field :generic-signature)
 										 :mod-bits (bindat-get-field field :mod-bits))))
-		  (jdi-trace "id:%s name:%s signature:%s modbits:%s" 
+		  (jdi-trace "id:%s name:%s signature:%s generic-signature:%s modbits:%s" 
 					 (bindat-get-field field :id) 
 					 (jdwp-get-string field :name) 
 					 (jdwp-get-string field :signature)
+					 (jdwp-get-string field :generic-signature)
 					 (jdi-field-mod-bits-string new-field))
 		  (push new-field (jdi-class-fields class))))
 	  (if (jdi-class-super class)
@@ -1123,7 +1156,8 @@ named field-name, and call func with (jdi value field-value) after that."
 		 (fields (loop for field in (jdi-class-all-fields class)
 					   if (not (jdi-field-static-p field)) collect field))
 		 (values (mapcar (lambda (field) (make-jdi-value :name (jdi-field-name field)
-														 :signature (jdi-field-signature field)))
+														 :signature (jdi-field-signature field)
+														 :generic-signature (jdi-field-generic-signature field)))
 						 fields)))
 	(jdi-info "number of nonstatic fields:%d" (length fields))
 	(if (> (length fields) 0)
@@ -1149,7 +1183,8 @@ named field-name, and call func with (jdi value field-value) after that."
 		 (fields (loop for field in (jdi-class-all-fields class)
 					   if (jdi-field-static-p field) collect field))
 		 (values (mapcar (lambda (field) (make-jdi-value :name (jdi-field-name field)
-														 :signature (jdi-field-signature field)))
+														 :signature (jdi-field-signature field)
+														 :generic-signature (jdi-field-generic-signature field)))
 						 fields)))
 	(jdi-info "number of static fields:%d" (length fields))
 	(if (> (length fields) 0)
@@ -1284,7 +1319,7 @@ to populate the jdi-value-values of the jdi-value.")
 			(> size 0))
 	  (setf (jdi-value-array-length value) size)
 	  (setf (jdi-value-string value) 
-			(format "%s[%d]" (jdi-class-name (jdi-value-class value)) size)))))
+			(format "%s[%d]" (jdi-value-type-with-generic value) size)))))
 
 (defun jdi-value-custom-expand-collection (jdi value)
   (jdi-info "jdi-value-custom-expand-collection")
