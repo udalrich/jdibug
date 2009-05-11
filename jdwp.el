@@ -362,6 +362,17 @@
 									  (:can-get-source-debug-extension    u8)
 									  (:can-request-vm-death-event        u8)
 									  (:can-set-default-stratum           u8)))
+		(:name         "all-classes-with-generic"
+					   :commandset   1
+					   :command      20
+					   :command-spec nil
+					   :reply-spec   ((:classes       u32)
+									  (:class         repeat (:classes)
+													  (:ref-type-tag u8)
+													  (:type-id      vec (eval jdwp-reference-type-id-size))
+													  (:signature    struct jdwp-string-spec)
+													  (:generic-signature    struct jdwp-string-spec)
+													  (:status       u32))))
 		(:name         "signature"
 					   :commandset   2
 					   :command      1
@@ -459,6 +470,20 @@
 													  (:code-index    vec 8)
 													  (:name          struct jdwp-string-spec)
 													  (:signature     struct jdwp-string-spec)
+													  (:length        u32)
+													  (:slot          u32))))
+		(:name         "variable-table-with-generic"
+					   :commandset   6
+					   :command      5
+					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size))
+									  (:method-id     vec (eval jdwp-method-id-size)))
+					   :reply-spec   ((:arg-cnt       u32)
+									  (:slots         u32)
+									  (:slot          repeat (:slots)
+													  (:code-index    vec 8)
+													  (:name          struct jdwp-string-spec)
+													  (:signature     struct jdwp-string-spec)
+													  (:generic-signature     struct jdwp-string-spec)
 													  (:length        u32)
 													  (:slot          u32))))
 		(:name         "reference-type"
