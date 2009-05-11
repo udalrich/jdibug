@@ -430,6 +430,17 @@
 					   :command      11
 					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
 					   :reply-spec   ((:class-object  vec (eval jdwp-object-id-size))))
+		(:name         "fields-with-generic"
+					   :commandset   2
+					   :command      14
+					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
+					   :reply-spec   ((:declared      u32)
+									  (:field         repeat (:declared)
+													  (:id        vec (eval jdwp-field-id-size))
+													  (:name      struct jdwp-string-spec)
+													  (:signature struct jdwp-string-spec)
+													  (:generic-signature struct jdwp-string-spec)
+													  (:mod-bits  u32))))
 		(:name         "superclass"
 					   :commandset   3
 					   :command      1
