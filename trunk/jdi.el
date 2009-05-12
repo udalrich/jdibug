@@ -773,7 +773,7 @@
   (not (equal (logand (jdi-method-mod-bits method) jdi-access-static) 0)))
 
 (defun jdi-class-name (class-or-signature)
-  (let* ((class-name (if (jdi-class-p class-or-signature) (jdi-class-signature class) class-or-signature)))
+  (let* ((class-name (if (jdi-class-p class-or-signature) (jdi-class-signature class-or-signature) class-or-signature)))
 	(jdi-trace "jdi-class-name:%s" class-name)
     (cond ((string= class-name "I")
 		   (setq class-name "int"))
@@ -961,7 +961,7 @@ named field-name, and call func with (jdi value field-value) after that."
 					   (jdi-value-custom-set-string-with-method jdi value setter)))
 			  (setf (jdi-value-string value) (format "%s {id=%s}" (jdi-class-name class) (jdwp-vec-to-int (jdi-value-value value))))))))))
 
-(defun jdi-value-array-display-string (value)
+(defun jdi-value-array-display-string (value size)
   "for array of three dimension, return i[2][][]."
   (let ((sig (string-to-list (jdi-class-signature (jdi-value-class value))))
 		(suffix ""))
@@ -972,7 +972,7 @@ named field-name, and call func with (jdi value field-value) after that."
 		  (pop sig))
 	(format "%s[%s]%s" 
 			(jdi-class-name (concat sig))
-			(bindat-get-field reply :array-length)
+			size
 			suffix)))
 
 (defun jdi-value-resolve-array (jdi value)
@@ -989,7 +989,7 @@ named field-name, and call func with (jdi value field-value) after that."
 	(let ((size (bindat-get-field reply :array-length)))
 	  (setf (jdi-value-array-length value) (bindat-get-field reply :array-length))
 	  (setf (jdi-value-has-children-p value) (> size 0))
-	  (setf (jdi-value-string value) (jdi-value-array-display-string value)))))
+	  (setf (jdi-value-string value) (jdi-value-array-display-string value size)))))
 
 (defun jdi-format-string (str)
   "Truncate and escape the string to be displayed."
