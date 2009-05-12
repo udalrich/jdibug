@@ -377,6 +377,13 @@
 		  (jdi-info "class do not have debug information")
 		(jdi-error "failed to look line-code-index %s in class %s" line-code-index (jdi-class-name class))))))
 
+(defun jdi-class-dump (class)
+  (format "id=%s\nsignature=%s\nref-type-tag=%s\nstatus=%s\n"
+		  (jdi-class-id class)
+		  (jdi-class-signature class)
+		  (jdi-class-ref-type-tag class)
+		  (jdi-class-status class)))
+
 (defun jdi-class-invoke-method (jdi class method-name)
   "Invoke a simple method (do not require arguments) in the class."
   (jdi-info "jdi-class-invoke-method:%s" method-name)
@@ -765,10 +772,9 @@
 (defun jdi-method-static-p (method)
   (not (equal (logand (jdi-method-mod-bits method) jdi-access-static) 0)))
 
-(defun jdi-class-name (class)
-  (jdi-trace "jdi-class-name:%s" (jdi-class-signature class))
-  (let* ((class-name (jdi-class-signature class)))
-    (setq class-name (replace-regexp-in-string "^\\[" "" class-name))
+(defun jdi-class-name (class-or-signature)
+  (let* ((class-name (if (jdi-class-p class-or-signature) (jdi-class-signature class) class-or-signature)))
+	(jdi-trace "jdi-class-name:%s" class-name)
     (cond ((string= class-name "I")
 		   (setq class-name "int"))
 		  (t
@@ -955,19 +961,35 @@ named field-name, and call func with (jdi value field-value) after that."
 					   (jdi-value-custom-set-string-with-method jdi value setter)))
 			  (setf (jdi-value-string value) (format "%s {id=%s}" (jdi-class-name class) (jdwp-vec-to-int (jdi-value-value value))))))))))
 
+(defun jdi-value-array-display-string (value)
+  "for array of three dimension, return i[2][][]."
+  (let ((sig (string-to-list (jdi-class-signature (jdi-value-class value))))
+		(suffix ""))
+	(pop sig)
+	(loop while (equal (car sig) jdwp-tag-array)
+		  do
+		  (setf suffix (concat suffix "[]"))
+		  (pop sig))
+	(format "%s[%s]%s" 
+			(jdi-class-name (concat sig))
+			(bindat-get-field reply :array-length)
+			suffix)))
+
 (defun jdi-value-resolve-array (jdi value)
-  (jdi-info "jdi-value-resolve-array:%s:%s" (jdi-value-name value) (jdi-value-value value))
+  (jdi-info "jdi-value-resolve-array:name=%s,value=%s" (jdi-value-name value) (jdi-value-value value))
+;;  (jdi-value-resolve jdi (jdi-value-value value))
   (multiple-value-bind (reply error jdwp id)
-	  (jdwp-send-command (jdi-jdwp jdi) "reference-type" `((:object . ,(jdi-value-value value))))
-	(let ((class (jdi-classes-find-by-id jdi (bindat-get-field reply :type-id))))
-	  (jdi-trace "found class %s for array" (jdi-class-name class))
-	  (setf (jdi-value-class value) class))
-	(multiple-value-bind (reply error jdwp id)
-		(jdwp-send-command (jdi-jdwp jdi) "array-length" `((:array-object . ,(jdi-value-value value))))
-	  (let ((size (bindat-get-field reply :array-length)))
-		(setf (jdi-value-array-length value) (bindat-get-field reply :array-length))
-		(setf (jdi-value-has-children-p value) (> size 0))
-		(setf (jdi-value-string value) (format "%s[%d]" (jdi-class-name (jdi-value-class value)) (bindat-get-field reply :array-length)))))))
+ 	  (jdwp-send-command (jdi-jdwp jdi) "reference-type" `((:object . ,(jdi-value-value value))))
+ 	(let ((class (jdi-classes-find-by-id jdi (bindat-get-field reply :type-id))))
+ 	  (jdi-trace "found class for array:%s" (jdi-class-dump class))
+ 	  (setf (jdi-value-class value) class)))
+  (jdi-info "get array-length")
+  (multiple-value-bind (reply error jdwp id)
+	  (jdwp-send-command (jdi-jdwp jdi) "array-length" `((:array-object . ,(jdi-value-value value))))
+	(let ((size (bindat-get-field reply :array-length)))
+	  (setf (jdi-value-array-length value) (bindat-get-field reply :array-length))
+	  (setf (jdi-value-has-children-p value) (> size 0))
+	  (setf (jdi-value-string value) (jdi-value-array-display-string value)))))
 
 (defun jdi-format-string (str)
   "Truncate and escape the string to be displayed."
@@ -1226,7 +1248,8 @@ named field-name, and call func with (jdi value field-value) after that."
 						   (:length . ,(jdi-value-array-length value))))
 	(let ((array (jdwp-unpack-arrayregion jdwp reply)))
 	  (jdi-trace "got array-get-values:%s" array)
-	  (if (= (bindat-get-field array :type) jdwp-tag-object)
+	  (if (or (= (bindat-get-field array :type) jdwp-tag-object)
+			  (= (bindat-get-field array :type) jdwp-tag-array))
 		  (loop for jdi-value in (jdi-value-values value)
 				for value in (bindat-get-field array :value)
 				do
