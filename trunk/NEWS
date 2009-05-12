@@ -2,6 +2,11 @@
 
 * 0.3 (Current)
 
+** Supports generics 
+Now the locals browser supports displaying generics as 
+ArrayList<String>. I do not understand why Eclipse is displaying it 
+as ArrayList<E>!
+
 ** Supports connecting to multiple debuggee
 Now JDIbug can connect to multiple debuggee on different host:port. 
 The configuration parameter jdibug-connect-host and jdibug-connect-port
