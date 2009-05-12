@@ -111,6 +111,10 @@
 (defconst jdwp-tag-thread-group 103)
 (defconst jdwp-tag-class-loader 108)
 
+(defconst jdwp-type-tag-class     1)
+(defconst jdwp-type-tag-interface 2)
+(defconst jdwp-type-tag-array     3)
+
 (defconst jdwp-suspend-policy-none 0)
 (defconst jdwp-suspend-policy-event-thread 1)
 (defconst jdwp-suspend-policy-all 2)
@@ -274,6 +278,7 @@
 	  (setq repeater 
 			(case type
 			  (76 '(:value struct jdwp-value-spec))
+			  (91 '(:value struct jdwp-value-spec))
 			  (66 '(:value u8))
 			  (67 '(:value u16))
 			  (70 '(:value u32))
@@ -971,11 +976,11 @@
 		  (if (zerop (logand status 8)) nil "[ERROR]")))
 
 (defun jdwp-type-tag-string (type-tag)
-  (cond ((= type-tag 1)
+  (cond ((= type-tag jdwp-type-tag-class)
 		 "CLASS")
-		((= type-tag 2)
+		((= type-tag jdwp-type-tag-interface)
 		 "INTERFACE")
-		((= type-tag 3)
+		((= type-tag jdwp-type-tag-array)
 		 "ARRAY")))
 
 (defun jdwp-error-string (errcode)
