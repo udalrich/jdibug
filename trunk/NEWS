@@ -2,6 +2,9 @@
 
 * 0.3 (Current)
 
+** Supports multi dimensional array
+Now supports displaying/expanding of multi dimensional array.
+
 ** Supports generics 
 Now the locals browser supports displaying generics as 
 ArrayList<String>. I do not understand why Eclipse is displaying it 
