@@ -1,5 +1,4 @@
 (defvar cont-cont 'identity)
-;(setq cont 'identity)
 
 ;; (defmacro cont-defun (name parms &rest body)
 ;;   (declare (indent defun))
@@ -32,11 +31,6 @@
   `(lexical-let ((cont-cont (lambda ,parms ,@body))) ,expr))
 
 (defmacro cont-funcall (fn &rest args)
-  (let ((f (intern (concatenate 'string
-								"=" (symbol-value fn)))))
-	`(funcall ,f cont-cont ,@args)))
-
-(defmacro cont-funcall (fn &rest args)
   `(funcall ,fn cont-cont ,@args))
 
 (defmacro cont-apply (fn &rest args)
@@ -46,30 +40,47 @@
   `(lexical-let ((cont-cont 'identity))
 	 ,@body))
 
-;; one argument
-;; (cont-defun add1 (x) (cont-values (1+ x)))
-;; (add1 2)
+(eval-when-compile
+  ;; one argument
+  (cont-defun add1 (x) (cont-values (1+ x)))
+  (assert (equal (add1 2) 3))
 
-;; two argument
-;; (cont-defun add2 (x y) (cont-values (list (1+ x) (1+ y))))
-;; (add2 2 4)
+  ;; two argument
+  (cont-defun add2 (x y) (cont-values (list (1+ x) (1+ y))))
+  (assert (equal (add2 2 4) (list 3 5)))
 
-;; no argument
-;; (cont-defun message2 ()
-;;   (cont-values 'hello))
-;; (message2)
+  ;; no argument
+  (cont-defun message2 ()
+	(cont-values 'hello))
+  (assert (equal (message2) 'hello))
 
-;; third test
-;; (cont-defun message3 ()
-;;   (message "message3:cont=%s" cont)
-;;   (cont-values 'hello 'there))
+  ;; test case from onlisp
+  (cont-defun message3 ()
+	(cont-values 'hello 'there))
 
-;; (cont-defun baz ()
-;;   (message "baz:cont=%s" cont)
-;;   (cont-bind (m n) (message3)
-;; 	(message "cont-bind:cont=%s" cont)
-;; 	(cont-values (list m n))))
+  (cont-defun baz ()
+	(cont-bind (m n) (message3)
+	  (cont-values (list m n))))
 
-;; (baz)
+  (assert (equal (baz) (list 'hello 'there)))
+
+  ;; save the continuation somewhere and call it later
+  (setq saved-cont nil)
+  (setq saved-reply nil)
+
+  (cont-defun send-message ()
+	(setq saved-cont (cont-get)))
+  
+  (cont-bind (reply) (send-message)
+	(setq saved-reply reply))
+
+  (assert (equal saved-reply nil))
+  (funcall saved-cont "aloha")
+  (assert (equal saved-reply "aloha"))
+
+  ;; SUCCESS!
+  (message "Unit test success")
+)
+
 
 (provide 'cont)
