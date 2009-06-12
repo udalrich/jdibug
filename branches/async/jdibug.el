@@ -339,8 +339,7 @@ And position the point at the line number."
 ;;   (setf (jdi-current-frame jdi) (car (jdi-frames jdi)))
   (when (null (jdibug-active-thread jdibug-this))
 	(setf (jdibug-active-thread jdibug-this) thread)
-	(cont-fork
-	 (jdibug-refresh-locals-buffer thread location)))
+	(jdibug-refresh-locals-buffer thread location))
 ;;   (jdibug-refresh-frames-buffer jdibug-this jdi)
 ;;   (message "JDIbug: breakpoint hit:%s" location)
   (jdibug-goto-location location)
@@ -356,8 +355,7 @@ And position the point at the line number."
 
   (when (null (jdibug-active-thread jdibug-this))
 	(setf (jdibug-active-thread jdibug-this) thread)
-	(cont-fork
-	 (jdibug-refresh-locals-buffer thread location)))
+	(jdibug-refresh-locals-buffer thread location))
 ;;   (jdibug-refresh-frames-buffer jdibug-this jdi)
 ;;   (message "JDIbug: breakpoint hit:%s" location)
   (jdibug-goto-location location))
@@ -652,7 +650,7 @@ And position the point at the line number."
       :value 
       ,(format "%s: %s" (jdi-value-name value) (jdi-value-string value)))))
 
-(cont-defun jdibug-refresh-locals-buffer (thread location)
+(defun jdibug-refresh-locals-buffer (thread location)
   (jdibug-time-start)
 
   (with-current-buffer (jdibug-locals-buffer jdibug-this)

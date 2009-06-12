@@ -734,7 +734,7 @@
   (setf (jdwp-frame-id-size jdwp) (bindat-get-field reply :frame-id-size))
   (jdwp-trace "frame-id-size         :%d" (jdwp-frame-id-size jdwp))
 
-  (funcall (jdwp-ready-cont jdwp) t))
+  (cont-values-this (jdwp-ready-cont jdwp) t))
 
 (defun jdwp-monitor (jdwp)
 ;  (jdwp-trace "jdwp-monitor state=%s" (jdwp-state jdwp))
@@ -748,9 +748,8 @@
 			
 			((eq (jdwp-state jdwp) 'handshaked)
 			 (setf (jdwp-state jdwp) 'ready)
-			 (lexical-let ((cont-cont 'identity))
-			   (cont-bind (reply error jdwp id) (jdwp-send-command jdwp "id-sizes" nil)
-				 (jdwp-process-id-sizes jdwp reply))))
+			 (cont-bind (reply error jdwp id) (jdwp-send-command jdwp "id-sizes" nil)
+			   (jdwp-process-id-sizes jdwp reply)))
 
 			((eq (jdwp-state jdwp) 'ready)
 			 (let ((packet))
@@ -765,7 +764,7 @@
 							(cont (nth 1 value)))
 					   (jdwp-trace "received reply packet for id:%s:cont:%s" id cont)
 					   (jdwp-trace "requests-alist:%s" (jdwp-requests-alist jdwp))
-					   (apply cont (jdwp-process-reply jdwp packet command-data)))
+					   (apply 'cont-values-this (cons cont (jdwp-process-reply jdwp packet command-data))))
 				   ;; command packet
 				   (jdwp-process-command jdwp packet)
 				   ;;			  (jdwp-process-command jdwp packet)
@@ -780,7 +779,7 @@
 	(cancel-timer timer))
   (setq jdwp-all-timers nil))
 
-(cont-defun jdwp-connect (jdwp server port)
+(defun jdwp-connect (jdwp server port)
   "[ASYNC] returns t if connected and an (ERROR-SYMBOL . SIGNAL-DATA) if there are problems connecting"
   (jdwp-trace "jdwp-connect:%s:%s" server port)
   (condition-case err
@@ -799,7 +798,7 @@
 		  (with-current-buffer (process-buffer (jdwp-process jdwp))
 			(set-buffer-multibyte nil))
 		  (set-process-coding-system (jdwp-process jdwp) 'no-conversion 'no-conversion)
-		  (setf (jdwp-ready-cont jdwp) (cont-get))
+		  (setf (jdwp-ready-cont jdwp) (cont-current-id))
 		  (process-send-string (jdwp-process jdwp) jdwp-handshake))
 		jdwp)
 	(error (cont-values err))))
@@ -1043,7 +1042,7 @@
     (bindat--pack-group struct spec)
     (if no-return nil bindat-raw)))
 
-(cont-defun jdwp-send-command (jdwp name data)
+(defun jdwp-send-command (jdwp name data)
   (jdwp-with-size 
     jdwp
     (if (null (jdwp-process jdwp))
@@ -1076,7 +1075,7 @@
 		(let ((inhibit-eol-conversion t))
 		  (setf (jdwp-current-reply jdwp) nil)
 		  (process-send-string (jdwp-process jdwp) command-packed)
-		  (push `(,id . (,command-data ,(cont-get))) (jdwp-requests-alist jdwp))
+		  (push `(,id . (,command-data ,(cont-current-id))) (jdwp-requests-alist jdwp))
 ;;		  )))))
 		  (accept-process-output (jdwp-process jdwp) 0.1 0 t))))))
 
