@@ -11,6 +11,10 @@
   "Make a new continuation and add it to the current running continuations list."
   (let* ((id (cont-generate-id))
 		 (new-cont (make-cont :id id :pid pid :inuation func)))
+	(cont-trace "cont-new:id=%s:pid=%s:func=\n%s" 
+				(cont-id new-cont) 
+				(cont-pid new-cont)
+				(elog-trim func 100))
 	(push `(,id . ,new-cont) cont-alist)
 	new-cont))
 
@@ -47,17 +51,24 @@
 				cont-alist)))
 
 (defun cont-values (&rest retvals)
-  (cont-trace "cont-values:current-id=%s:retvals=%s" 
+  (cont-trace "cont-values:current-id=%s:retvals=%s:continuation=\n%s"
 			  (if cont-current (cont-id cont-current) "nil")
-			  (elog-trim retvals 100))
+			  (elog-trim retvals 100)
+			  (if (null cont-current)
+				  "identity"
+				(elog-trim (cont-inuation cont-current) 200)))
+  (cont-trace "%s" (cont-list))
   (if (null cont-current)
-	  (apply 'identity retvals)
-	(let ((cont-previous cont-current))
-	  (setq cont-alist (assq-delete-all (cont-id cont-previous) cont-alist))
-	  (let ((cont-current (if (cont-have-child-p (cont-pid cont-current))
-							  nil
-							(cdr (assoc (cont-pid cont-current) cont-alist)))))
-		(apply (cont-inuation cont-previous) retvals)))))
+	  (and retvals (apply 'identity retvals))
+	(unless (cont-have-child-p (cont-id cont-current))
+	  (let ((cont-previous cont-current))
+		(setq cont-alist (assq-delete-all (cont-id cont-previous) cont-alist))
+		(cont-trace "parent-id=%s:parent-have-child=%s" (cont-pid cont-current) (cont-have-child-p (cont-pid cont-current)))
+		(cont-trace "current-have-child=%s" (cont-have-child-p (cont-id cont-current)))
+		(let ((cont-current (if (cont-have-child-p (cont-pid cont-current))
+								nil
+							  (cdr (assoc (cont-pid cont-current) cont-alist)))))
+		  (apply (cont-inuation cont-previous) retvals))))))
 
 (defun cont-values-this (id &rest retvals)
   (cont-trace "cont-values-this:id=%s:retvals=%s" id (elog-trim retvals 100))
@@ -68,7 +79,7 @@
 (defmacro cont-bind (parms expr &rest body)
   (declare (indent defun))
   `(let ((cont-current (cont-new (if cont-current 
-									 (cont-id cont-current)
+									 (cont-current-id)
 								   nil)
 								 (lambda ,parms ,@body))))
 	 ,expr))
@@ -76,12 +87,13 @@
 (defmacro cont-wait (expr &rest body)
   (declare (indent defun))
   `(let* ((cont-current (cont-new (if cont-current 
-									  (cont-id cont-current)
+									  (cont-current-id)
 									nil)
 								  (lambda (&rest args) ,@body)))
 		  ;; this is to solve the problem that when the first operation in expr
 		  ;; returns straight away, the rest of the expressions will not be waited on
-		  (cont-child (cont-new (cont-id cont-current) (lambda () (cont-values t)))))
+		  (cont-child (cont-new (cont-current-id) (lambda () (cont-values)))))
+	 (cont-trace "created the temp child id=%s:pid=%s" (cont-id cont-child) (cont-pid cont-child))
 	 ,expr
 	 (cont-values-this (cont-id cont-child))))
 
@@ -108,6 +120,13 @@
 ;; 	   (equal (caar cont-alist) 0)
 ;; 	   (null (cont-pid (cdar cont-alist)))
 ;; 	   (eq (cont-inuation (cdar cont-alist)) 'identity)))
+
+(defun cont-list ()
+  (interactive)
+  (concat "cont-list:"
+		  (apply 'concat (loop for cont-pair in cont-alist
+							   for cont = (cdr cont-pair)
+							   collect (format "\n    id=%s:pid=%s" (cont-id cont) (cont-pid cont))))))
 
 (eval-when-compile
   (cont-clear)
@@ -169,15 +188,13 @@
   ;;;;
   ;; Testing concurrent operations that does not save continuations
   ;;;;
+  (cont-trace "Testing concurrent operations that does not save continuations")
   (setq cont-test-saved-reply nil)
 
-  (cont-wait (progn
-			   (cont-bind (reply) (cont-values t)
-				 (push "start" cont-test-saved-reply)
-				 (cont-values t))
-			   (cont-bind (reply) (cont-values t)
-				 (push "running" cont-test-saved-reply)
-				 (cont-values t)))
+  (cont-wait (mapc (lambda (reply)
+					 (push reply cont-test-saved-reply)
+					 (cont-values t))
+				   (list "start" "running"))
 	(push "end" cont-test-saved-reply))
 
   (assert (equal '("end" "running" "start") cont-test-saved-reply))
