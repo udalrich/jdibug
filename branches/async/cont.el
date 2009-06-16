@@ -1,20 +1,11 @@
-;; (defmacro cont-defun (name parms &rest body)
-;;   (declare (indent defun))
-;;   (let ((f (intern (concatenate 'string
-;; 								"=" (symbol-name name)))))
-;; 	`(progn
-;; 	   (defmacro ,name ,parms
-;; 		 `(,',f cont ,,@parms))
-;; 	   (defun ,f (cont ,@parms) ,@body))))
-
 (require 'elog)
 (elog-make-logger cont)
 
 (defstruct cont
   id
-  pid ; parent id
+  pid									; parent id
   inuation
-)
+  )
 
 (defun cont-new (pid &optional func)
   "Make a new continuation and add it to the current running continuations list."
@@ -35,6 +26,7 @@
 
 (defun cont-current-id ()
   "return a unique id that you can save and then invoke it later using cont-values-this"
+  (cont-info "cont-current-id:%s" (cont-id cont-current))
   (cont-id cont-current))
 
 (defun cont-generate-id ()
@@ -54,28 +46,21 @@
 				  (equal (cont-pid (cdr pair)) id))
 				cont-alist)))
 
-;; (defmacro cont-defun (name parms &rest body)
-;;   (declare (indent defun))
-;;   (let ((f (intern (concatenate 'string
-;; 								"=" (symbol-name name)))))
-;; 	`(progn
-;; 	   (defmacro ,name ,parms
-;; 		 (cons ',f (cons 'cont-current (list ,@parms))))
-;; 	   (defun ,f (cont-current ,@parms)
-;; 		 ,@body))))
-
 (defun cont-values (&rest retvals)
-  (cont-trace "cont-values:current-id=%s:retvals=%s" (if cont-current (cont-id cont-current) "nil") retvals)
+  (cont-trace "cont-values:current-id=%s:retvals=%s" 
+			  (if cont-current (cont-id cont-current) "nil")
+			  (elog-trim retvals 100))
   (if (null cont-current)
 	  (apply 'identity retvals)
 	(let ((cont-previous cont-current))
 	  (setq cont-alist (assq-delete-all (cont-id cont-previous) cont-alist))
 	  (let ((cont-current (if (cont-have-child-p (cont-pid cont-current))
-							 nil
-						   (cdr (assoc (cont-pid cont-current) cont-alist)))))
+							  nil
+							(cdr (assoc (cont-pid cont-current) cont-alist)))))
 		(apply (cont-inuation cont-previous) retvals)))))
 
 (defun cont-values-this (id &rest retvals)
+  (cont-trace "cont-values-this:id=%s:retvals=%s" id (elog-trim retvals 100))
   (let ((cont-current (cdr (assoc id cont-alist))))
 	(if (null cont-current) (error "canot find cont:%s" id))
 	(apply 'cont-values retvals)))
@@ -90,11 +75,15 @@
 
 (defmacro cont-wait (expr &rest body)
   (declare (indent defun))
-  `(let ((cont-current (cont-new (if cont-current 
-									 (cont-id cont-current)
-								   nil)
-								 (lambda (&rest args) ,@body))))
-	 ,expr))
+  `(let* ((cont-current (cont-new (if cont-current 
+									  (cont-id cont-current)
+									nil)
+								  (lambda (&rest args) ,@body)))
+		  ;; this is to solve the problem that when the first operation in expr
+		  ;; returns straight away, the rest of the expressions will not be waited on
+		  (cont-child (cont-new (cont-id cont-current) (lambda () (cont-values t)))))
+	 ,expr
+	 (cont-values-this (cont-id cont-child))))
 
 ;; (defmacro cont-funcall (fn &rest args)
 ;;   `(funcall ,fn cont-cont ,@args))
@@ -121,94 +110,117 @@
 ;; 	   (eq (cont-inuation (cdar cont-alist)) 'identity)))
 
 (eval-when-compile
-  (when (featurep 'elunit)
-	(cont-clear)
+  (cont-clear)
 
-	(defsuite cont-suite nil
-	  :teardown-hook (lambda () (message "done testing")))
+  ;;;;
+  ;; Testing one argument.
+  ;;;;
+  (defun cont-test-add1 (x) (cont-values (1+ x)))
+  (assert (equal 3 (cont-test-add1 2)))
+  (assert (cont-clear-p))
 
-	(deftest cont-test-one-argument cont-suite
-	  "Testing one argument."
-	  (defun add1 (x) (cont-values (1+ x)))
-	  (assert-equal 3 (add1 2))
-	  (assert-that (cont-clear-p)))
+  ;;;;
+  ;; Testing two argument.
+  ;;;;
+  (defun cont-test-add2 (x y) (cont-values (list (1+ x) (1+ y))))
+  (assert (equal (list 3 5) (cont-test-add2 2 4)))
+  (assert (cont-clear-p))
 
-	(deftest cont-test-two-argument cont-suite
-	  "Testing two argument."
-	  (defun add2 (x y) (cont-values (list (1+ x) (1+ y))))
-	  (assert-equal (list 3 5) (add2 2 4))
-	  (assert-that (cont-clear-p)))
+  ;;;;
+  ;; Testing no argument.
+  ;;;;
+  (defun cont-test-message2 ()
+	(cont-values 'hello))
+  (assert (equal 'hello (cont-test-message2)))
+  (assert (cont-clear-p))
 
-	(deftest cont-test-no-argument cont-suite
-	  "Testing no argument."
-	  (defun message2 ()
-		(cont-values 'hello))
-	  (assert-equal 'hello (message2))
-	  (assert-that (cont-clear-p)))
+  ;;;;
+  ;; Test case from on lisp.
+  ;;;;
+  (defun cont-test-message3 ()
+	(cont-values 'hello 'there))
 
-	(deftest cont-test-onlisp cont-suite
-	  "Test case from on lisp."
-	  (defun message3 ()
-		(cont-values 'hello 'there))
+  (defun cont-test-baz ()
+	(cont-bind (m n) (cont-test-message3)
+	  (cont-values (list m n))))
 
-	  (defun baz ()
-		(cont-bind (m n) (message3)
-		  (cont-values (list m n))))
+  (assert (equal (list 'hello 'there) (cont-test-baz)))
+  (assert (cont-clear-p))
 
-	  (assert-equal (list 'hello 'there) (baz))
-	  (assert-that (cont-clear-p)))
+  ;;;;
+  ;; save the continuation somewhere and call it later
+  ;;;;
+  (defvar cont-test-saved-cont nil)
+  (setq cont-test-saved-cont nil)
+  (defvar cont-test-saved-reply nil)
+  (setq cont-test-saved-reply nil)
 
-	(deftest cont-test-save cont-suite
-	  "save the continuation somewhere and call it later"
-	  (defvar saved-cont nil)
-	  (setq saved-cont nil)
-	  (defvar saved-reply nil)
-	  (setq saved-reply nil)
-
-	  (defun send-message ()
-		(setq saved-cont (cont-current-id)))
+  (defun cont-test-send-message ()
+	(setq cont-test-saved-cont (cont-current-id)))
   
-	  (cont-bind (reply) (send-message)
-		(setq saved-reply reply))
+  (cont-bind (reply) (cont-test-send-message)
+	(setq cont-test-saved-reply reply))
 
-	  (assert-nil saved-reply)
-	  (cont-values-this saved-cont "aloha")
-	  (assert-equal "aloha" saved-reply)
-	  (assert-that (cont-clear-p)))
+  (assert (null cont-test-saved-reply))
+  (cont-values-this cont-test-saved-cont "aloha")
+  (assert (equal "aloha" cont-test-saved-reply))
+  (assert (cont-clear-p))
 
-	(deftest cont-test-concurrent cont-suite
-	  "Perform concurrent operations, calling a continuation when all of them is done"
-	  (setq saved-cont-1 nil)
-	  (setq saved-cont-2 nil)
-	  (setq saved-reply nil)
+  ;;;;
+  ;; Testing concurrent operations that does not save continuations
+  ;;;;
+  (setq cont-test-saved-reply nil)
 
-	  (defun send-message-1 ()
-		(setq saved-cont-1 (cont-current-id)))
+  (cont-wait (progn
+			   (cont-bind (reply) (cont-values t)
+				 (push "start" cont-test-saved-reply)
+				 (cont-values t))
+			   (cont-bind (reply) (cont-values t)
+				 (push "running" cont-test-saved-reply)
+				 (cont-values t)))
+	(push "end" cont-test-saved-reply))
 
-	  (defun send-message-2 ()
-		(setq saved-cont-2 (cont-current-id)))
+  (assert (equal '("end" "running" "start") cont-test-saved-reply))
+
+
+  ;;;;
+  ;; Perform concurrent operations, calling a continuation when all of them is done
+  ;;;;
+  (setq cont-test-saved-cont-1 nil)
+  (setq cont-test-saved-cont-2 nil)
+  (setq cont-test-saved-reply nil)
+
+  (defun cont-test-send-message-1 ()
+	(setq cont-test-saved-cont-1 (cont-current-id)))
+
+  (defun cont-test-send-message-2 ()
+	(setq cont-test-saved-cont-2 (cont-current-id)))
     
-	  (cont-wait (progn
-				   (cont-bind (reply) (send-message-1)
-					 (push reply saved-reply)
-					 (cont-values t))
-				   (cont-bind (reply) (send-message-2)
-					 (push reply saved-reply)
-					 (cont-values t)))
-		(push "end" saved-reply))
+  (cont-wait (progn
+			   ;; this simulate the value might already be cached
+			   ;; and calls cont-values straight away
+			   (cont-bind (reply) (cont-values t)
+				 (push "start" cont-test-saved-reply)
+				 (cont-values t))
+			   ;; while these two saved it first, then continue 
+			   ;; it later
+			   (cont-bind (reply) (cont-test-send-message-1)
+				 (push reply cont-test-saved-reply)
+				 (cont-values t))
+			   (cont-bind (reply) (cont-test-send-message-2)
+				 (push reply cont-test-saved-reply)
+				 (cont-values t)))
+	(push "end" cont-test-saved-reply))
 
-	  (assert-nil saved-reply)
-	  (cont-values-this saved-cont-1 "aloha")
-	  (assert-equal '("aloha") saved-reply)
-	  (cont-values-this saved-cont-2 "there")
-	  (assert-equal '("end" "there" "aloha") saved-reply)
-	  (assert-that (cont-clear-p)))
+  (assert (equal '("start") cont-test-saved-reply))
+  (cont-values-this cont-test-saved-cont-1 "aloha")
+  (assert (equal '("aloha" "start") cont-test-saved-reply))
+  (cont-values-this cont-test-saved-cont-2 "there")
+  (assert (equal '("end" "there" "aloha" "start") cont-test-saved-reply))
+  (assert (cont-clear-p))
 
-	;; SUCCESS!
-	(set (make-local-variable 'elunit-default-suite) "cont-suite")
-	(elunit "cont-suite")
-	)
-)
+  (run-with-timer 0 nil (lambda () (message "cont.el unit test success")))
+  )
 
 
 (provide 'cont)
