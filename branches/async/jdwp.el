@@ -763,12 +763,12 @@
 							(command-data (nth 0 value))
 							(cont (nth 1 value)))
 					   (jdwp-trace "received reply packet for id:%s:cont:%s" id cont)
-					   (jdwp-trace "requests-alist:%s" (jdwp-requests-alist jdwp))
+					   (jdwp-trace "requests-alist:%s" (elog-trim (jdwp-requests-alist jdwp) 100))
 					   (apply 'cont-values-this (cons cont (jdwp-process-reply jdwp packet command-data))))
 				   ;; command packet
 				   (jdwp-process-command jdwp packet)
 				   ;;			  (jdwp-process-command jdwp packet)
-				   (jdwp-info "received command packet"))))))
+				   (jdwp-trace "received command packet"))))))
 	(error (jdwp-error "jdwp-monitor-error:%s" (error-message-string err)))))
 
 (defvar jdwp-all-timers nil)
@@ -798,7 +798,7 @@
 		  (with-current-buffer (process-buffer (jdwp-process jdwp))
 			(set-buffer-multibyte nil))
 		  (set-process-coding-system (jdwp-process jdwp) 'no-conversion 'no-conversion)
-		  (setf (jdwp-ready-cont jdwp) (cont-current-id))
+		  (setf (jdwp-ready-cont jdwp) (cont-get-current-id))
 		  (process-send-string (jdwp-process jdwp) jdwp-handshake))
 		jdwp)
 	(error (cont-values err))))
@@ -852,13 +852,13 @@
 			(list (substring str 11) error jdwp id))
 		(if reply-spec
 			(let ((reply-data   (bindat-unpack reply-spec str 11)))
-			  (jdwp-info "reply id:%5s command:%20s time:%-6s len:%5s error:%1d" 
+			  (jdwp-info "reply id:%5s command:[%20s] time:%-6s len:%5s error:%1d" 
 						 id 
 						 (getf protocol :name)
 						 (float-time (time-subtract (current-time) (cdr (assoc :sent-time command-data))))
 						 (bindat-get-field packet :length) 
 						 (bindat-get-field packet :error))
-			  (jdwp-trace "reply-data:%s" reply-data)
+			  (jdwp-trace "reply-data:%s" (elog-trim reply-data 100))
 			  (list reply-data error jdwp id))
 		  (list (substring str 11) error jdwp id))))))
 
@@ -1075,9 +1075,9 @@
 		(let ((inhibit-eol-conversion t))
 		  (setf (jdwp-current-reply jdwp) nil)
 		  (process-send-string (jdwp-process jdwp) command-packed)
-		  (push `(,id . (,command-data ,(cont-current-id))) (jdwp-requests-alist jdwp))
-;;		  )))))
-		  (accept-process-output (jdwp-process jdwp) 0.1 0 t))))))
+		  (push `(,id . (,command-data ,(cont-get-current-id))) (jdwp-requests-alist jdwp))
+		  )))))
+;;		  (accept-process-output (jdwp-process jdwp) 0.1 0 t))))))
 
 ;; 		  (catch 'done
 ;; 			(with-timeout 
