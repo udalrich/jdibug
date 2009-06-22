@@ -185,6 +185,14 @@
 					(set flag t)
 				  (set flag nil))))))
 
+(defun elog-trim (obj max)
+  (let ((str (if (stringp obj)
+				 obj
+			   (format "%s" obj))))
+	(if (> (length str) max)
+		(substring str 0 (- max 3))
+	  str)))
+
 (provide 'elog)
 
 ;;; elog.el ends here
