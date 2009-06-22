@@ -272,8 +272,11 @@
   ;;;;
   ;; Perform concurrent operations, calling a continuation when all of them is done
   ;;;;
+  (defvar cont-test-saved-cont-1 nil)
   (setq cont-test-saved-cont-1 nil)
+  (defvar cont-test-saved-cont-2 nil)
   (setq cont-test-saved-cont-2 nil)
+  (defvar cont-test-saved-reply nil)
   (setq cont-test-saved-reply nil)
 
   (defun cont-test-send-message-1 ()
