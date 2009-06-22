@@ -1073,6 +1073,10 @@ to populate the jdi-value-values of the jdi-value.")
 		(setf (jdi-value-string value) (format "setter %s not found" method))
 		(cont-values t)))))
 
+(defun jdi-value-extract-generic-class-name (generic-signature)
+  (string-match "<L.*/\\(.*\\);>" generic-signature)
+  (match-string 1 generic-signature))
+
 (defun jdi-value-type-with-generic (value)
   (let ((class (jdi-value-class value))
 		(gs (jdi-value-generic-signature value)))
