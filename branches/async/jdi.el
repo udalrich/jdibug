@@ -32,6 +32,7 @@
   super	    
   ;; list of interfaces implemented by this class
   interfaces
+  interfaces-count ;; we use this to see whether the interfaces field have been resolved or not
   ;; list of jdi-method
   methods)
 
@@ -117,6 +118,18 @@
   signature
   generic-signature
   mod-bits)
+
+;;; Constants:
+(defconst jdi-access-public        #x0001)
+(defconst jdi-access-private       #x0002)
+(defconst jdi-access-protected     #x0004)
+(defconst jdi-access-static        #x0008)
+(defconst jdi-access-final         #x0010)
+(defconst jdi-access-synchronized  #x0020)
+(defconst jdi-access-volatile      #x0040)
+(defconst jdi-access-transient     #x0080)
+(defconst jdi-access-native        #x0100)
+(defconst jdi-access-abstract      #x0400)
 
 (defun jdi-mirror-jdwp (mirror)
   (jdi-virtual-machine-jdwp (jdi-mirror-virtual-machine mirror)))
@@ -210,6 +223,7 @@
 
 (defun jdi-class-get-methods (class)
   "[ASYNC] returns a list of jdi-method in the class"
+  (jdi-info "jdi-clsas-get-methods:%s" (jdi-class-signature class))
   (lexical-let ((class class))
 	(if (jdi-class-methods class)
 		(cont-values t)
@@ -329,9 +343,7 @@
 		 (location (if method (jdi-method-location-by-line-code-index method line-code-index))))
     (if location
 		location
-      (if (null (jdi-class-all-locations class))
-		  (jdi-info "class do not have debug information")
-		(jdi-error "failed to look line-code-index %s in class %s" line-code-index (jdi-class-name class))))))
+	  (jdi-error "failed to look line-code-index %s in class %s" line-code-index (jdi-class-name class)))))
 
 (defun jdi-thread-get-frames (thread)
   (jdi-info "jdi-thread-get-frames")
@@ -406,7 +418,9 @@
   (lexical-let* ((frame frame)
 				 (location location)
 				 (current-frame-line-code (jdwp-vec-to-int (jdi-location-line-code-index location))))
+	(jdi-time-start)
 	(cont-bind (result) (jdi-method-get-values (jdi-location-method location))
+	  (jdi-time-end "jdi-method-get-values")
 	  (setf (jdi-frame-values frame)
 			(loop for method-value in (jdi-method-values (jdi-location-method location))
 				  if (and (>= current-frame-line-code (jdi-value-code-index method-value))
@@ -430,8 +444,25 @@
 				  do
 				  (setf (jdi-value-type value-struct) (bindat-get-field value-reply :slot-value :type))
 				  (setf (jdi-value-value value-struct) (bindat-get-field value-reply :slot-value :u :value)))
-			(cont-wait (mapc 'jdi-value-get-string (jdi-frame-values frame))
-			  (cont-values (jdi-frame-values frame)))))))))
+			(jdi-time-start)
+			(cont-bind () (jdi-values-get-class-and-super-and-interfaces (jdi-frame-values frame))
+			  (cont-wait (mapc 'jdi-value-get-string (jdi-frame-values frame))
+				(jdi-time-end "mapc jdi-value-get-string")
+				(cont-values (jdi-frame-values frame))))))))))
+
+(defun jdi-value-object-p (value)
+  (equal (jdi-value-type value) jdwp-tag-object))
+
+(defun jdi-values-get-class-and-super-and-interfaces (values)
+  (lexical-let ((values values))
+	(cont-bind () (jdi-values-get-class (remove-if-not 'jdi-value-object-p values))
+	  (cont-bind () (jdi-classes-get-super-r (loop for value in values
+												   if (jdi-value-class value)
+												   collect (jdi-value-class value)))
+		(cont-bind () (jdi-classes-get-interfaces (loop for value in values
+														if (jdi-value-class value)
+														append (jdi-class-all-super (jdi-value-class value))))
+		  (cont-values))))))
 
 (defun jdi-values-get-string (values)
   (jdi-info "jdi-values-get-string %s values" (length values))
@@ -514,27 +545,69 @@
 		   (setq class-name (replace-regexp-in-string ";" "" class-name))))
     class-name))
 
+(defmacro jdi-multiple-get-defun (name unique-id-func set-field-func accessor-func)
+  `(defun ,name (structures)
+	 (jdi-info "%s:%s structures" (symbol-name ',name) (length structures))
+	 (lexical-let ((structures structures)
+				   (structures-hash (make-hash-table :test 'equal)))
+	   (dolist (structure structures)
+		 (puthash (,unique-id-func structure) structure structures-hash))
+	   (jdi-info "unique structures = %s" (hash-table-count structures-hash))
+	   (cont-wait (maphash (lambda (key value)
+							 (,set-field-func value))
+						   structures-hash)
+		 (dolist (structure structures)
+		   (when (null (,accessor-func structure))
+			 (setf (,accessor-func structure)
+				   (,accessor-func (gethash (,unique-id-func structure) structures-hash)))))
+		 (cont-values)))))
+
+(jdi-multiple-get-defun jdi-values-get-class       jdi-value-value jdi-value-get-class      jdi-value-class)
+(jdi-multiple-get-defun jdi-classes-get-super      jdi-class-id    jdi-class-get-super      jdi-class-super)
+(jdi-multiple-get-defun jdi-classes-get-interfaces jdi-class-id    jdi-class-get-interfaces jdi-class-interfaces)
+
+(defun jdi-classes-get-super-r (classes)
+  "recursive"
+  (jdi-info "jdi-classes-get-super-r")
+  (if (null classes)
+	  (cont-values)
+	(mapc (lambda (class)
+			(jdi-info "class-signature:%s" (jdi-class-signature class)))
+		  classes)
+	(lexical-let ((classes classes))
+	  (cont-wait (jdi-classes-get-super classes)
+		(jdi-classes-get-super-r (loop for class in classes
+									   if (jdi-class-super class)
+									   collect (jdi-class-super class)))))))
+
+(defun jdi-value-get-class (value)
+  "populate the jdi-value-class field"
+  (if (jdi-value-class value)
+	  (cont-values)
+	(lexical-let ((value value))
+	  (cont-bind (reply error jdwp id) (jdwp-send-command 
+										(jdi-mirror-jdwp value) 
+										"reference-type" 
+										`((:object . ,(jdi-value-value value))))
+		(let ((class (gethash (bindat-get-field reply :type-id) (jdi-virtual-machine-classes (jdi-mirror-virtual-machine value)))))
+		  (setf (jdi-value-class value) class)
+		  (cont-values))))))
+
 (defun jdi-value-get-string-object (value)
   (jdi-info "jdi-value-get-string-object:name=%s:type=%s" (jdi-value-name value) (jdi-value-type value))
   (lexical-let ((value value))
-	(if (equal (jdi-value-value value) [0 0 0 0 0 0 0 0])
-		(cont-values "null")
-	  (cont-bind (reply error jdwp id)
-		(jdwp-send-command (jdi-mirror-jdwp value) "reference-type" `((:object . ,(jdi-value-value value))))
-		(let ((class (gethash (bindat-get-field reply :type-id) (jdi-virtual-machine-classes (jdi-mirror-virtual-machine value)))))
- 		  (setf (jdi-value-class value) class)
-		  (cont-bind () (jdi-class-get-parent (jdi-value-class value))
-			(let ((setter (jdi-value-custom-set-strings-find value)))
-			  (jdi-info "found setter:%s for class signature:%s" setter (jdi-class-signature (jdi-value-class value)))
-			  (if setter 
-				  (cond 
-				   ((stringp setter)
-					(jdi-value-custom-set-string-with-method value setter))
-				   (t
-					(funcall setter value)))
-				(setf (jdi-value-string value) (format "%s {id=%s}" (jdi-class-name (jdi-value-class value)) (jdwp-vec-to-int (jdi-value-value value))))
-				(jdi-info "set jdi-value-string to %s" (jdi-value-string value))
-				(cont-values t)))))))))
+	(cont-bind () (jdi-value-get-class value)
+	  (let ((setter (jdi-value-custom-set-strings-find value)))
+		(jdi-info "found setter:%s for class signature:%s" setter (jdi-class-signature (jdi-value-class value)))
+		(if setter 
+			(cond 
+			 ((stringp setter)
+			  (jdi-value-custom-set-string-with-method value setter))
+			 (t
+			  (funcall setter value)))
+		  (setf (jdi-value-string value) (format "%s {id=%s}" (jdi-class-name (jdi-value-class value)) (jdwp-vec-to-int (jdi-value-value value))))
+		  (jdi-info "set jdi-value-string to %s" (jdi-value-string value))
+		  (cont-values t))))))
 
 (defun jdi-value-array-display-string (value size)
   "for array of three dimension, return i[2][][]."
@@ -597,6 +670,16 @@
 (defun jdi-field-static-p (field)
   (not (equal (logand (jdi-field-mod-bits field) jdi-access-static) 0)))
 
+(defun jdi-remove-duplicated (fields)
+  "Return a list of jdi-fields, without duplicated names, the first field is kept."
+  (let (names filtered)
+	(mapc (lambda (field)
+			(when (not (member (jdi-field-name field) names))
+			  (push (jdi-field-name field) names)
+			  (push field filtered)))
+		  fields)
+	filtered))
+	
 (defun jdi-class-all-fields (class)
   "Return a list of jdi-fields including those of parents."
   (let ((all-fields (append (jdi-class-fields class)
@@ -639,7 +722,8 @@
 			  (setf (jdi-value-value jdi-value) (bindat-get-field value :value :u :value)))
 		(jdi-info "adding %s values to existing %s" (length values) (length (jdi-value-values value)))
 		(setf (jdi-value-values value) (append (jdi-value-values value) values))
-		(cont-values t)))))
+		(cont-bind () (jdi-values-get-class-and-super-and-interfaces (jdi-value-values value))
+		  (cont-values t))))))
 
 (defun jdi-value-get-static-values (value)
   "Populate the values for the static fields in jdi-value"
@@ -671,7 +755,13 @@
 			  (setf (jdi-value-type jdi-value) (bindat-get-field value :value :type))
 			  (setf (jdi-value-value jdi-value) (bindat-get-field value :value :u :value)))
 		(setf (jdi-value-values value) (append (jdi-value-values value) values))
-		(cont-values t)))))
+		(cont-bind () (jdi-values-get-class-and-super-and-interfaces (jdi-value-values value))
+		  (cont-values t))))))
+
+(defun jdi-class-all-super (class)
+  "Returns all the classes in this class's hierarchy, including this class itself"
+  (unless (null class)
+	(cons class (jdi-class-all-super (jdi-class-super class)))))
 
 (defun jdi-class-get-super (class)
   "populate the jdi-class-super of this class"
@@ -695,7 +785,7 @@
 (defun jdi-class-get-interfaces (class)
   "populate the jdi-class-interfaces of this class"
   (jdi-info "jdi-class-get-interfaces:name=%s" (jdi-class-name class))
-  (if (or (jdi-class-interfaces class)
+  (if (or (jdi-class-interfaces-count class)
 		  (string= (jdi-class-signature class) "Ljava/lang/Object;"))
 	  (cont-values)
 
@@ -708,6 +798,7 @@
 		(setf (jdi-class-interfaces class)
 			  (loop for interface in (bindat-get-field reply :interface)
 					collect (gethash (bindat-get-field interface :type) (jdi-virtual-machine-classes (jdi-mirror-virtual-machine class)))))
+		(setf (jdi-class-interfaces-count class) (bindat-get-field reply :interfaces))
 		(if jdi-info-flag
 			(loop for interface in (jdi-class-interfaces class)
 				  do (jdi-info "class:%s interface:%s"
@@ -715,16 +806,16 @@
 							   (jdi-class-name interface))))
 		(cont-values)))))
 
-(defun jdi-class-get-parent (class)
-  "Get the whole parent hierarchy of this class, stop only after reaching the Object class."
-  (jdi-info "jdi-class-get-parent:name=%s" (jdi-class-name class))
-  (lexical-let ((class class))
-	(cont-wait (progn
-				 (jdi-class-get-super class)
-				 (jdi-class-get-interfaces class))
-	  (if (jdi-class-super class)
-		  (jdi-class-get-parent (jdi-class-super class))
-		(cont-values)))))
+;; (defun jdi-class-get-parent (class)
+;;   "Get the whole parent hierarchy of this class, stop only after reaching the Object class."
+;;   (jdi-info "jdi-class-get-parent:name=%s" (jdi-class-name class))
+;;   (lexical-let ((class class))
+;; 	(cont-wait (progn
+;; 				 (jdi-class-get-super class)
+;; 				 (jdi-class-get-interfaces class))
+;; 	  (if (jdi-class-super class)
+;; 		  (jdi-class-get-parent (jdi-class-super class))
+;; 		(cont-values)))))
 								
 ;; 	(cont-bind () (jdi-class-get-super class)
 ;; 	  (cont-bind () (jdi-class-get-interfaces class)
@@ -759,11 +850,26 @@
 ;; 				  (cont-values)
 ;; 				(jdi-class-get-parent superclass)))))))))
 
-(defun jdi-class-all-super (class)
-  "Returns a list of jdi-class including this one and all its super classes."
-  (if (null class)
-	  nil
-	(cons class (jdi-class-all-super (jdi-class-super class)))))
+(defun jdi-access-string (bits)
+  (let ((str)
+		(map `((,jdi-access-public       . "[public]")
+			   (,jdi-access-private      . "[private]")
+			   (,jdi-access-protected    . "[protected]")
+			   (,jdi-access-static       . "[static]")
+			   (,jdi-access-final        . "[final]")
+			   (,jdi-access-synchronized . "[final]")
+			   (,jdi-access-volatile     . "[volatile]")
+			   (,jdi-access-transient    . "[transient]")
+			   (,jdi-access-native       . "[native]")
+			   (,jdi-access-abstract     . "[abstract]"))))
+    (mapc (lambda (m)
+			(if (not (equal (logand bits (car m)) 0))
+				(setq str (concat str (cdr m)))))
+		  map)
+    str))
+
+(defun jdi-field-mod-bits-string (field)
+  (jdi-access-string (jdi-field-mod-bits field)))
 
 (defun jdi-class-get-fields (class)
   "Get all the fields in this class, and also in the parent's class if this class have a parent."
@@ -795,20 +901,19 @@
 (defun jdi-value-object-get-values (value)
   (jdi-info "jdi-value-object-get-values")
   (lexical-let ((value value))
-	(cont-bind () (jdi-class-get-parent (jdi-value-class value))
-	  (cont-wait (mapc 'jdi-class-get-fields (jdi-class-all-super (jdi-value-class value)))
+	(cont-wait (mapc 'jdi-class-get-fields (jdi-class-all-super (jdi-value-class value)))
 
-		(let ((expander-func (jdi-value-custom-expanders-find value)))
-		  (if expander-func
-			  (cont-bind (result) (funcall expander-func value)
-				(cont-wait (mapc 'jdi-value-get-string (jdi-value-values value))
-				  (cont-values)))
+	  (let ((expander-func (jdi-value-custom-expanders-find value)))
+		(if expander-func
+			(cont-bind (result) (funcall expander-func value)
+			  (cont-wait (mapc 'jdi-value-get-string (jdi-value-values value))
+				(cont-values)))
 
-			(cont-bind (result) (jdi-value-get-static-values value)
-			  (cont-bind (result) (jdi-value-get-nonstatic-values value)
-				(jdi-info "done jdi-value-object-get-values")
-				(cont-wait (mapc 'jdi-value-get-string (jdi-value-values value))
-				  (cont-values))))))))))
+		  (cont-bind (result) (jdi-value-get-static-values value)
+			(cont-bind (result) (jdi-value-get-nonstatic-values value)
+			  (jdi-info "done jdi-value-object-get-values")
+			  (cont-wait (mapc 'jdi-value-get-string (jdi-value-values value))
+				(cont-values)))))))))
 
 (defun jdi-value-array-get-values (value)
   (jdi-info "jdi-value-get-array-values")
@@ -978,17 +1083,16 @@ to populate the jdi-value-values of the jdi-value.")
 (defun jdi-value-custom-set-string-with-size (value)
   (jdi-trace "jdi-value-custom-set-string-with-size:%s" (jdi-class-name (jdi-value-class value)))
   (lexical-let ((value value))
-	(cont-bind () (jdi-class-get-parent (jdi-value-class value))
-	  (cont-bind (result) (jdi-class-get-methods (jdi-value-class value))
+	(cont-bind (result) (jdi-class-get-methods (jdi-value-class value))
 
-		(cont-bind (reply error jdwp id)
-		  (jdi-value-invoke-method value "size" nil)
+	  (cont-bind (reply error jdwp id)
+		(jdi-value-invoke-method value "size" nil)
 
-		  (let ((size (bindat-get-field reply :return-value :u :value)))
-			(setf (jdi-value-array-length value) size)
-			(setf (jdi-value-string value) 
-				  (format "%s[%d]" (jdi-value-type-with-generic value) size)))
-		  (cont-values t))))))
+		(let ((size (bindat-get-field reply :return-value :u :value)))
+		  (setf (jdi-value-array-length value) size)
+		  (setf (jdi-value-string value) 
+				(format "%s[%d]" (jdi-value-type-with-generic value) size)))
+		(cont-values t)))))
 
 (defun jdi-value-custom-expand-collection (value)
   (jdi-info "jdi-value-custom-expand-collection")
@@ -1013,22 +1117,21 @@ to populate the jdi-value-values of the jdi-value.")
   (lexical-let ((value value)
 				(method-name method-name)
 				(method-signature method-signature))
-	(cont-bind () (jdi-class-get-parent (jdi-value-class value))
-	  (cont-bind (result) (jdi-class-get-methods (jdi-value-class value))
-		(lexical-let ((method (find-if (lambda (method)
-										 (and (string= (jdi-method-name method) method-name)
-											  (or (null method-signature)
-												  (string= (jdi-method-signature method) method-signature))))
-									   (jdi-class-all-methods (jdi-value-class value)))))
-		  (if method
-			  (jdwp-send-command (jdi-mirror-jdwp value) "object-invoke-method"
-								 `((:object . ,(jdi-value-value value))
-								   (:thread . ,(jdi-virtual-machine-suspended-thread-id (jdi-mirror-virtual-machine value)))
-								   (:class . ,(jdi-class-id (jdi-value-class value)))
-								   (:method-id . ,(jdi-method-id method))
-								   (:arguments . 0)
-								   (:options . ,jdwp-invoke-single-threaded)))
-			(cont-values nil nil nil nil)))))))
+	(cont-bind (result) (jdi-class-get-methods (jdi-value-class value))
+	  (lexical-let ((method (find-if (lambda (method)
+									   (and (string= (jdi-method-name method) method-name)
+											(or (null method-signature)
+												(string= (jdi-method-signature method) method-signature))))
+									 (jdi-class-all-methods (jdi-value-class value)))))
+		(if method
+			(jdwp-send-command (jdi-mirror-jdwp value) "object-invoke-method"
+							   `((:object . ,(jdi-value-value value))
+								 (:thread . ,(jdi-virtual-machine-suspended-thread-id (jdi-mirror-virtual-machine value)))
+								 (:class . ,(jdi-class-id (jdi-value-class value)))
+								 (:method-id . ,(jdi-method-id method))
+								 (:arguments . 0)
+								 (:options . ,jdwp-invoke-single-threaded)))
+		  (cont-values nil nil nil nil))))))
 
 (defun jdi-value-custom-expand-map (value)
   (jdi-info "jdi-value-custom-expand-collection")
