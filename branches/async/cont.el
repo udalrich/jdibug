@@ -133,11 +133,6 @@
 									(lambda ,parms ,@body))))
 	 ,expr))
 
-(defun cont-apply-when-last (&rest args)
-  (cont-trace "cont-apply-when-last:id=%s:pid=%s" (cont-id cont-current) (cont-pid cont-current))
-  (unless (cont-have-child-p (cont-id cont-current))
-	(cont-values)))
-
 (defmacro cont-wait (expr &rest body)
   (declare (indent defun))
   `(let* ((cont-current-id (cont-new cont-current-id
