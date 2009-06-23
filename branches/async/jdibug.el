@@ -653,6 +653,9 @@ And position the point at the line number."
       :value 
       ,(format "%s: %s" (jdi-value-name value) (jdi-value-string value)))))
 
+(defvar jdibug-refresh-locals-buffer-proc nil)
+(setq jdibug-refresh-locals-buffer-proc nil)
+
 (defun jdibug-refresh-locals-buffer (thread location)
   (with-current-buffer (jdibug-locals-buffer jdibug-this)
 	(let ((inhibit-read-only t))
@@ -663,18 +666,21 @@ And position the point at the line number."
 				(location location))
 	(jdibug-info "jdibug-refresh-locals-buffer")
 	(jdibug-time-start)
-	(cont-bind () (jdi-thread-get-frames thread)
-	  (jdibug-time-end "jdi-thread-get-frames")
-	  (jdibug-info "number of frames:%s" (length (jdi-thread-frames thread)))
-	  (jdibug-time-start)
-	  (cont-bind (locals) (jdi-frame-get-locals (car (jdi-thread-frames thread)) location)
-		(jdibug-time-end "jdibug-frame-get-locals")
-		(jdibug-info "jdi-frame-get-locals returned %s locals" (length locals))
-		(with-current-buffer (jdibug-locals-buffer jdibug-this)
-		  (let ((inhibit-read-only t))
-			(erase-buffer))
-		  (tree-mode-insert (jdibug-make-locals-tree locals)))
-		(cont-values t)))))
+	(cont-kill jdibug-refresh-locals-buffer-proc)
+	(setq jdibug-refresh-locals-buffer-proc
+		  (cont-fork
+		   (cont-bind () (jdi-thread-get-frames thread)
+			 (jdibug-time-end "jdi-thread-get-frames")
+			 (jdibug-info "number of frames:%s" (length (jdi-thread-frames thread)))
+			 (jdibug-time-start)
+			 (cont-bind (locals) (jdi-frame-get-locals (car (jdi-thread-frames thread)) location)
+			   (jdibug-time-end "jdibug-frame-get-locals")
+			   (jdibug-info "jdi-frame-get-locals returned %s locals" (length locals))
+			   (with-current-buffer (jdibug-locals-buffer jdibug-this)
+				 (let ((inhibit-read-only t))
+				   (erase-buffer))
+				 (tree-mode-insert (jdibug-make-locals-tree locals)))
+			   (cont-values t)))))))
 
 ;;   (with-current-buffer (jdibug-locals-buffer jdibug-this)
 ;; 	(let ((tree (jdibug-locals-tree jdibug-this)))
