@@ -3,17 +3,18 @@
 
 (defstruct cont
   id
-  pid									; parent id
+  parent-id	
+  proc-id
   func
   )
 
-(defun cont-new (pid &optional func)
+(defun cont-new (parent-id proc-id &optional func)
   "Make a new continuation and add it to the current running continuations list. Return the new id."
   (let* ((id (cont-generate-id))
-		 (new-cont (make-cont :id id :pid pid :func func)))
-	(cont-trace "cont-new:id=%s:pid=%s:func=\n    %s" 
+		 (new-cont (make-cont :id id :parent-id parent-id :proc-id proc-id :func func)))
+	(cont-trace "cont-new:id=%s:parent-id=%s:func=\n    %s" 
 				(cont-id new-cont) 
-				(cont-pid new-cont)
+				(cont-parent-id new-cont)
 				(elog-trim func 100))
 	(push `(,id . ,new-cont) cont-alist)
 	id))
@@ -26,6 +27,11 @@
 
 (defcustom cont-maximum 10000
   "Number of total continuations that we support."
+  :group 'cont
+  :type 'integer)
+
+(defcustom cont-proc-maximum 10000
+  "Number of total processes that we support."
   :group 'cont
   :type 'integer)
 
@@ -43,7 +49,7 @@
   "whether this id have any child continuations."
   (and id
 	   (find-if (lambda (pair)
-				  (equal (cont-pid (cdr pair)) id))
+				  (equal (cont-parent-id (cdr pair)) id))
 				cont-alist)))
 
 ;; cont-get and cont-delete should be the only access to cont-alist
@@ -57,20 +63,41 @@
   "Return a struct-cont from this id."
   (cont-info "cont-get:%s" id)
   (if (null id)
-	  (make-cont :id nil :pid nil :func 'cont-identity)
-	(let ((result (cdr (assoc id cont-alist))))
-	  (if result result (error "can't find cont-id %s" id)))))
+	  (make-cont :id nil :parent-id nil :func 'cont-identity)
+	(cdr (assoc id cont-alist))))
 		  
 (defun cont-identity (&rest args)
   (if args
-	  (apply 'identity args)))
+	  (if (cdr args)
+		  (apply 'identity (list args))
+		(apply 'identity args))))
 
 (defun cont-delete (id)
-  (cont-info "cont-delete:%s:func=%s" id (if (assoc id cont-alist) (elog-trim (cont-func (cdr (assoc id cont-alist))) 100)
+  (cont-info "cont-delete:%s:func=%s" id (if (assoc id cont-alist) (elog-trim (cont-func (cdr (assoc id cont-alist))) 500)
 										   nil))
   (if id
 	  (setq cont-alist (assq-delete-all id cont-alist))))
-	  
+
+(defvar cont-proc-list nil
+  "A list of process ids that are currently running.")
+
+(defvar cont-current-proc-id nil)
+
+(defun cont-new-proc-id ()
+  (let ((num 0))
+	(catch 'done
+	  (while (< num cont-proc-maximum)
+		(if (not (member num cont-proc-list))
+			(throw 'done num)
+		  (setq num (1+ num))))
+	  (error "too many process running"))))
+
+(defmacro cont-fork (&rest body)
+  `(let ((cont-current-proc-id ,(cont-new-proc-id)))
+	 (setq cont-proc-list (cons cont-current-proc-id cont-proc-list))
+	 ,@body
+	 cont-current-proc-id))
+
 (defun cont-values (&rest retvals)
   (cont-info "cont-values:current-id=%s:retvals=%s" cont-current-id (elog-trim retvals 100))
   (if (cont-have-child-p cont-current-id)
@@ -78,114 +105,76 @@
 	(let* ((cont-previous-id cont-current-id)
 		   (cont-current (cont-get cont-current-id))
 		   ;; current-id = next-id that we are looking at
-		   (cont-current-id (cont-id (cont-get (cont-pid cont-current)))))
+		   (cont-current-id (cont-id (cont-get (cont-parent-id cont-current))))
+		   (cont-current-proc-id (cont-proc-id cont-current)))
 	  (cont-delete cont-previous-id)
-	  (apply (cont-func cont-current) retvals))))
-
-;; (defmacro cont-defun (name parms &rest body)
-;;   `(defun ,name ,parms
-;; 	 ,@body))
-;; 	 (let ((cont-current-id (cont-new (cont-id (cont-get cont-current-id))
-;; 									  'cont-values)))
-;; 	   ,@body)))
-
-;; (defmacro cont-defun (name parms &rest body)
-;;   `(defun ,name ,parms
-;; 	 (cont-trace "calling %s %s cont-current" (symbol-name ',name) (if cont-current "with" "without"))
-;; 	 (if cont-current
-;; 		 ,@body
-;; 	   (flet ((cont-values (&rest retvals) (apply 'identity retvals)))
-;; 		 ,@body))))
-
-;; (defun cont-values (&rest retvals)
-;;   (cont-trace "cont-values:current-id=%s:retvals=%s:continuation=\n%s"
-;; 			  (if cont-current (cont-id cont-current) "nil")
-;; 			  (elog-trim retvals 100)
-;; 			  (if (null cont-current)
-;; 				  "identity"
-;; 				(elog-trim (cont-inuation cont-current) 200)))
-;;   (cont-trace "%s" (cont-list))
-;;   (if (null cont-current)
-;; 	  (and retvals (apply 'identity retvals))
-;; 	(and (> (cont-referred cont-current) 0) (decf (cont-referred cont-current)))
-;; 	(when (equal (cont-referred cont-current) 0)
-;; 	  (let ((cont-previous cont-current)
-;; 			(cont-current (cdr (assoc (cont-pid cont-current) cont-alist))))
-;; 		(cont-trace "removing cont id:%s" (cont-id cont-previous))
-;; 		(setq cont-alist (assq-delete-all (cont-id cont-previous) cont-alist))
-;; 		(apply (cont-inuation cont-previous) retvals))))
-
-;; 		(cont-trace "parent-id=%s:parent-have-child=%s" (cont-pid cont-current) (cont-have-child-p (cont-pid cont-current)))
-;; 		(cont-trace "current-have-child=%s" (cont-have-child-p (cont-id cont-current)))
-;; 		(let ((cont-current (if (cont-have-child-p (cont-pid cont-current))
-;; 								nil
-;; 							  (cdr (assoc (cont-pid cont-current) cont-alist)))))
-;; 		  (apply (cont-inuation cont-previous) retvals))))))
+	  (cont-info "cont-values:deleted")
+	  (let ((result (apply (cont-func cont-current) retvals)))
+		(cont-gc)
+		(cont-info "applied")
+		result))))
 
 (defun cont-values-this (id &rest retvals)
   (let ((cont-current (cont-get id))
 		(cont-current-id id))
-	(apply 'cont-values retvals)))
+	(when cont-current
+	  (apply 'cont-values retvals))))
 
 (defmacro cont-bind (parms expr &rest body)
   (declare (indent defun))
-  `(let ((cont-current-id (cont-new cont-current-id
-									(lambda ,parms ,@body))))
-	 ,expr))
-
+  `(let* ((cont-current-id (cont-new cont-current-id
+									 cont-current-proc-id
+									 (lambda ,parms ,@body)))
+		  (result (progn ,expr)))
+	 (if (assoc cont-current-id cont-alist)
+		 cont-current-id
+	   result)))
+	 
 (defmacro cont-wait (expr &rest body)
   (declare (indent defun))
   `(let* ((cont-current-id (cont-new cont-current-id
+									 cont-current-proc-id
 									(lambda (&rest args) ,@body)))
-		  (cont-last-child (cont-new cont-current-id 'cont-values)))
+		  (cont-last-child (cont-new cont-current-id cont-current-proc-id 'cont-values)))
 	 ,expr
 	 (cont-values-this cont-last-child)))
   
-;; (defmacro cont-wait (expr &rest body)
-;;   (declare (indent defun))
-;;   `(let* ((cont-current (cont-new (if cont-current 
-;; 									  (cont-current-id)
-;; 									nil)
-;; 								  (lambda (&rest args) ,@body)))
-;; 		  ;; this is to solve the problem that when the first operation in expr
-;; 		  ;; returns straight away, the rest of the expressions will not be waited on
-;; 		  (cont-child (cont-new (cont-current-id) (lambda () (cont-values)))))
-;; 	 (cont-trace "created the temp child id=%s:pid=%s" (cont-id cont-child) (cont-pid cont-child))
-;; 	 ,expr
-;; 	 (cont-values-this (cont-id cont-child))))
-
-;; (defmacro cont-funcall (fn &rest args)
-;;   `(funcall ,fn cont-cont ,@args))
-
-;; (defmacro cont-apply (fn &rest args)
-;;   `(apply ,fn cont-cont ,@args))
-
-;; (defmacro cont-fork (&rest body)
-;;   `(let ((cont-current (cont-new nil 'identity)))
-;; 	 ,@body))
-
 (defun cont-init ()
   (interactive)
-  (setq cont-alist nil))
+  (setq cont-alist nil)
+  (setq cont-proc-list nil))
 
 (defun cont-clear-p ()
   (interactive)
-  (null cont-alist))
-;;   (and cont-alist
-;; 	   (car cont-alist)
-;; 	   (null (caar cont-alist))
-;; 	   (null (cont-pid (cdar cont-alist)))
-;; 	   (eq (cont-func (cdar cont-alist)) 'identity)))
+  (and (null cont-alist)
+	   (null cont-proc-list)))
 
 (defun cont-list ()
   (interactive)
   (concat "cont-list:"
 		  (apply 'concat (loop for cont-pair in cont-alist
 							   for cont = (cdr cont-pair)
-							   collect (format "\n    id=%s:pid=%s" (cont-id cont) (cont-pid cont))))))
+							   collect (format "\n    id=%s:parent-id=%s" (cont-id cont) (cont-parent-id cont))))))
+
+(defun cont-kill (proc-id)
+  "Stop all the continuations for the process id, and its child continuations."
+  (cont-info "cont-kill:%s" proc-id)
+  (loop for pair in cont-alist
+		for cont = (cdr pair)
+		if (equal (cont-proc-id cont) proc-id)
+		do (setf (cont-func cont) 'cont-identity)))
+
+(defun cont-gc ()
+  "Garbage Collect. :P"
+  (let ((all-proc-id (loop for pair in cont-alist
+						   for cont = (cdr pair)
+						   collect (cont-proc-id cont))))
+	(setq cont-proc-list
+		  (loop for proc-id in cont-proc-list
+				if (member proc-id all-proc-id)
+				collect proc-id))))
 
 (eval-when-compile
-
   (defun assert-equal (expected value)
 	(unless (equal expected value)
 	  (error "expected %s but got %s" expected value)))
@@ -280,10 +269,12 @@
   (setq cont-test-saved-reply nil)
 
   (defun cont-test-send-message-1 ()
-	(setq cont-test-saved-cont-1 (cont-get-current-id)))
+	(setq cont-test-saved-cont-1 (cont-get-current-id))
+	t)
 
   (defun cont-test-send-message-2 ()
-	(setq cont-test-saved-cont-2 (cont-get-current-id)))
+	(setq cont-test-saved-cont-2 (cont-get-current-id))
+	t)
     
   (cont-wait (progn
 			   ;; this simulate the value might already be cached
@@ -306,6 +297,40 @@
   (assert-equal '("aloha" "start") cont-test-saved-reply)
   (cont-values-this cont-test-saved-cont-2 "there")
   (assert-equal '("end" "there" "aloha" "start") cont-test-saved-reply)
+  (assert (cont-clear-p))
+
+  ;;;;
+  ;; Cancel a continuation
+  ;;;;
+  (setq cont-test-saved-cont-1 nil)
+  (setq cont-test-saved-cont-2 nil)
+  (setq cont-test-saved-reply nil)
+
+  (defvar cont-test-proc nil)
+  (setq cont-test-proc nil)
+
+  (defun cont-test-refresh ()
+	(cont-kill cont-test-proc)
+	(setq cont-test-saved-reply nil)
+	(setq cont-test-proc (cont-fork
+						  (cont-bind (reply) (cont-test-send-message-1)
+							(push reply cont-test-saved-reply)
+
+							(cont-bind (reply) (cont-test-send-message-2)
+							  (push reply cont-test-saved-reply)
+							  (push "end" cont-test-saved-reply))))))
+
+  (cont-test-refresh)
+  (assert-equal nil cont-test-saved-reply)
+  (cont-values-this cont-test-saved-cont-1 "aloha")
+  (assert-equal '("aloha") cont-test-saved-reply)
+
+  (cont-test-refresh)
+  (cont-values-this cont-test-saved-cont-2 "there")
+  (cont-values-this cont-test-saved-cont-1 "aloha again")
+  (assert-equal '("aloha again") cont-test-saved-reply)
+  (cont-values-this cont-test-saved-cont-2 "there")
+  (assert-equal '("end" "there" "aloha again") cont-test-saved-reply)
   (assert (cont-clear-p))
 
   (run-with-timer 0 nil (lambda () (message "cont.el unit test success")))
