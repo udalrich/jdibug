@@ -48,14 +48,7 @@
   process		   
 
   ;; the state of our process
-  ;; can be one of (nil 'handshaked 'ready)
-  ;; nil            = when we are not connected
-  ;; 'handshaked    = we have sent a handshake and received the reply handshake
-  ;; 'ready         = we have received the id-sizes and ready for operation
-  state  
-
-  ;; our timer process that continuously monitor the process buffer
-  timer
+  handshaked-p
 
   ;; the last used command id that we sent to the server
   (current-id            0) 
@@ -679,6 +672,12 @@
 ;;   (setf (jdwp-handshaked-p jdwp) t)
 ;;   (jdwp-consume-output jdwp (length jdwp-handshake)))
 
+(defun jdwp-process-filter (process string)
+  (jdwp-trace "jdwp-process-filter:string=%s" string)
+  (jdwp-ordinary-insertion-filter process string)
+  (let ((jdwp (process-get process 'jdwp)))
+	(run-with-timer 0 nil 'jdwp-monitor jdwp)))
+
 ;; (defun jdwp-process-filter (process string)
 ;;   (jdwp-info "jdwp-process-filter")
 ;;   (jdwp-trace "string=%s" string)
@@ -737,21 +736,18 @@
   (cont-values-this (jdwp-ready-cont jdwp) t))
 
 (defun jdwp-monitor (jdwp)
-;  (jdwp-trace "jdwp-monitor state=%s" (jdwp-state jdwp))
+  (jdwp-trace "jdwp-monitor handshaked=%s" (jdwp-handshaked-p jdwp))
   (condition-case err
-	  (cond ((eq (jdwp-state jdwp) 'nil)
+	  (cond ((null (jdwp-handshaked-p jdwp))
 			 (if (string= (jdwp-residual-output jdwp)
 						  jdwp-handshake)
 				 (progn
-				   (setf (jdwp-state jdwp) 'handshaked)
-				   (jdwp-consume-output jdwp (length jdwp-handshake)))))
-			
-			((eq (jdwp-state jdwp) 'handshaked)
-			 (setf (jdwp-state jdwp) 'ready)
-			 (cont-bind (reply error jdwp id) (jdwp-send-command jdwp "id-sizes" nil)
-			   (jdwp-process-id-sizes jdwp reply)))
+				   (setf (jdwp-handshaked-p jdwp) t)
+				   (jdwp-consume-output jdwp (length jdwp-handshake))
+				   (cont-bind (reply error jdwp id) (jdwp-send-command jdwp "id-sizes" nil)
+					 (jdwp-process-id-sizes jdwp reply)))))
 
-			((eq (jdwp-state jdwp) 'ready)
+			(t
 			 (let ((packet))
 			   (while (setq packet (jdwp-get-packet jdwp))
 				 (if (jdwp-reply-packet-p packet)
@@ -771,14 +767,6 @@
 				   (jdwp-trace "received command packet"))))))
 	(error (jdwp-error "jdwp-monitor-error:%s" (error-message-string err)))))
 
-(defvar jdwp-all-timers nil)
-
-(defun jdwp-cancel-all-timers ()
-  (jdwp-trace "jdwp-cancel-all-timers:%s timers" (length jdwp-all-timers))
-  (dolist (timer jdwp-all-timers)
-	(cancel-timer timer))
-  (setq jdwp-all-timers nil))
-
 (defun jdwp-connect (jdwp server port)
   "[ASYNC] returns t if connected and an (ERROR-SYMBOL . SIGNAL-DATA) if there are problems connecting"
   (jdwp-trace "jdwp-connect:%s:%s" server port)
@@ -790,10 +778,7 @@
 		(setf (jdwp-process jdwp) (open-network-stream "jdwp" buffer-name server port))
 		(when (jdwp-process jdwp)
 		  (process-put               (jdwp-process jdwp) 'jdwp jdwp)
-		  (push
-		   (setf (jdwp-timer jdwp) (run-with-timer 0 0.1 'jdwp-monitor jdwp))
-		   jdwp-all-timers)
-		  ;; 	  (set-process-filter        (jdwp-process jdwp) 'jdwp-process-filter)
+		  (set-process-filter        (jdwp-process jdwp) 'jdwp-process-filter)
 		  ;; 	  (set-process-sentinel      (jdwp-process jdwp) 'jdwp-process-sentinel)
 		  (with-current-buffer (process-buffer (jdwp-process jdwp))
 			(set-buffer-multibyte nil))
@@ -811,10 +796,7 @@
 	(setf (process-sentinel (jdwp-process jdwp)) nil)
 	(kill-buffer (process-buffer (jdwp-process jdwp))))
   ;;(delete-process (jdwp-process jdwp))
-  (when (jdwp-timer jdwp)
-	(cancel-timer (jdwp-timer jdwp)))
   (setf (jdwp-process jdwp) nil)
-  (setf (jdwp-timer jdwp) nil)
   (setf (jdwp-state jdwp) nil))
 
 (defvar jdwp-disconnected-hooks nil)
@@ -908,8 +890,13 @@
 
 (defun jdwp-ordinary-insertion-filter (proc string)
   (with-current-buffer (process-buffer proc)
-    (goto-char (point-max))
-    (insert string)))
+	(let ((moving (= (point) (process-mark proc))))
+	  (save-excursion
+		;; Insert the text, advancing the process marker.
+		(goto-char (process-mark proc))
+		(insert string)
+		(set-marker (process-mark proc) (point)))
+	  (if moving (goto-char (process-mark proc))))))
 
 (defun jdwp-append-output (jdwp process string)
   (jdwp-ordinary-insertion-filter process string))
@@ -918,6 +905,7 @@
 ;;   (setf (jdwp-residual-output jdwp) (concat (jdwp-residual-output jdwp) (string-as-unibyte string))))
 
 (defun jdwp-consume-output (jdwp len)
+  (jdwp-trace "jdwp-consume-output:len=%s" len)
   (when (jdwp-process jdwp)
     (with-current-buffer (process-buffer (jdwp-process jdwp))
       (goto-char (point-min))
