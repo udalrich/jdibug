@@ -693,31 +693,10 @@ And position the point at the line number."
 			   (with-current-buffer (jdibug-locals-buffer jdibug-this)
 				 (let ((inhibit-read-only t))
 				   (erase-buffer))
-				 (tree-mode-insert (jdibug-make-locals-tree locals)))
+				 (tree-mode-insert (jdibug-make-locals-tree locals))
+				 (local-set-key "s" 'jdibug-node-tostring)
+				 (local-set-key "c" 'jdibug-node-classname))
 			   (cont-values t)))))))
-
-;;   (with-current-buffer (jdibug-locals-buffer jdibug-this)
-;; 	(let ((tree (jdibug-locals-tree jdibug-this)))
-;; 	  (if tree
-;; 		  ;; after the first time, we do not need to recreate the tree
-;; 		  ;; just reopen it
-;; 		  (progn
-;; 			(jdibug-info "we already have the tree, just reopen it will do")
-;;   			(let ((inhibit-read-only t))
-;;   			  (erase-buffer))
-;; 			(tree-mode-reflesh-tree tree))
-
-;; 		;; first time, create the buffer
-;;  		(let ((inhibit-read-only t))
-;;  		  (erase-buffer))
-;; 		(local-set-key "s" 'jdibug-node-tostring)
-;; 		(local-set-key "c" 'jdibug-node-classname)
-;; 		(jdibug-info "making the locals tree")
-;; 		(setf (jdibug-locals-tree jdibug)
-;; 			  (tree-mode-insert (jdibug-make-values-tree jdibug jdi (jdi-locals jdi))))
-;; 		(jdibug-info "1:from=%s" (widget-get (jdibug-locals-tree jdibug) :from))
-;; 		;; default to open it the first time 
-;; 		(widget-apply-action (jdibug-locals-tree jdibug))))))
 
 (defun jdibug-refresh-frames-buffer (jdibug jdi)
   (jdibug-info "jdibug-refresh-frames-buffer, frames=%d" (length (jdi-frames jdi)))
@@ -808,19 +787,18 @@ And position the point at the line number."
 
 (defun jdibug-node-tostring ()
   (interactive)
-  (let* ((wid (widget-at))
-		 (tree (widget-get wid :parent))
-		 (value (widget-get tree :jdi-value))
-		 (jdibug (widget-get tree :jdibug))
-		 (jdi (jdibug-current-jdi jdibug)))
+  (lexical-let* ((wid (widget-at))
+				 (tree (widget-get wid :parent))
+				 (value (widget-get tree :jdi-value))
+				 (jdibug (widget-get tree :jdibug)))
     (if (null value)
 		(message "not an object")
-	  (multiple-value-bind (reply error jdwp id)
-		  (jdi-value-invoke-method jdi value "toString")
+	  (cont-bind (reply error jdwp id) (jdi-value-invoke-method value "toString" "()Ljava/lang/String;")
 		(let ((object-id (bindat-get-field reply :return-value :u :value)))
-		  (multiple-value-bind (reply error jdwp id)
-			  (jdwp-send-command (jdi-jdwp jdi) "string-value" 
-								 `((:object . ,object-id)))
+		  (cont-bind (reply error jdwp id) (jdwp-send-command 
+											(jdi-mirror-jdwp value) 
+											"string-value" 
+											`((:object . ,object-id)))
 			(jdibug-trace "tostring-reply:%s" (jdwp-get-string reply :value))
 			(message "%s" (jdwp-get-string reply :value))))))))
 
