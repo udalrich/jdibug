@@ -541,8 +541,8 @@
 		 (cont-values t))))
 
 (defun jdi-class-name (class-or-signature)
+  (jdi-info "jdi-class-name")
   (let* ((class-name (if (jdi-class-p class-or-signature) (jdi-class-signature class-or-signature) class-or-signature)))
-	(jdi-trace "jdi-class-name:%s" class-name)
     (cond ((string= class-name "I")
 		   (setq class-name "int"))
 		  (t
@@ -587,7 +587,9 @@
 
 (defun jdi-value-get-class (value)
   "populate the jdi-value-class field"
-  (if (jdi-value-class value)
+  (jdi-info "jdi-value-get-class:name=%s type=%s" (jdi-value-name value) (jdi-value-type value))
+  (if (or (jdi-value-class value)
+		  (equal (jdi-value-value value) [0 0 0 0 0 0 0 0]))
 	  (cont-values)
 	(lexical-let ((value value))
 	  (cont-bind (reply error jdwp id) (jdwp-send-command 
@@ -599,20 +601,22 @@
 		  (cont-values))))))
 
 (defun jdi-value-get-string-object (value)
-  (jdi-info "jdi-value-get-string-object:name=%s:type=%s" (jdi-value-name value) (jdi-value-type value))
-  (lexical-let ((value value))
-	(cont-bind () (jdi-value-get-class value)
-	  (let ((setter (jdi-value-custom-set-strings-find value)))
-		(jdi-info "found setter:%s for class signature:%s" setter (jdi-class-signature (jdi-value-class value)))
-		(if setter 
-			(cond 
-			 ((stringp setter)
-			  (jdi-value-custom-set-string-with-method value setter))
-			 (t
-			  (funcall setter value)))
-		  (setf (jdi-value-string value) (format "%s {id=%s}" (jdi-class-name (jdi-value-class value)) (jdwp-vec-to-int (jdi-value-value value))))
-		  (jdi-info "set jdi-value-string to %s" (jdi-value-string value))
-		  (cont-values t))))))
+  (jdi-info "jdi-value-get-string-object:name=%s:type=%s:value=%s" (jdi-value-name value) (jdi-value-type value) (jdi-value-value value))
+  (if (equal (jdi-value-value value) [0 0 0 0 0 0 0 0])
+	  (cont-values t)
+	(lexical-let ((value value))
+	  (cont-bind () (jdi-value-get-class value)
+		(let ((setter (jdi-value-custom-set-strings-find value)))
+		  (jdi-info "found setter:%s for class signature:%s" setter (jdi-class-signature (jdi-value-class value)))
+		  (if setter 
+			  (cond 
+			   ((stringp setter)
+				(jdi-value-custom-set-string-with-method value setter))
+			   (t
+				(funcall setter value)))
+			(setf (jdi-value-string value) (format "%s {id=%s}" (jdi-class-name (jdi-value-class value)) (jdwp-vec-to-int (jdi-value-value value))))
+			(jdi-info "set jdi-value-string to %s" (jdi-value-string value))
+			(cont-values t)))))))
 
 (defun jdi-value-array-display-string (value size)
   "for array of three dimension, return i[2][][]."
