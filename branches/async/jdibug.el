@@ -60,6 +60,14 @@ jdibug-use-jde-source-paths is t."
   :group 'jdibug
   :type 'list)
 
+(defcustom jdibug-refresh-locals-buffer-delay 0.5
+  "The delay in seconds between when a breakpoint/step was hit
+and the locals buffer are refreshed. Set to 0 for instant update.
+Set to more for speeding up quick multi step when the locals buffer
+need not be refreshed."
+  :group 'jdibug
+  :type 'float)
+
 (defcustom jdibug-use-jde-source-paths t
   "Set to t to use the jde-sourcepath as the source paths. 
 jdibug-source-paths will be ignored if this is set to t."
@@ -129,6 +137,10 @@ jdibug-source-paths will be ignored if this is set to t."
 
   ;; buffer the shows a tree of the local variables
   locals-buffer
+  ;; our cont proc id for refreshing the locals buffer
+  locals-buffer-proc
+  ;; timer for refreshing locals buffer
+  locals-buffer-timer
 
   ;; the variable that hold the tree-widget of the locals buffer
   locals-tree
@@ -652,10 +664,13 @@ And position the point at the line number."
       :value 
       ,(format "%s: %s" (jdi-value-name value) (jdi-value-string value)))))
 
-(defvar jdibug-refresh-locals-buffer-proc nil)
-(setq jdibug-refresh-locals-buffer-proc nil)
-
 (defun jdibug-refresh-locals-buffer (thread location)
+  (if (jdibug-locals-buffer-timer jdibug-this)
+	  (cancel-timer (jdibug-locals-buffer-timer jdibug-this)))
+  (setf (jdibug-locals-buffer-timer jdibug-this)
+		(run-with-timer jdibug-refresh-locals-buffer-delay nil 'jdibug-refresh-locals-buffer-now thread location)))
+
+(defun jdibug-refresh-locals-buffer-now (thread location)
   (with-current-buffer (jdibug-locals-buffer jdibug-this)
 	(let ((inhibit-read-only t))
 	  (erase-buffer))
@@ -665,8 +680,8 @@ And position the point at the line number."
 				(location location))
 	(jdibug-info "jdibug-refresh-locals-buffer")
 	(jdibug-time-start)
-	(cont-kill jdibug-refresh-locals-buffer-proc)
-	(setq jdibug-refresh-locals-buffer-proc
+	(cont-kill (jdibug-locals-buffer-proc jdibug-this))
+	(setf (jdibug-locals-buffer-proc jdibug-this)
 		  (cont-fork
 		   (cont-bind () (jdi-thread-get-frames thread)
 			 (jdibug-time-end "jdi-thread-get-frames")
