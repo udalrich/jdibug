@@ -1048,15 +1048,6 @@ to populate the jdi-value-values of the jdi-value.")
     (if element
 		(cadr element))))
 
-(defun jdi-value-custom-set-string-boolean (jdi value)
-;;  (setf (jdi-value-has-children-p value) nil)
-  (jdi-value-get-field-value 
-   jdi value "value"
-   (lambda (jdi value field-value)
-     (if (equal 0 field-value)
-		 (setf (jdi-value-string value) "Boolean.FALSE")
-       (setf (jdi-value-string value) "Boolean.TRUE")))))
-
 (defun jdi-value-custom-set-string-with-method (value method)
   (lexical-let ((value value)
 				(method method))
