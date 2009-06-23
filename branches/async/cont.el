@@ -10,6 +10,7 @@
 
 (defun cont-new (parent-id proc-id &optional func)
   "Make a new continuation and add it to the current running continuations list. Return the new id."
+  (cont-info "cont-new parent-id:%s proc-id:%s" parent-id proc-id)
   (let* ((id (cont-generate-id))
 		 (new-cont (make-cont :id id :parent-id parent-id :proc-id proc-id :func func)))
 	(cont-trace "cont-new:id=%s:parent-id=%s:func=\n    %s" 
@@ -23,7 +24,10 @@
   "contains the id of the current continuation, can be saved to be invoked later with cont-values")
 
 (defun cont-get-current-id ()
+  (setq cont-waiting-id-list (cons cont-current-id cont-waiting-id-list))
   cont-current-id)
+
+(defvar cont-waiting-id-list nil)
 
 (defcustom cont-maximum 10000
   "Number of total continuations that we support."
@@ -115,6 +119,7 @@
 		result))))
 
 (defun cont-values-this (id &rest retvals)
+  (setq cont-waiting-id-list (delete id cont-waiting-id-list))
   (let ((cont-current (cont-get id))
 		(cont-current-id id))
 	(when cont-current
@@ -142,12 +147,14 @@
 (defun cont-init ()
   (interactive)
   (setq cont-alist nil)
-  (setq cont-proc-list nil))
+  (setq cont-proc-list nil)
+  (setq cont-waiting-id-list nil))
 
 (defun cont-clear-p ()
   (interactive)
   (and (null cont-alist)
-	   (null cont-proc-list)))
+	   (null cont-proc-list)
+	   (null cont-waiting-id-list)))
 
 (defun cont-list ()
   (interactive)
@@ -159,10 +166,16 @@
 (defun cont-kill (proc-id)
   "Stop all the continuations for the process id, and its child continuations."
   (cont-info "cont-kill:%s" proc-id)
-  (loop for pair in cont-alist
-		for cont = (cdr pair)
-		if (equal (cont-proc-id cont) proc-id)
-		do (setf (cont-func cont) 'cont-identity)))
+  (dolist (pair cont-alist)
+	(let ((cont (cdr pair)))
+	  (cont-info "cont-kill:checking id:%s proc-id:%s" (cont-id cont) (cont-proc-id cont))
+	  (when (equal (cont-proc-id cont) proc-id)
+		(cont-info "cont-kill:setting to identity:%s" (cont-id cont))
+		(setf (cont-func cont) 'cont-identity))
+	  (when (and (equal (cont-proc-id cont) proc-id)
+				 (not (member (cont-id cont) cont-waiting-id-list)))
+		(cont-info "cont-kill:deleting because nobody's waiting:%s" (cont-id cont))
+		(cont-delete (cont-id cont))))))
 
 (defun cont-gc ()
   "Garbage Collect. :P"
@@ -265,6 +278,8 @@
   (setq cont-test-saved-cont-1 nil)
   (defvar cont-test-saved-cont-2 nil)
   (setq cont-test-saved-cont-2 nil)
+  (defvar cont-test-saved-cont-3 nil)
+  (setq cont-test-saved-cont-3 nil)
   (defvar cont-test-saved-reply nil)
   (setq cont-test-saved-reply nil)
 
@@ -274,6 +289,10 @@
 
   (defun cont-test-send-message-2 ()
 	(setq cont-test-saved-cont-2 (cont-get-current-id))
+	t)
+
+  (defun cont-test-send-message-3 ()
+	(setq cont-test-saved-cont-3 (cont-get-current-id))
 	t)
     
   (cont-wait (progn
@@ -331,6 +350,53 @@
   (assert-equal '("aloha again") cont-test-saved-reply)
   (cont-values-this cont-test-saved-cont-2 "there")
   (assert-equal '("end" "there" "aloha again") cont-test-saved-reply)
+  (assert (cont-clear-p))
+
+  ;;;;
+  ;; Cancel a concurrent continuation
+  ;;;;
+  (setq cont-test-saved-cont-1 nil)
+  (setq cont-test-saved-cont-2 nil)
+  (setq cont-test-saved-cont-3 nil)
+  (setq cont-test-saved-reply nil)
+  (setq cont-test-proc nil)
+
+  (defun cont-test-refresh ()
+	(cont-kill cont-test-proc)
+	(setq cont-test-saved-reply nil)
+	(setq cont-test-proc (cont-fork
+						  (cont-wait (progn
+									   (cont-bind (reply) (cont-values t)
+										 (push "start" cont-test-saved-reply)
+										 (cont-values t))
+									   (cont-bind (reply) (cont-test-send-message-1)
+										 (push reply cont-test-saved-reply)
+										 (cont-bind (reply) (cont-test-send-message-2)
+										   (push reply cont-test-saved-reply)
+										   (cont-values t)))
+									   (cont-bind (reply) (cont-test-send-message-3)
+										 (push reply cont-test-saved-reply)
+										 (cont-values t)))
+							(push "end" cont-test-saved-reply)))))
+
+  (cont-test-refresh)
+  (assert-equal '("start") cont-test-saved-reply)
+  (cont-values-this cont-test-saved-cont-1 "aloha")
+  (assert-equal '("aloha" "start") cont-test-saved-reply)
+  (cont-values-this cont-test-saved-cont-3 "there")
+  (assert-equal '("there" "aloha" "start") cont-test-saved-reply)
+
+  (cont-test-refresh)
+  (assert-equal '("start") cont-test-saved-reply)
+  (cont-values-this cont-test-saved-cont-2 "there")
+
+  (cont-values-this cont-test-saved-cont-1 "aloha again")
+  (assert-equal '("aloha again" "start") cont-test-saved-reply)
+  (cont-values-this cont-test-saved-cont-2 "there")
+  (assert-equal '("there" "aloha again" "start") cont-test-saved-reply)
+  (cont-values-this cont-test-saved-cont-3 "there again")
+  (assert-equal '("end" "there again" "there" "aloha again" "start") cont-test-saved-reply)
+
   (assert (cont-clear-p))
 
   (run-with-timer 0 nil (lambda () (message "cont.el unit test success")))
