@@ -437,13 +437,16 @@
 										`((:slot . ,(jdi-value-slot value))
 										  (:sigbyte . ,(jdi-value-sigbyte value))))
 									  (jdi-frame-values frame))))))
-		  (cont-bind (reply error jdwp id)
-			(jdwp-send-command (jdi-mirror-jdwp frame) "stack-get-values" data)
+		  (cont-bind (reply error jdwp id) (jdwp-send-command 
+											(jdi-mirror-jdwp frame) 
+											"stack-get-values" 
+											data)
 			(loop for value-struct in (jdi-frame-values frame)
 				  for value-reply  in (bindat-get-field reply :value)
 				  do
 				  (setf (jdi-value-type value-struct) (bindat-get-field value-reply :slot-value :type))
-				  (setf (jdi-value-value value-struct) (bindat-get-field value-reply :slot-value :u :value)))
+				  (setf (jdi-value-value value-struct) (bindat-get-field value-reply :slot-value :u :value))
+				  (jdi-info "jdi-frame-get-locals:setting value:%s to type %s" (jdi-value-name value-struct) (jdi-value-type value-struct)))
 			(jdi-time-start)
 			(cont-bind () (jdi-values-get-class-and-super-and-interfaces (jdi-frame-values frame))
 			  (cont-wait (mapc 'jdi-value-get-string (jdi-frame-values frame))
@@ -474,7 +477,7 @@
 
 (defun jdi-value-get-string (value)
   "[ASYNC] get a string to be displayed for a value"
-  (jdi-info "jdi-value-get-string:type=%s" (jdi-value-type value))
+  (jdi-info "jdi-value-get-string:name=%s:type=%s" (jdi-value-name value) (jdi-value-type value))
   (cond ((or (equal (jdi-value-type value) jdwp-tag-int)
 			 (equal (jdi-value-type value) jdwp-tag-byte)
 			 (equal (jdi-value-type value) jdwp-tag-char)
