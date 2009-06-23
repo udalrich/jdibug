@@ -264,6 +264,8 @@
 											   :method method
 											   :line-code-index (bindat-get-field line :line-code-index)
 											   :line-number (bindat-get-field line :line-number))))
+		(dolist (location (jdi-method-locations method))
+		  (jdi-trace "line-number:%s line-code-index:%s" (jdi-location-line-number location) (jdi-location-line-code-index location)))
 		(cont-values)))))
 
 (defvar jdi-start-time nil)
@@ -667,8 +669,11 @@
 	  (cont-values t))))
 
 (defun jdi-value-has-children-p (value)
-  (member (jdi-value-type value)
-		  (list jdwp-tag-object jdwp-tag-array)))
+  (jdi-info "jdi-value-has-children-p:name:%s type:%s array-length:%s" (jdi-value-name value) (jdi-value-type value) (jdi-value-array-length value))
+  (or (and (equal (jdi-value-type value) jdwp-tag-object)
+		   (not (equal (jdi-value-array-length value) 0)))
+	  (and (equal (jdi-value-type value) jdwp-tag-array)
+		   (jdi-value-values value))))
 
 (defun jdi-field-static-p (field)
   (not (equal (logand (jdi-field-mod-bits field) jdi-access-static) 0)))
@@ -912,6 +917,7 @@
 			  (cont-wait (mapc 'jdi-value-get-string (jdi-value-values value))
 				(cont-values)))
 
+		  (setf (jdi-value-values value) nil)
 		  (cont-bind (result) (jdi-value-get-static-values value)
 			(cont-bind (result) (jdi-value-get-nonstatic-values value)
 			  (jdi-info "done jdi-value-object-get-values")
