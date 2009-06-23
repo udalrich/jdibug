@@ -179,7 +179,6 @@ jdibug-source-paths will be ignored if this is set to t."
   (interactive)
   (jdibug-message "JDIbug connecting... ")
   (jdibug-time-start)
-  (jdwp-cancel-all-timers)
   (setf (jdibug-virtual-machines jdibug-this)
 		(mapcar (lambda (connect-host-and-port)
 				  (lexical-let* ((host (nth 0 (split-string connect-host-and-port ":")))
