@@ -270,7 +270,18 @@ jdibug-source-paths will be ignored if this is set to t."
 		  (if (jdibug-breakpoint-overlay bp)
 			  (delete-overlay (jdibug-breakpoint-overlay bp))))
 		(jdibug-breakpoints jdibug-this))
-  (setf (jdibug-locals-tree jdibug-this) nil)
+
+  (cont-kill (jdibug-locals-buffer-proc jdibug-this))
+  (and (timerp (jdibug-locals-buffer-timer jdibug-this))
+	   (cancel-timer (jdibug-locals-buffer-timer jdibug-this)))
+  (setf (jdibug-locals-tree             jdibug-this) nil
+		(jdibug-locals-buffer           jdibug-this) nil
+		(jdibug-locals-buffer-proc      jdibug-this) nil
+		(jdibug-locals-buffer-timer     jdibug-this) nil
+		(jdibug-locals-tree-opened-path jdibug-this) nil
+
+		(jdibug-active-thread           jdibug-this) nil)
+
   (jdibug-trace "number of debuggee:%d" (length (jdibug-jdi jdibug-this)))
   (jdibug-message "JDIbug disconnecting... ")
   (mapc (lambda (vm)
