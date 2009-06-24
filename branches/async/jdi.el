@@ -642,25 +642,19 @@
 (defun jdi-value-get-string-array (value)
   (jdi-info "jdi-value-get-string-array")
   (lexical-let ((value value))
-	(cont-bind (reply error jdwp id) (jdwp-send-command 
-									  (jdi-mirror-jdwp value) 
-									  "reference-type" 
-									  `((:object . ,(jdi-value-value value))))
-	  (let ((class (gethash (bindat-get-field reply :type-id) (jdi-virtual-machine-classes (jdi-mirror-virtual-machine value)))))
-		(jdi-trace "found class for array:%s" (jdi-class-name class))
-		(setf (jdi-value-class value) class)
-		(jdi-info "get array-length")
+	(cont-bind () (jdi-value-get-class value)
+	  (jdi-info "get array-length")
 
-		(cont-bind (reply error jdwp id) (jdwp-send-command 
-										  (jdi-mirror-jdwp value) 
-										  "array-length" 
-										  `((:array-object . ,(jdi-value-value value))))
-		  (let ((size (bindat-get-field reply :array-length)))
-			(setf (jdi-value-array-length value) (bindat-get-field reply :array-length))
-;;			(setf (jdi-value-has-children-p value) (> size 0))
-			(setf (jdi-value-string value) (jdi-value-array-display-string value size))
-			(jdi-info "set jdi-value-string to %s" (jdi-value-string value))
-			(cont-values t)))))))
+	  (cont-bind (reply error jdwp id) (jdwp-send-command 
+										(jdi-mirror-jdwp value) 
+										"array-length" 
+										`((:array-object . ,(jdi-value-value value))))
+		(let ((size (bindat-get-field reply :array-length)))
+		  (setf (jdi-value-array-length value) (bindat-get-field reply :array-length))
+		  ;;			(setf (jdi-value-has-children-p value) (> size 0))
+		  (setf (jdi-value-string value) (jdi-value-array-display-string value size))
+		  (jdi-info "set jdi-value-string to %s" (jdi-value-string value))
+		  (cont-values t))))))
 
 (defun jdi-format-string (str)
   "Truncate and escape the string to be displayed."
