@@ -219,11 +219,9 @@
 (defun jdi-virtual-machine-disconnect (vm)
   (jdwp-disconnect (jdi-virtual-machine-jdwp vm)))
 
-
-
 (defun jdi-class-get-methods (class)
   "[ASYNC] returns a list of jdi-method in the class"
-  (jdi-info "jdi-clsas-get-methods:%s" (jdi-class-signature class))
+  (jdi-info "jdi-class-get-methods:%s" (jdi-class-signature class))
   (lexical-let ((class class))
 	(if (jdi-class-methods class)
 		(cont-values t)
@@ -683,10 +681,12 @@
 
 (defun jdi-value-has-children-p (value)
   (jdi-info "jdi-value-has-children-p:name:%s type:%s array-length:%s" (jdi-value-name value) (jdi-value-type value) (jdi-value-array-length value))
-  (or (and (equal (jdi-value-type value) jdwp-tag-object)
-		   (not (equal (jdi-value-array-length value) 0)))
-	  (and (equal (jdi-value-type value) jdwp-tag-array)
-		   (not (equal (jdi-value-array-length value) 0)))))
+  (and (not (equal (jdi-value-value value)
+				   [0 0 0 0 0 0 0 0]))
+	   (or (and (equal (jdi-value-type value) jdwp-tag-object)
+				(not (equal (jdi-value-array-length value) 0)))
+		   (and (equal (jdi-value-type value) jdwp-tag-array)
+				(not (equal (jdi-value-array-length value) 0))))))
 
 (defun jdi-field-static-p (field)
   (not (equal (logand (jdi-field-mod-bits field) jdi-access-static) 0)))
@@ -802,6 +802,16 @@
 			(jdi-trace "class %s superclass:%s" (jdi-class-name class) (jdi-class-name superclass))
 			(setf (jdi-class-super class) superclass)
 			(cont-values)))))))
+
+(defun jdi-method-invoke (method)
+  "Invoke a simple method (do not require arguments) in the class."
+  (jdi-info "jdi-class-invoke-method:%s" (jdi-method-name method))
+  (jdwp-send-command (jdi-mirror-jdwp method) "class-invoke-method"
+					 `((:class . ,(jdi-class-id (jdi-method-class method)))
+					   (:thread . ,(jdi-virtual-machine-suspended-thread-id (jdi-mirror-virtual-machine method)))
+					   (:method-id . ,(jdi-method-id method))
+					   (:arguments . 0)
+					   (:options . ,jdwp-invoke-single-threaded))))
 
 (defun jdi-class-get-interfaces (class)
   "populate the jdi-class-interfaces of this class"
@@ -1123,25 +1133,33 @@ to populate the jdi-value-values of the jdi-value.")
 		(jdi-value-array-get-values value)))))
 
 (defun jdi-class-all-methods (class)
-  "Return a list of methods including those of parents."
-  (let ((all-methods (append (jdi-class-methods class)
-							 (if (jdi-class-super class)
-								 (jdi-class-all-methods (jdi-class-super class))))))
-    (sort all-methods (lambda (a b)
-						(string< (jdi-method-name a) (jdi-method-name b))))))
+  "Return a list of methods including those of parents.
+Methods of child class will appear in front of parent's in the list
+so finding a method by signature will return the child's method first."
+  (append (jdi-class-methods class) (if (jdi-class-super class)
+										(jdi-class-all-methods (jdi-class-super class)))))
 
-(defun jdi-value-invoke-method (value method-name method-signature)
+(defun jdi-method-static-p (method)
+  (not (equal (logand (jdi-method-mod-bits method) jdi-access-static) 0)))
+
+(defun jdi-value-invoke-method (value method-or-name &optional method-signature)
   "Invoke a simple method (do not require arguments) in the object in jdi-value."
-  (jdi-info "jdi-value-invoke-method:%s:%s" method-name method-signature)
+  (jdi-info "jdi-value-invoke-method:%s:%s" 
+			(if (jdi-method-p method-or-name)
+				(jdi-method-name method-or-name)
+			  method-or-name)
+			method-signature)
   (lexical-let ((value value)
-				(method-name method-name)
+				(method-or-name method-or-name)
 				(method-signature method-signature))
 	(cont-bind (result) (jdi-class-get-methods (jdi-value-class value))
-	  (lexical-let ((method (find-if (lambda (method)
-									   (and (string= (jdi-method-name method) method-name)
-											(or (null method-signature)
-												(string= (jdi-method-signature method) method-signature))))
-									 (jdi-class-all-methods (jdi-value-class value)))))
+	  (lexical-let ((method (if (jdi-method-p method-or-name)
+								method-or-name
+							  (find-if (lambda (method)
+										 (and (string= (jdi-method-name method) method-or-name)
+											  (or (null method-signature)
+												  (string= (jdi-method-signature method) method-signature))))
+									   (jdi-class-all-methods (jdi-value-class value))))))
 		(if method
 			(jdwp-send-command (jdi-mirror-jdwp value) "object-invoke-method"
 							   `((:object . ,(jdi-value-value value))

@@ -470,7 +470,6 @@ And position the point at the line number."
 			 :tag 
 			 ,(format "%s (%s)" (jdi-thread-group-name thread-group) (jdi-thread-group-id thread-group))
 			 :format "%[%t%]\n")
-      :has-children t
       :open t
       :args ,(append child-group-nodes child-thread-nodes))))
 
@@ -485,7 +484,6 @@ And position the point at the line number."
 		   :tag "*"
 		   :format "%[%t%]\n")
     :open t
-    :has-children t
     :args ,(mapcar (lambda (tg) (jdibug-make-thread-group-node jdibug tg)) (jdi-thread-groups (jdibug-jdi jdibug)))))
 
 (defun jdibug-refresh-threads-buffer (jdibug)
@@ -569,6 +567,30 @@ And position the point at the line number."
 ;; 		(jdibug-info "running method %s returned %s" (jdi-method-name method) (jdi-value-string value))
 ;; 		(list (jdibug-make-value-node jdibug value))))))
 
+(defun jdibug-expand-method-node (tree)
+  (jdibug-trace "jdibug-expand-method-node")
+  (lexical-let* ((tree tree)
+				 (value (widget-get tree :jdi-value))
+				 (method (widget-get tree :jdi-method)))
+	(let ((cont-current-proc-id (jdibug-locals-buffer-proc jdibug-this)))
+	  (cont-bind (reply error jdwp id)  (if (jdi-method-static-p method)
+											(jdi-method-invoke method)
+										  (jdi-value-invoke-method value method))
+		(jdibug-info "type:%s,value:%s" 
+					 (bindat-get-field reply :return-value :type)
+					 (bindat-get-field reply :return-value :u :value))
+		(lexical-let ((value (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
+											 :name "returns"
+											 :type (bindat-get-field reply :return-value :type) 
+											 :value (bindat-get-field reply :return-value :u :value))))
+		  (cont-bind (result) (jdi-value-get-string value)
+			(jdibug-info "running method %s returned %s" (jdi-method-name method) (jdi-value-string value))
+			(jdibug-locals-tree-set-and-refresh tree (list (jdibug-make-tree-from-value value))))))))
+  (list 
+   `(item 
+	 :value "loading...")))
+
+
 ;; (defun jdibug-make-method-node (jdibug value class method)
 ;;   `(tree-widget
 ;; 	:node (push-button
@@ -583,6 +605,21 @@ And position the point at the line number."
 ;; 	:dynargs jdibug-expand-method-node
 ;; 	:expander jdibug-expand-method-node))
 
+(defun jdibug-make-method-node (value method)
+  (if (string= "()" (substring (jdi-method-signature method) 0 2))
+	  `(tree-widget
+		:node (push-button
+			   :tag ,(format "%s: %s" (jdi-method-name method) (jdi-method-signature method))
+			   :format "%[%t%]\n")
+		:open nil
+		:jdi-value  ,value
+		:jdi-method ,method
+		:dynargs jdibug-expand-method-node
+		:expander jdibug-expand-method-node)
+	`(item 
+	  :value 
+	  ,(format "%s: %s" (jdi-method-name method) (jdi-method-signature method)))))
+
 
 ;; (defun jdibug-expand-methods (tree)
 ;;   (let* ((jdibug (widget-get tree :jdibug))
@@ -594,6 +631,51 @@ And position the point at the line number."
 ;; 	  (jdi-class-resolve-methods jdi class)
 ;; 	  (mapcar (lambda (method) (jdibug-make-method-node jdibug value class method)) 
 ;; 			  (jdi-class-all-methods class)))))
+
+(defun jdibug-locals-tree-set-and-refresh (tree args)
+  ;; have this run later, so we can call this function in expander, and do not have to worry
+  ;; about this executing before we return the "loading..." sign!
+  (run-with-timer 0 nil 'jdibug-locals-tree-set-and-refresh-now tree args))
+
+(defun jdibug-locals-tree-set-and-refresh-now (tree args)
+  (widget-put tree :args args)
+  (widget-put tree :dynargs nil)
+  (widget-put tree :expander nil)
+  (with-current-buffer (jdibug-locals-buffer jdibug-this)
+	(jdibug-tree-mode-reflesh-tree tree)))
+
+(defun jdibug-expand-methods (tree)
+  (lexical-let ((tree tree)
+				(value (widget-get tree :jdi-value)))
+	(let ((cont-current-proc-id (jdibug-locals-buffer-proc jdibug-this)))
+	  (cont-bind () (jdi-classes-get-super-r (list (jdi-value-class value)))
+		(cont-bind () (jdi-classes-get-methods (jdi-class-all-super (jdi-value-class value)))
+		  (jdibug-locals-tree-set-and-refresh tree (mapcar (lambda (method) 
+															 (jdibug-make-method-node value method))
+														   (sort (remove-duplicates (jdi-class-all-methods (jdi-value-class value))
+																					:test (lambda (obj1 obj2)
+																							(and (equal (jdi-method-name obj1)
+																										(jdi-method-name obj2))
+																								 (equal (jdi-method-signature obj1)
+																										(jdi-method-signature obj2))))
+																					:from-end t)
+																 (lambda (obj1 obj2)
+																   (string< (jdi-method-name obj1)
+																			(jdi-method-name obj2))))))))))
+  (list 
+   `(item 
+	 :value "loading...")))
+
+
+(defun jdibug-make-methods-node (value)
+  `(tree-widget
+	:node (push-button
+		   :tag "methods"
+		   :format "%[%t%]\n")
+	:open nil
+	:jdi-value ,value
+	:dynargs jdibug-expand-methods
+	:expander jdibug-expand-methods))
 
 ;; (defun jdibug-make-methods-node (jdibug value class)
 ;;   `(tree-widget
@@ -641,7 +723,6 @@ And position the point at the line number."
 		   :tag "Locals"
 		   :format "%[%t%]\n")
 	:open t
-	:has-children t
 	:args ,(mapcar 'jdibug-make-tree-from-value locals)))
 
 (defun jdibug-tree-mode-find-child-path (tree path)
@@ -678,21 +759,14 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		   (let ((cont-current-proc-id (jdibug-locals-buffer-proc jdibug-this)))
 			 (cont-bind () (jdi-value-object-get-values value)
 			   (jdibug-info "jdibug-value-expander got %s values" (length (jdi-value-values value)))
-			   (widget-put tree :args (mapcar 'jdibug-make-tree-from-value (jdi-value-values value)))
-			   (widget-put tree :dynargs nil)
-			   (widget-put tree :expander nil)
 			   (jdibug-time-end "expanded")
-			   (with-current-buffer (jdibug-locals-buffer jdibug-this)
-				 (jdibug-tree-mode-reflesh-tree tree)))))
+			   (jdibug-locals-tree-set-and-refresh tree (append (mapcar 'jdibug-make-tree-from-value (jdi-value-values value))
+																(list (jdibug-make-methods-node value)))))))
 		  ((= (jdi-value-type value) jdwp-tag-array)
 		   (let ((cont-current-proc-id (jdibug-locals-buffer-proc jdibug-this)))
 			 (cont-bind (result) (jdi-value-array-get-values value)
-			   (widget-put tree :args (mapcar 'jdibug-make-tree-from-value (jdi-value-values value)))
-			   (widget-put tree :dynargs nil)
-			   (widget-put tree :expander nil)
 			   (jdibug-time-end "expanded")
-			   (with-current-buffer (jdibug-locals-buffer jdibug-this)
-				 (jdibug-tree-mode-reflesh-tree tree))))))
+			   (jdibug-locals-tree-set-and-refresh tree (mapcar 'jdibug-make-tree-from-value (jdi-value-values value)))))))
 	(jdibug-trace "setting into the tree"))
 
   (list 
@@ -706,7 +780,6 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 			   :tag ,(format "%s: %s" (jdi-value-name value) (jdi-value-string value))
 			   :format "%[%t%]\n")
 		:open nil
-		:has-children t
 		:args nil
 		:jdi-value ,value
 		:expander jdibug-value-expander
