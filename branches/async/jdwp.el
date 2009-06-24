@@ -796,8 +796,7 @@
 	(setf (process-sentinel (jdwp-process jdwp)) nil)
 	(kill-buffer (process-buffer (jdwp-process jdwp))))
   ;;(delete-process (jdwp-process jdwp))
-  (setf (jdwp-process jdwp) nil)
-  (setf (jdwp-state jdwp) nil))
+  (setf (jdwp-process jdwp) nil))
 
 (defvar jdwp-disconnected-hooks nil)
 
