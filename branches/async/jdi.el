@@ -677,7 +677,7 @@
   (or (and (equal (jdi-value-type value) jdwp-tag-object)
 		   (not (equal (jdi-value-array-length value) 0)))
 	  (and (equal (jdi-value-type value) jdwp-tag-array)
-		   (jdi-value-values value))))
+		   (not (equal (jdi-value-array-length value) 0)))))
 
 (defun jdi-field-static-p (field)
   (not (equal (logand (jdi-field-mod-bits field) jdi-access-static) 0)))
