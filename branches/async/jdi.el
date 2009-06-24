@@ -312,8 +312,8 @@
 			 (location (find-if (lambda (loc) 
 								  (equal (jdi-location-line-number loc) line))
 								 locations)))
-		(jdi-trace "number-of-methods:%s number-of-locations:%s"
-				   (length methods) (length locations))
+		(jdi-trace "number-of-methods:%s number-of-locations:%s found location:%s"
+				   (length methods) (length locations) (if location "yes" "no"))
 		(if location
 			(lexical-let* ((erm (jdi-virtual-machine-event-request-manager vm))
 						   (er (jdi-event-request-manager-create-breakpoint erm location)))
@@ -458,6 +458,12 @@
 (defun jdi-value-object-p (value)
   (equal (jdi-value-type value) jdwp-tag-object))
 
+(defun jdi-classes-get-locations (classes)
+  (lexical-let ((classes classes))
+	(cont-bind () (jdi-classes-get-methods classes)
+	  (cont-bind () (jdi-methods-get-locations (apply 'append (mapcar 'jdi-class-methods classes)))
+		(cont-values)))))
+
 (defun jdi-values-get-class-and-super-and-interfaces (values)
   (lexical-let ((values values))
 	(cont-bind () (jdi-values-get-class (remove-if-not 'jdi-value-object-p values))
@@ -570,6 +576,9 @@
 (jdi-multiple-get-defun jdi-values-get-class       jdi-value-value jdi-value-get-class      jdi-value-class)
 (jdi-multiple-get-defun jdi-classes-get-super      jdi-class-id    jdi-class-get-super      jdi-class-super)
 (jdi-multiple-get-defun jdi-classes-get-interfaces jdi-class-id    jdi-class-get-interfaces jdi-class-interfaces)
+
+(jdi-multiple-get-defun jdi-classes-get-methods   jdi-class-id  jdi-class-get-methods    jdi-class-methods)
+(jdi-multiple-get-defun jdi-methods-get-locations jdi-method-id jdi-method-get-locations jdi-method-locations)
 
 (defun jdi-classes-get-super-r (classes)
   "recursive"
