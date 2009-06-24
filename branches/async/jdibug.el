@@ -207,7 +207,20 @@ jdibug-source-paths will be ignored if this is set to t."
 							(setf (jdibug-locals-buffer jdibug-this) (get-buffer-create jdibug-locals-buffer-name))
 							(setf (jdibug-frames-buffer jdibug-this) (get-buffer-create jdibug-frames-buffer-name))
 							(setf (jdibug-breakpoints-buffer jdibug-this) (get-buffer-create jdibug-breakpoints-buffer-name))
-							(run-hooks 'jdibug-connected-hook))
+
+							(lexical-let* ((bps (jdibug-breakpoints jdibug-this))
+										   (signatures (loop for bp in bps
+															 collect (jdibug-source-file-to-class-signature
+																	  (jdibug-breakpoint-source-file bp)))))
+							  (setf (jdibug-breakpoints jdibug-this) nil)
+							  (cont-bind () (jdi-classes-get-locations (apply 
+																		'append 
+																		(mapcar 
+																		 (lambda (sig)
+																		   (gethash sig (jdi-virtual-machine-classes-by-signature vm)))
+																		 signatures)))
+								(cont-wait (mapc 'jdibug-set-breakpoint bps)
+								  (run-hooks 'jdibug-connected-hook)))))
 						(jdibug-message "(failed)" t)))
 					vm))
 				jdibug-connect-hosts)))
@@ -916,6 +929,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
     buf))
 
 (defun jdibug-set-breakpoint (bp)
+  (jdibug-info "jdibug-set-breakpoint")
   (lexical-let ((bp bp)
 				(source-file (jdibug-breakpoint-source-file bp))
 				(line-number (jdibug-breakpoint-line-number bp)))
@@ -937,7 +951,8 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 				  (setf (jdibug-breakpoint-status bp) 'enabled)
 				  (push result (jdibug-breakpoint-event-requests bp))
 				  (push bp (jdibug-breakpoints jdibug-this))
-				  (jdibug-breakpoint-update bp)))))
+				  (jdibug-breakpoint-update bp))
+				(cont-values))))
 
 					
 ;; 				(let ((le (jdi-get-last-error jdi)))
