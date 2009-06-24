@@ -141,9 +141,9 @@ jdibug-source-paths will be ignored if this is set to t."
   locals-buffer-proc
   ;; timer for refreshing locals buffer
   locals-buffer-timer
-
   ;; the variable that hold the tree-widget of the locals buffer
   locals-tree
+  locals-tree-opened-path
   )
 
 (defstruct jdibug-breakpoint
@@ -620,6 +620,29 @@ And position the point at the line number."
 	:has-children t
 	:args ,(mapcar 'jdibug-make-tree-from-value locals)))
 
+(defun jdibug-tree-mode-find-child-path (tree path)
+  (when path
+	(if (equal (widget-get (tree-widget-node tree) :tag) (car path))
+		path
+	  (find-if (lambda (path)
+				 (jdibug-tree-mode-find-child-path tree path))
+			   (cdr path)))))
+
+(defun jdibug-tree-mode-reflesh-tree (tree)
+  "Redraw TREE.
+If tree has attribute :dynargs, generate new :args from that function.
+Otherwise use :old-args which saved by `tree-mode-backup-args'."
+  (let ((path (or (jdibug-tree-mode-find-child-path tree (jdibug-locals-tree-opened-path jdibug-this))
+				  (tree-mode-opened-tree tree))))
+	(jdibug-info "jdibug-tree-mode-reflesh-tree:tag=%s:path=%s" (widget-get (tree-widget-node tree) :tag) path)
+	(jdibug-info "jdibug-tree-mode-reflesh-tree:opened-path=%s" (tree-mode-opened-tree tree))
+    (if (widget-get tree :dynargs)
+        (widget-put tree :args nil)
+      (if (widget-get tree :old-args)
+          (widget-put tree :args (widget-get tree :old-args))))
+    (widget-value-set tree (widget-value tree))
+    (tree-mode-open-tree tree path)))
+
 (defun jdibug-value-expander (tree)
   (jdibug-info "jdibug-value-expander")
   (jdibug-trace "jdibug-expand-value-node")
@@ -628,20 +651,24 @@ And position the point at the line number."
 	(jdibug-trace "Expanding value:%s" (jdi-value-name value))
 	(jdibug-time-start)
 	(cond ((= (jdi-value-type value) jdwp-tag-object)
-		   (cont-bind () (jdi-value-object-get-values value)
-			 (jdibug-info "jdibug-value-expander got %s values" (length (jdi-value-values value)))
-			 (widget-put tree :args (mapcar 'jdibug-make-tree-from-value (jdi-value-values value)))
-			 (widget-put tree :dynargs nil)
-			 (widget-put tree :expander nil)
-			 (jdibug-time-end "expanded")
-			 (tree-mode-reflesh-tree tree)))
+		   (let ((cont-current-proc-id (jdibug-locals-buffer-proc jdibug-this)))
+			 (cont-bind () (jdi-value-object-get-values value)
+			   (jdibug-info "jdibug-value-expander got %s values" (length (jdi-value-values value)))
+			   (widget-put tree :args (mapcar 'jdibug-make-tree-from-value (jdi-value-values value)))
+			   (widget-put tree :dynargs nil)
+			   (widget-put tree :expander nil)
+			   (jdibug-time-end "expanded")
+			   (with-current-buffer (jdibug-locals-buffer jdibug-this)
+				 (jdibug-tree-mode-reflesh-tree tree)))))
 		  ((= (jdi-value-type value) jdwp-tag-array)
-		   (cont-bind (result) (jdi-value-array-get-values value)
-			 (widget-put tree :args (mapcar 'jdibug-make-tree-from-value (jdi-value-values value)))
-			 (widget-put tree :dynargs nil)
-			 (widget-put tree :expander nil)
-			 (jdibug-time-end "expanded")
-			 (tree-mode-reflesh-tree tree))))
+		   (let ((cont-current-proc-id (jdibug-locals-buffer-proc jdibug-this)))
+			 (cont-bind (result) (jdi-value-array-get-values value)
+			   (widget-put tree :args (mapcar 'jdibug-make-tree-from-value (jdi-value-values value)))
+			   (widget-put tree :dynargs nil)
+			   (widget-put tree :expander nil)
+			   (jdibug-time-end "expanded")
+			   (with-current-buffer (jdibug-locals-buffer jdibug-this)
+				 (jdibug-tree-mode-reflesh-tree tree))))))
 	(jdibug-trace "setting into the tree"))
 
   (list 
@@ -693,7 +720,15 @@ And position the point at the line number."
 			   (with-current-buffer (jdibug-locals-buffer jdibug-this)
 				 (let ((inhibit-read-only t))
 				   (erase-buffer))
-				 (tree-mode-insert (jdibug-make-locals-tree locals))
+				 (if (null (jdibug-locals-tree jdibug-this))
+					 (setf (jdibug-locals-tree jdibug-this)
+						   (tree-mode-insert (jdibug-make-locals-tree locals)))
+				   (setf (jdibug-locals-tree-opened-path jdibug-this)
+						 (tree-mode-opened-tree (jdibug-locals-tree jdibug-this)))
+				   (jdi-info "current opened tree path:%s" (tree-mode-opened-tree (jdibug-locals-tree jdibug-this)))
+				   (widget-put (jdibug-locals-tree jdibug-this) 
+							   :args (mapcar 'jdibug-make-tree-from-value locals))
+				   (tree-mode-reflesh-tree (jdibug-locals-tree jdibug-this)))
 				 (local-set-key "s" 'jdibug-node-tostring)
 				 (local-set-key "c" 'jdibug-node-classname))
 			   (cont-values t)))))))
