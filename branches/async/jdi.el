@@ -289,7 +289,8 @@
 
 (defun jdi-method-get-locations (method)
   (jdi-info "jdi-method-get-locations:name=%s" (jdi-method-name method))
-  (if (jdi-method-locations method)
+  (if (or (jdi-method-locations method)
+		  (jdi-method-native-p method))
 	  (cont-values)
 	(lexical-let ((method method))
 	  (cont-bind (reply error jdwp id) (jdwp-send-command 
@@ -1210,6 +1211,9 @@ Methods of child class will appear in front of parent's in the list
 so finding a method by signature will return the child's method first."
   (append (jdi-class-methods class) (if (jdi-class-super class)
 										(jdi-class-all-methods (jdi-class-super class)))))
+
+(defun jdi-method-native-p (method)
+  (not (equal (logand (jdi-method-mod-bits method) jdi-access-native) 0)))
 
 (defun jdi-method-static-p (method)
   (not (equal (logand (jdi-method-mod-bits method) jdi-access-static) 0)))
