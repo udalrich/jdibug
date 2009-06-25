@@ -16,6 +16,8 @@
   classes ;; hash table where key=class-id value=jdi-class
   classes-by-signature ;; hash table where key=signature value=jdi-class
 
+  threads
+
   suspended-thread-id
   )
 
@@ -79,13 +81,17 @@
 
 (defstruct (jdi-thread (:include jdi-mirror))
   id
+  name
+  status
+  suspend-status
   frames
   )
 
 (defstruct (jdi-frame (:include jdi-mirror))
   id
   values
-  thread)
+  thread
+  location)
 
 (defstruct (jdi-value (:include jdi-mirror)) ;; in java, this corresponds to both jdi-variable and jdi-value
   name
@@ -216,6 +222,46 @@
 						(puthash signature (list newclass) (jdi-virtual-machine-classes-by-signature vm)))))
 			  (cont-values t))))))))
 
+(defun jdi-virtual-machine-get-threads (vm)
+  (jdi-info "jdi-virtual-machine-get-threads")
+  (lexical-let ((vm vm))
+	(cont-bind (reply error jdwp id) (jdwp-send-command (jdi-virtual-machine-jdwp vm) "all-threads" nil)
+	  (jdi-info "number of threads:%s" (bindat-get-field reply :threads))
+	  (setf (jdi-virtual-machine-threads vm)
+			(loop for thread in (bindat-get-field reply :thread)
+				  collect (make-jdi-thread :virtual-machine vm
+										   :id (bindat-get-field thread :id))))
+	  (cont-wait (progn
+				   (mapc 'jdi-thread-get-name (jdi-virtual-machine-threads vm))
+				   (mapc 'jdi-thread-get-status (jdi-virtual-machine-threads vm)))
+		(cont-values)))))
+
+(defun jdi-virtual-machine-suspended-threads (vm)
+  (jdi-info "jdi-virtual-machine-suspended-threads")
+  (loop for thread in (jdi-virtual-machine-threads vm)
+		if (equal (jdi-thread-suspend-status thread) 1)
+		collect thread))
+
+(defun jdi-thread-get-name (thread)
+  (jdi-info "jdi-thread-get-name")
+  (lexical-let ((thread thread))
+	(cont-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread) "thread-name" `((:thread . ,(jdi-thread-id thread))))
+	  (setf (jdi-thread-name thread)
+			(jdwp-get-string reply :thread-name))
+	  (jdi-info "thread-name=%s" (jdi-thread-name thread))
+	  (cont-values))))
+
+(defun jdi-thread-get-status (thread)
+  (jdi-info "jdi-thread-get-status")
+  (lexical-let ((thread thread))
+	(cont-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread) "thread-status" `((:thread . ,(jdi-thread-id thread))))
+	  (setf (jdi-thread-status thread)
+			(bindat-get-field reply :thread-status)
+			(jdi-thread-suspend-status thread)
+			(bindat-get-field reply :suspend-status))
+	  (jdi-info "thread-status:%s suspend-status:%s" (jdi-thread-status thread) (jdi-thread-suspend-status thread))
+	  (cont-values))))
+
 (defun jdi-virtual-machine-disconnect (vm)
   (jdwp-disconnect (jdi-virtual-machine-jdwp vm)))
 
@@ -320,7 +366,7 @@
 		  (cont-values nil))))))
 
 (defun jdi-method-location-by-line-code-index (method line-code-index)
-  (jdi-trace "jdi-locations-find-by-line-code-index:%s:%s:%d" (jdi-method-name method) line-code-index (length (jdi-method-locations method)))
+  (jdi-trace "jdi-method-location-by-line-code-index:%s:%s:%d" (jdi-method-name method) line-code-index (length (jdi-method-locations method)))
   (if jdi-trace-flag
       (loop for loc in (jdi-method-locations method)
 			do
@@ -345,6 +391,20 @@
 		location
 	  (jdi-error "failed to look line-code-index %s in class %s" line-code-index (jdi-class-name class)))))
 
+(defun jdi-location-get-class-and-method-and-line-number (location)
+  (jdi-info "jdi-location-get-class-and-method")
+  (setf (jdi-location-class location) 
+		(gethash (jdi-location-class-id location) (jdi-virtual-machine-classes (jdi-mirror-virtual-machine location))))
+  (when (jdi-location-class location)
+	(let ((stored-loc (jdi-class-find-location (jdi-location-class location)
+											   (jdi-location-method-id location)
+											   (jdi-location-line-code-index location))))
+	  (if stored-loc
+		  (setf (jdi-location-method location)
+				(jdi-location-method stored-loc)
+				(jdi-location-line-number location)
+				(jdi-location-line-number stored-loc))))))
+
 (defun jdi-thread-get-frames (thread)
   (jdi-info "jdi-thread-get-frames")
   (lexical-let ((thread thread))
@@ -357,11 +417,29 @@
 																 (:start-frame . 0)
 																 (:length . ,(bindat-get-field reply :frame-count))))
 		  (setf (jdi-thread-frames thread) 
-				(loop for frame in (bindat-get-field reply :frame)
+				(loop for frame           in (bindat-get-field reply :frame)
+					  for class-id        = (bindat-get-field frame :location :class-id)
+					  for method-id       = (bindat-get-field frame :location :method-id)
+					  for type            = (bindat-get-field frame :location :type)
+					  for line-code-index = (bindat-get-field frame :location :index)
+					  for location        = (make-jdi-location :virtual-machine (jdi-mirror-virtual-machine thread)
+															   :class-id class-id
+															   :method-id method-id
+															   :type type
+															   :line-code-index line-code-index)
 					  collect (make-jdi-frame :virtual-machine (jdi-mirror-virtual-machine thread)
 											  :thread thread
+											  :location location
 											  :id (bindat-get-field frame :id))))
-		  (cont-values))))))
+		  (cont-bind () (jdi-classes-get-locations (loop for frame in (jdi-thread-frames thread)
+														 for class-id = (jdi-location-class-id (jdi-frame-location frame))
+														 for class = (gethash class-id (jdi-virtual-machine-classes (jdi-mirror-virtual-machine thread)))
+														 if class
+														 collect class))
+			(mapc 'jdi-location-get-class-and-method-and-line-number 
+				  (mapcar 'jdi-frame-location 
+						  (jdi-thread-frames thread)))
+			(cont-values)))))))
 
 (defun jdi-thread-resume (thread)
   (jdi-info "jdi-thread-resume")

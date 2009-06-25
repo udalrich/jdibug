@@ -68,6 +68,14 @@ need not be refreshed."
   :group 'jdibug
   :type 'float)
 
+(defcustom jdibug-refresh-frames-buffer-delay 0.5
+  "The delay in seconds between when a breakpoint/step was hit
+and the frames buffer are refreshed. Set to 0 for instant update.
+Set to more for speeding up quick multi step when the frames buffer
+need not be refreshed."
+  :group 'jdibug
+  :type 'float)
+
 (defcustom jdibug-use-jde-source-paths t
   "Set to t to use the jde-sourcepath as the source paths. 
 jdibug-source-paths will be ignored if this is set to t."
@@ -131,7 +139,7 @@ jdibug-source-paths will be ignored if this is set to t."
   current-line-overlay
   threads-tree 
   threads-buffer
-  frames-buffer
+
   breakpoints ;; list of jdibug-breakpoint
   breakpoints-buffer
 
@@ -144,6 +152,11 @@ jdibug-source-paths will be ignored if this is set to t."
   ;; the variable that hold the tree-widget of the locals buffer
   locals-tree
   locals-tree-opened-path
+
+  frames-buffer
+  frames-tree
+  frames-buffer-proc
+  frames-buffer-timer
   )
 
 (defstruct jdibug-breakpoint
@@ -374,8 +387,8 @@ And position the point at the line number."
 ;;   (setf (jdi-current-frame jdi) (car (jdi-frames jdi)))
   (when (null (jdibug-active-thread jdibug-this))
 	(setf (jdibug-active-thread jdibug-this) thread)
-	(jdibug-refresh-locals-buffer thread location))
-;;   (jdibug-refresh-frames-buffer jdibug-this jdi)
+	(jdibug-refresh-locals-buffer thread location)
+	(jdibug-refresh-frames-buffer))
 ;;   (message "JDIbug: breakpoint hit:%s" location)
   (jdibug-goto-location location)
 
@@ -390,8 +403,8 @@ And position the point at the line number."
 
   (when (null (jdibug-active-thread jdibug-this))
 	(setf (jdibug-active-thread jdibug-this) thread)
-	(jdibug-refresh-locals-buffer thread location))
-;;   (jdibug-refresh-frames-buffer jdibug-this jdi)
+	(jdibug-refresh-locals-buffer thread location)
+	(jdibug-refresh-frames-buffer))
 ;;   (message "JDIbug: breakpoint hit:%s" location)
   (jdibug-goto-location location))
 
@@ -789,12 +802,14 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
       ,(format "%s: %s" (jdi-value-name value) (jdi-value-string value)))))
 
 (defun jdibug-refresh-locals-buffer (thread location)
+  (jdibug-info "jdibug-refresh-locals-buffer")
   (if (jdibug-locals-buffer-timer jdibug-this)
 	  (cancel-timer (jdibug-locals-buffer-timer jdibug-this)))
   (setf (jdibug-locals-buffer-timer jdibug-this)
 		(run-with-timer jdibug-refresh-locals-buffer-delay nil 'jdibug-refresh-locals-buffer-now thread location)))
 
 (defun jdibug-refresh-locals-buffer-now (thread location)
+  (jdibug-info "jdibug-refresh-locals-buffer-now")
   (with-current-buffer (jdibug-locals-buffer jdibug-this)
 	(let ((inhibit-read-only t))
 	  (erase-buffer))
@@ -802,7 +817,6 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 
   (lexical-let ((thread thread)
 				(location location))
-	(jdibug-info "jdibug-refresh-locals-buffer")
 	(jdibug-time-start)
 	(cont-kill (jdibug-locals-buffer-proc jdibug-this))
 	(setf (jdibug-locals-buffer-proc jdibug-this)
@@ -830,92 +844,147 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 				 (local-set-key "c" 'jdibug-node-classname))
 			   (cont-values t)))))))
 
-(defun jdibug-refresh-frames-buffer (jdibug jdi)
-  (jdibug-info "jdibug-refresh-frames-buffer, frames=%d" (length (jdi-frames jdi)))
+(defun jdibug-make-frame-node (frame)
+  `(item 
+    :value 
+    ,(format "%s:%s:%s" 
+			 (jdi-class-name (jdi-location-class (jdi-frame-location frame)))
+			 (jdi-method-name (jdi-location-method (jdi-frame-location frame)))
+			 (jdi-location-line-number (jdi-frame-location frame)))))
+  
+(defun jdibug-make-thread-tree (thread)
+  `(tree-widget
+    :node (push-button
+		   :tag ,(format "%s" (jdi-thread-name thread))
+		   :format "%[%t%]\n")
+    :open t
+    :args ,(mapcar 'jdibug-make-frame-node (jdi-thread-frames thread))))
+  
+(defun jdibug-make-virtual-machine-tree (vm)
+  `(tree-widget
+    :node (push-button
+		   :tag ,(format "%s:%s" (jdi-virtual-machine-host vm) (jdi-virtual-machine-port vm))
+		   :format "%[%t%]\n")
+    :open t
+    :args ,(mapcar 'jdibug-make-thread-tree (jdi-virtual-machine-suspended-threads vm))))
 
-  (mapc (lambda (buffer) 
-		  (with-current-buffer buffer
-			(toggle-read-only 1)
-			(let ((inhibit-read-only t))
-			  (erase-buffer)
-			  (insert "refreshing..."))))
-		(list (jdibug-frames-buffer jdibug)))
+(defun jdibug-make-frames-tree ()
+  `(tree-widget
+	:node (push-button
+		   :tag "*"
+		   :format "%[%t%]\n")
+	:open t
+	:args ,(mapcar 'jdibug-make-virtual-machine-tree (jdibug-virtual-machines jdibug-this))))
 
-  (jdibug-trace "associate the locations with their classes")
-  (dolist (frame (jdi-frames jdi))
-	(let* ((location (jdi-frame-location frame))
-		   (class (jdi-classes-find-by-id jdi (jdi-location-class-id location))))
-	  (setf (jdi-location-class location) class)))
+(defun jdibug-refresh-frames-buffer ()
+  (jdibug-info "jdibug-refresh-frames-buffer")
+  (if (jdibug-frames-buffer-timer jdibug-this)
+	  (cancel-timer (jdibug-frames-buffer-timer jdibug-this)))
+  (setf (jdibug-frames-buffer-timer jdibug-this)
+		(run-with-timer jdibug-refresh-frames-buffer-delay nil 'jdibug-refresh-frames-buffer-now)))
 
-  (jdibug-trace "resolve the methods for all the classes in the location")
-  (dolist (frame (jdi-frames jdi))
-	(jdi-class-resolve-methods jdi (jdi-location-class (jdi-frame-location frame))))
+(defun jdibug-refresh-frames-buffer-now ()
+  (jdibug-info "jdibug-refresh-frames-buffer-now")
+  (cont-kill (jdibug-frames-buffer-proc jdibug-this))
+  (setf (jdibug-frames-buffer-proc jdibug-this)
+		(cont-fork
+		 (cont-wait (mapc 'jdi-virtual-machine-get-threads (jdibug-virtual-machines jdibug-this))
+		   (lexical-let ((suspended-threads (apply 'append (mapcar 'jdi-virtual-machine-suspended-threads (jdibug-virtual-machines jdibug-this)))))
+			 (cont-wait (mapc 'jdi-thread-get-frames suspended-threads)
+			   (jdibug-info "number of suspended threads:%s" (length suspended-threads))
+			   (dolist (thread suspended-threads)
+				 (jdibug-info "suspended thread name:%s" (jdi-thread-name thread)))
+			   (with-current-buffer (jdibug-frames-buffer jdibug-this)
+				 (let ((inhibit-read-only t))
+				   (erase-buffer))
+				 (tree-mode-insert (jdibug-make-frames-tree)))))))))
 
-  (jdibug-trace "associate all the locations with their methods")
-  (dolist (frame (jdi-frames jdi))
-	(let* ((location (jdi-frame-location frame))
-		   (class (jdi-location-class location))
-		   (method (jdi-methods-find-by-id class
-										   (jdi-location-method-id location))))
-	  (setf (jdi-location-method location) method)))
+;; (defun jdibug-refresh-frames-buffer (jdibug jdi)
+;;   (jdibug-info "jdibug-refresh-frames-buffer, frames=%d" (length (jdi-frames jdi)))
 
-  (jdibug-trace "resolve the locations for all the methods")
-  (dolist (frame (jdi-frames jdi))
-	(jdi-method-resolve-locations jdi (jdi-location-method (jdi-frame-location frame))))
+;;   (mapc (lambda (buffer) 
+;; 		  (with-current-buffer buffer
+;; 			(toggle-read-only 1)
+;; 			(let ((inhibit-read-only t))
+;; 			  (erase-buffer)
+;; 			  (insert "refreshing..."))))
+;; 		(list (jdibug-frames-buffer jdibug)))
 
-  ;; display it
-  (jdibug-trace "now we output the name of the location")
+;;   (jdibug-trace "associate the locations with their classes")
+;;   (dolist (frame (jdi-frames jdi))
+;; 	(let* ((location (jdi-frame-location frame))
+;; 		   (class (jdi-classes-find-by-id jdi (jdi-location-class-id location))))
+;; 	  (setf (jdi-location-class location) class)))
 
-  (with-current-buffer (jdibug-frames-buffer jdibug)
-	(let ((inhibit-read-only t))
-	  (erase-buffer)))
+;;   (jdibug-trace "resolve the methods for all the classes in the location")
+;;   (dolist (frame (jdi-frames jdi))
+;; 	(jdi-class-resolve-methods jdi (jdi-location-class (jdi-frame-location frame))))
 
-  (loop for frame in (jdi-frames jdi)
-		for i from 0
-		do
-		(with-current-buffer (jdibug-frames-buffer jdibug)
-		  (let ((inhibit-read-only t))
-			(let* ((location (jdi-frame-location frame))
-				   (class (jdi-location-class location))
-				   (method (jdi-location-method location))
-				   (resolved-location (jdi-locations-find-by-line-code-index method
-																			 (jdi-location-line-code-index location))))
-			  (if (null class) (jdibug-error "failed to find class of location"))
-			  (if (null method) (jdibug-error "failed to find method of location"))
+;;   (jdibug-trace "associate all the locations with their methods")
+;;   (dolist (frame (jdi-frames jdi))
+;; 	(let* ((location (jdi-frame-location frame))
+;; 		   (class (jdi-location-class location))
+;; 		   (method (jdi-methods-find-by-id class
+;; 										   (jdi-location-method-id location))))
+;; 	  (setf (jdi-location-method location) method)))
 
-			  (if (and resolved-location
-					   (jdibug-have-class-source-p jdibug-this class))
-				  (insert-button (format "%s.%s():%s"
-										 (jdi-class-name class)
-										 (jdi-method-name method)
-										 (if resolved-location
-											 (jdi-location-line-number resolved-location)))
-								 'class class
-								 'method method
-								 'location resolved-location
-								 'frame frame
-								 'index i
-								 'jdi jdi
-								 'action (lambda (but) 
-										   (let ((class (button-get but 'class))
-												 (location (button-get but 'location))
-												 (jdi (button-get but 'jdi))
-												 (frame (button-get but 'frame))
-												 (index (button-get but 'index)))
-											 (jdibug-info "clicked on frame index:%d" index)
-											 (setf (jdi-frames jdi) nil)
-											 ;; we need to resolve again and get the frame id from the index
-											 ;; if not, we will get into some invalid frame id errors
-											 ;; when doing stack-get-values
-											 (jdi-resolve-frames jdi (jdi-suspended-thread-id jdi))
-											 (setf (jdi-current-frame jdi) (nth index (jdi-frames jdi)))
-											 (jdibug-goto-location jdibug-this jdi class location)
-											 (setf (jdi-locals jdi) nil)
-											 (setf (jdi-current-location jdi) (jdi-frame-location frame))
-											 (jdibug-refresh-locals-buffer jdibug-this jdi)))
-								 'follow-link t)
-				(insert (format "%s.%s()" (jdi-class-name class) (jdi-method-name method))))
-			  (insert "\n"))))))
+;;   (jdibug-trace "resolve the locations for all the methods")
+;;   (dolist (frame (jdi-frames jdi))
+;; 	(jdi-method-resolve-locations jdi (jdi-location-method (jdi-frame-location frame))))
+
+;;   ;; display it
+;;   (jdibug-trace "now we output the name of the location")
+
+;;   (with-current-buffer (jdibug-frames-buffer jdibug)
+;; 	(let ((inhibit-read-only t))
+;; 	  (erase-buffer)))
+
+;;   (loop for frame in (jdi-frames jdi)
+;; 		for i from 0
+;; 		do
+;; 		(with-current-buffer (jdibug-frames-buffer jdibug)
+;; 		  (let ((inhibit-read-only t))
+;; 			(let* ((location (jdi-frame-location frame))
+;; 				   (class (jdi-location-class location))
+;; 				   (method (jdi-location-method location))
+;; 				   (resolved-location (jdi-locations-find-by-line-code-index method
+;; 																			 (jdi-location-line-code-index location))))
+;; 			  (if (null class) (jdibug-error "failed to find class of location"))
+;; 			  (if (null method) (jdibug-error "failed to find method of location"))
+
+;; 			  (if (and resolved-location
+;; 					   (jdibug-have-class-source-p jdibug-this class))
+;; 				  (insert-button (format "%s.%s():%s"
+;; 										 (jdi-class-name class)
+;; 										 (jdi-method-name method)
+;; 										 (if resolved-location
+;; 											 (jdi-location-line-number resolved-location)))
+;; 								 'class class
+;; 								 'method method
+;; 								 'location resolved-location
+;; 								 'frame frame
+;; 								 'index i
+;; 								 'jdi jdi
+;; 								 'action (lambda (but) 
+;; 										   (let ((class (button-get but 'class))
+;; 												 (location (button-get but 'location))
+;; 												 (jdi (button-get but 'jdi))
+;; 												 (frame (button-get but 'frame))
+;; 												 (index (button-get but 'index)))
+;; 											 (jdibug-info "clicked on frame index:%d" index)
+;; 											 (setf (jdi-frames jdi) nil)
+;; 											 ;; we need to resolve again and get the frame id from the index
+;; 											 ;; if not, we will get into some invalid frame id errors
+;; 											 ;; when doing stack-get-values
+;; 											 (jdi-resolve-frames jdi (jdi-suspended-thread-id jdi))
+;; 											 (setf (jdi-current-frame jdi) (nth index (jdi-frames jdi)))
+;; 											 (jdibug-goto-location jdibug-this jdi class location)
+;; 											 (setf (jdi-locals jdi) nil)
+;; 											 (setf (jdi-current-location jdi) (jdi-frame-location frame))
+;; 											 (jdibug-refresh-locals-buffer jdibug-this jdi)))
+;; 								 'follow-link t)
+;; 				(insert (format "%s.%s()" (jdi-class-name class) (jdi-method-name method))))
+;; 			  (insert "\n"))))))
 
 (defun jdibug-node-tostring ()
   (interactive)
