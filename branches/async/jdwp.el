@@ -1056,6 +1056,7 @@
 					 (if (> (length outstr) 100)
 						 (substring outstr 0 100)
 					   outstr)))
+		(jdwp-info "data:%s" data)
 		(let ((inhibit-eol-conversion t))
 		  (setf (jdwp-current-reply jdwp) nil)
 		  (process-send-string (jdwp-process jdwp) command-packed)
