@@ -68,7 +68,9 @@
   (cont-info "cont-get:%s" id)
   (if (null id)
 	  (make-cont :id nil :parent-id nil :func 'cont-identity)
-	(cdr (assoc id cont-alist))))
+	(or (cdr (assoc id cont-alist))
+		(make-cont :id nil :parent-id nil :func 'cont-identity))))
+
 		  
 (defun cont-identity (&rest args)
   (if args
