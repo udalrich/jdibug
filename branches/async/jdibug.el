@@ -474,6 +474,11 @@ And position the point at the line number."
   "Face for unresolved breakpoint"
   :group 'jdibug)
 
+(defface jdibug-current-frame
+  `((t (:foreground "navajo white" :background "DodgerBlue")))
+  "Face for current frame"
+  :group 'jdibug)
+
 (defun jdibug-make-thread-group-node (jdibug thread-group)
   (let ((child-group-nodes (mapcar (lambda (ctg) (jdibug-make-thread-group-node jdibug ctg))
 								   (jdi-thread-group-thread-groups thread-group)))
@@ -862,6 +867,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	  (cont-bind () (jdi-thread-get-frames thread)
 		(let ((frame (nth frame-index (jdi-thread-frames thread))))
 		  (jdibug-info "after reload frame-id:%s" (jdi-frame-id frame))
+		  (setf (jdibug-active-frame jdibug-this) frame)
 		  (jdibug-refresh-frames-buffer)
 		  (jdibug-refresh-locals-buffer frame (jdi-frame-location frame)))))
 	(jdibug-goto-location (jdi-frame-location frame))))
@@ -874,6 +880,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 					  (jdi-method-name (jdi-location-method (jdi-frame-location frame)))
 					  (jdi-location-line-number (jdi-frame-location frame)))
 		:jdi-frame ,frame
+		:button-face ,(if (equal frame (jdibug-active-frame jdibug-this)) 'jdibug-current-frame)
 		:notify jdibug-frame-notify
 		:format "%[%t%]\n")
 	`(item 
