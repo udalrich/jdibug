@@ -153,7 +153,7 @@
 	(make-jdi-event-request :virtual-machine (jdi-mirror-virtual-machine location) :data data)))
 
 (defun jdi-event-request-manager-create-step (erm thread depth)
-  (let ((data `((:event-kind     . 1)
+  (let ((data `((:event-kind     . ,jdwp-event-single-step)
 				(:suspend-policy . ,jdwp-suspend-policy-event-thread)
 				(:modifiers      . 2)
 				(:modifier       
@@ -180,6 +180,19 @@
 	  (jdi-trace "cleared event request")
 	  (cont-values t))))
 
+(defun jdi-virtual-machine-set-standard-events (vm)
+  (cont-wait (mapc (lambda (event)
+					 (jdwp-send-command (jdi-virtual-machine-jdwp vm) "set" 
+										`((:event-kind . ,event)
+										  (:suspend-policy . ,jdwp-suspend-policy-none)
+										  (:modifiers . 0))))
+				   (list jdwp-event-class-prepare
+						 jdwp-event-class-unload
+						 jdwp-event-thread-start
+						 jdwp-event-thread-end
+						 jdwp-event-vm-death))
+	(cont-values)))
+
 (defun jdi-virtual-machine-connect (vm)
   "[ASYNC] returns t if success, nil on failure"
   (lexical-let ((jdwp (jdi-virtual-machine-jdwp vm))
@@ -191,6 +204,7 @@
 			(jdi-error "failed to connect:%s" result)
 			(cont-values nil))
 		(cont-bind (reply error jdwp id) (jdwp-send-command jdwp "version" nil)
+
 		  (jdi-trace "description: \n%s" (jdwp-get-string reply :description))
 		  (jdi-trace "major      : %s"   (bindat-get-field reply :jdwp-major))
 		  (jdi-trace "minor      : %s"   (bindat-get-field reply :jdwp-minor))
@@ -198,29 +212,28 @@
 		  (jdi-trace "name       : %s"   (jdwp-get-string reply :vm-name))
 		  (cont-bind (reply error jdwp id) (jdwp-send-command jdwp "capabilities-new" nil)
 			(jdi-trace "capabilities-new:%s" reply)
-			(cont-bind (reply error jdwp id) (jdwp-send-command jdwp "all-classes" nil)
-			  (jdi-info "number of classes loaded:%s" (bindat-get-field reply :classes))
-			  (setf (jdi-virtual-machine-classes vm) (make-hash-table :test 'equal))
-			  (setf (jdi-virtual-machine-classes-by-signature vm) (make-hash-table :test 'equal))
-			  (loop for class in       (bindat-get-field reply :class)
-					for type-id      = (bindat-get-field class :type-id)
-					for signature    = (jdwp-get-string class :signature)
-					for ref-type-tag = (bindat-get-field class :ref-type-tag)
-					for status       = (bindat-get-field class :status)
-					for newclass     = (make-jdi-class 
-										:virtual-machine vm
-										:id type-id	
-										:signature signature
-										:ref-type-tag ref-type-tag
-										:status status)
-					do
-					(jdi-trace "signature:%s id:%s" signature type-id)
-					(puthash type-id newclass (jdi-virtual-machine-classes vm))
-					(let ((l (gethash signature (jdi-virtual-machine-classes-by-signature vm))))
-					  (if l
-						  (puthash signature (cons newclass l) (jdi-virtual-machine-classes-by-signature vm))
-						(puthash signature (list newclass) (jdi-virtual-machine-classes-by-signature vm)))))
-			  (cont-values t))))))))
+			(cont-bind () (jdi-virtual-machine-set-standard-events vm)
+			  (cont-bind (reply error jdwp id) (jdwp-send-command jdwp "all-classes" nil)
+				(jdi-info "number of classes loaded:%s" (bindat-get-field reply :classes))
+				(setf (jdi-virtual-machine-classes vm) (make-hash-table :test 'equal))
+				(setf (jdi-virtual-machine-classes-by-signature vm) (make-hash-table :test 'equal))
+				(loop for class in       (bindat-get-field reply :class)
+					  for type-id      = (bindat-get-field class :type-id)
+					  for signature    = (jdwp-get-string class :signature)
+					  for ref-type-tag = (bindat-get-field class :ref-type-tag)
+					  for status       = (bindat-get-field class :status)
+					  for newclass     = (make-jdi-class 
+										  :virtual-machine vm
+										  :id type-id	
+										  :signature signature
+										  :ref-type-tag ref-type-tag
+										  :status status)
+					  do
+					  (jdi-trace "signature:%s id:%s" signature type-id)
+					  (puthash type-id newclass (jdi-virtual-machine-classes vm))
+					  (puthash signature (cons newclass (gethash signature (jdi-virtual-machine-classes-by-signature vm)))
+							   (jdi-virtual-machine-classes-by-signature vm)))
+				(cont-values t)))))))))
 
 (defun jdi-virtual-machine-get-threads (vm)
   (jdi-info "jdi-virtual-machine-get-threads")
@@ -341,14 +354,6 @@
 
 (defun jdi-virtual-machine-set-breakpoint (vm signature line)
   "[ASYNC] returns a jdi-event-request if a breakpoint is installed, nil otherwise"
-
-  ;; TODO: handle this on class prepare also
-  ;; we always return t, because there are simply too many cases to handle
-  ;; 1. class not loaded yet
-  ;; 2. class loaded but might be loaded again by another class loader
-  ;; 3. class loaded but no code at line
-  ;; eclipse simply snap the breakpoint to the nearest line, we can't do it
-  ;; unless the class is loaded!
 
   (lexical-let ((vm vm)
 				(signature signature)
@@ -510,10 +515,11 @@
   (lexical-let* ((frame frame)
 				 (location location)
 				 (current-frame-line-code (jdwp-vec-to-int (jdi-location-line-code-index location))))
-	(jdi-info "jdi-frame-get-locals: current-frame-line-code=%s" current-frame-line-code)
+	(jdi-info "jdi-frame-get-locals: current-frame-line-code=%s type-of frame:%s" current-frame-line-code (type-of frame))
 	(jdi-time-start)
 	(cont-bind (result) (jdi-method-get-values (jdi-location-method location))
 	  (jdi-time-end "jdi-method-get-values")
+	  (jdi-info "typeof frame=%s" (type-of frame))
 	  (setf (jdi-frame-values frame)
 			(loop for method-value in (jdi-method-values (jdi-location-method location))
 				  if (and (>= current-frame-line-code (jdi-value-code-index method-value))
@@ -1075,32 +1081,46 @@
 				 (thread-id (bindat-get-field event :u :thread))
 				 (class-id (bindat-get-field event :u :location :class-id))
 				 (method-id (bindat-get-field event :u :location :method-id))
-				 (line-code-index (bindat-get-field event :u :location :index))
-				 ;; if its a breakpoint, we assumed that we have already resolved it somehow
-				 ;; any case where it isn't?
-				 (class (gethash class-id (jdi-virtual-machine-classes vm)))
-				 (location (jdi-class-find-location class method-id line-code-index)))
-    (setf (jdi-virtual-machine-suspended-thread-id vm) (bindat-get-field event :u :thread))
-	(jdi-info "found location:%s" (if location "yes" "no"))
-	(cont-bind () (jdi-virtual-machine-get-all-frames vm)
-	  (run-hook-with-args 'jdi-breakpoint-hooks 
-						  (find-if (lambda (other)
-									 (equal (jdi-thread-id other)
-											thread-id))
-								   (jdi-virtual-machine-threads vm))
-						  location))))
+				 (line-code-index (bindat-get-field event :u :location :index)))
+	(setf (jdi-virtual-machine-suspended-thread-id vm) (bindat-get-field event :u :thread))
+	(run-hook-with-args 'jdi-breakpoint-hooks vm thread-id class-id method-id line-code-index)))
   
 (defun jdi-handle-step-event (jdwp event)
   (jdi-info "jdi-handle-step-event")
   (lexical-let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
+				 (thread-id (bindat-get-field event :u :thread))
 				 (class-id (bindat-get-field event :u :location :class-id))
 				 (method-id (bindat-get-field event :u :location :method-id))
-				 (line-code-index (bindat-get-field event :u :location :index))
-				 (class (gethash class-id (jdi-virtual-machine-classes vm)))
-				 (thread (make-jdi-thread :virtual-machine vm :id (bindat-get-field event :u :thread))))
-	(cont-bind () (jdi-class-get-all-line-locations class)
-	  (let ((location (jdi-class-find-location class method-id line-code-index)))
-		(run-hook-with-args 'jdi-step-hooks thread location)))))
+				 (line-code-index (bindat-get-field event :u :location :index)))
+	(setf (jdi-virtual-machine-suspended-thread-id vm) (bindat-get-field event :u :thread))
+	(run-hook-with-args 'jdi-step-hooks vm thread-id class-id method-id line-code-index)))
+
+(defun jdi-handle-class-prepare-event (jdwp event)
+  (jdi-info "jdi-handle-class-prepare-event")
+  (lexical-let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
+				 (type-id (bindat-get-field event :u :type-id))
+				 (signature (jdwp-get-string event :u :signature))
+				 (newclass (make-jdi-class :virtual-machine vm :id type-id :signature signature)))
+	(jdi-info "class-loaded:%s" signature)
+	(puthash type-id newclass (jdi-virtual-machine-classes vm))
+	(puthash signature (cons newclass (gethash signature (jdi-virtual-machine-classes-by-signature vm)))
+			 (jdi-virtual-machine-classes-by-signature vm))
+	(run-hook-with-args 'jdi-class-prepare-hooks newclass)))
+
+;; 	  ;; check whether we have any pending breakpoints for this class
+;; 	  ;; we never delete the breakpoints requests, as even though we might
+;; 	  ;; have installed it for the class, the class might be loaded again
+;; 	  ;; later by another class loader, and we want to install the breakpoint
+;; 	  ;; for THAT class as well
+;; 	  (dolist (br (jdi-breakpoint-requests jdi))
+;; 		(when (equal (jdi-breakpoint-request-source-file br) (jdi-class-signature-to-source jdi signature))
+;; 		  (jdi-resume jdi)
+;; 		  (jdi-set-breakpoint jdi (jdi-breakpoint-request-source-file br) (jdi-breakpoint-request-line-number br))
+;; 		  (funcall (jdi-breakpoint-resolved-handler jdi) jdi br))))))
+
+(defun jdi-handle-class-unload-event (jdwp event)
+  (jdi-info "jdi-handle-class-unload-event")
+  ())
 
 ;;; Customized display and expanders:
 (defvar jdi-value-custom-set-strings nil
@@ -1309,10 +1329,10 @@ so finding a method by signature will return the child's method first."
 					(cont-values t)))))))))))
 
 (defvar jdi-breakpoint-hooks nil
-  "callback to be called when breakpoint is hit, called with (jdi-thread jdi-location)")
+  "callback to be called when breakpoint is hit, called with (jdi-virtual-machine thread-id class-id method-id line-code-index)")
 
 (defvar jdi-step-hooks nil
-  "callback to be called when execution is stopped from stepping, called with (jdi-thread jdi-location)")
+  "callback to be called when execution is stopped from stepping, called with (jdi-virtual-machine thread-id class-id method-id line-code-index)")
 
 (defvar jdi-detached-hooks nil
   "callback to be called when debuggee detached from us, called with (jdi)")
@@ -1320,11 +1340,19 @@ so finding a method by signature will return the child's method first."
 (defvar jdi-breakpoint-resolved-hooks nil
   "handler to be called when the class is loaded for a breakpoint that wasn't resolved previously")
 
+(defvar jdi-class-prepare-hooks nil
+  "handler to be called when a class is prepared, called with (jdi-class)")
+
+(defvar jdi-class-unload-hooks nil
+  "handler to be called when a class is unloaded, called with (jdi-class)")
+
 (defun jdi-handle-event (jdwp event)
   (jdi-info "jdi-handle-event")
   (let ((handlers (list 
-				   `(,jdwp-event-breakpoint  . jdi-handle-breakpoint-event)
-				   `(,jdwp-event-single-step . jdi-handle-step-event)
+				   `(,jdwp-event-breakpoint    . jdi-handle-breakpoint-event)
+				   `(,jdwp-event-single-step   . jdi-handle-step-event)
+				   `(,jdwp-event-class-prepare . jdi-handle-class-prepare-event)
+				   `(,jdwp-event-class-unload  . jdi-handle-class-unload-event)
 				   )))
 	(mapc (lambda (handler)
 			(jdi-trace "compare %s with %s" (car handler) (bindat-get-field event :event-kind))
