@@ -387,7 +387,8 @@ And position the point at the line number."
 																 :class-id class-id
 																 :method-id method-id
 																 :line-code-index line-code-index))))
-	(setf (jdibug-active-frame jdibug-this) fake-frame)
+	(unless (jdibug-active-frame jdibug-this)
+	  (setf (jdibug-active-frame jdibug-this) fake-frame))
 	(setf (jdibug-suspended-frames jdibug-this) (nreverse (cons fake-frame (jdibug-suspended-frames jdibug-this)))))
 
   (jdibug-info "number of suspended frames=%s" (length (jdibug-suspended-frames jdibug-this)))
@@ -407,7 +408,8 @@ And position the point at the line number."
 																 :class-id class-id
 																 :method-id method-id
 																 :line-code-index line-code-index))))
-	(setf (jdibug-active-frame jdibug-this) fake-frame)
+	(unless (jdibug-active-frame jdibug-this)
+	  (setf (jdibug-active-frame jdibug-this) fake-frame))
 	(setf (jdibug-suspended-frames jdibug-this) (nreverse (cons fake-frame (jdibug-suspended-frames jdibug-this)))))
 
   (let ((class (gethash class-id (jdi-virtual-machine-classes vm))))
