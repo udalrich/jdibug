@@ -128,6 +128,8 @@ jdibug-source-paths will be ignored if this is set to t."
   ;; 3. our resume, step commands will go to
   active-frame
 
+  suspended-frames
+
   current-line-overlay
   threads-tree 
   threads-buffer
@@ -379,13 +381,16 @@ And position the point at the line number."
 (defun jdibug-handle-breakpoint (vm thread-id class-id method-id line-code-index)
   (jdibug-info "jdibug-handle-breakpoint")
 
-  (setf (jdibug-active-frame jdibug-this)
-		(make-jdi-frame :virtual-machine vm
-						:thread (make-jdi-thread :virtual-machine vm :id thread-id)
-						:location (make-jdi-location :virtual-machine vm
-													 :class-id class-id
-													 :method-id method-id
-													 :line-code-index line-code-index)))
+  (let ((fake-frame (make-jdi-frame :virtual-machine vm
+									:thread (make-jdi-thread :virtual-machine vm :id thread-id)
+									:location (make-jdi-location :virtual-machine vm
+																 :class-id class-id
+																 :method-id method-id
+																 :line-code-index line-code-index))))
+	(setf (jdibug-active-frame jdibug-this) fake-frame)
+	(setf (jdibug-suspended-frames jdibug-this) (nreverse (cons fake-frame (jdibug-suspended-frames jdibug-this)))))
+
+  (jdibug-info "number of suspended frames=%s" (length (jdibug-suspended-frames jdibug-this)))
 
   (if (jdibug-refresh-timer jdibug-this)
 	  (cancel-timer (jdibug-refresh-timer jdibug-this)))
@@ -396,13 +401,14 @@ And position the point at the line number."
 (defun jdibug-handle-step (vm thread-id class-id method-id line-code-index)
   (jdibug-info "jdibug-handle-step")
 
-  (setf (jdibug-active-frame jdibug-this)
-		(make-jdi-frame :virtual-machine vm
-						:thread (make-jdi-thread :virtual-machine vm :id thread-id)
-						:location (make-jdi-location :virtual-machine vm
-													 :class-id class-id
-													 :method-id method-id
-													 :line-code-index line-code-index)))
+  (let ((fake-frame (make-jdi-frame :virtual-machine vm
+									:thread (make-jdi-thread :virtual-machine vm :id thread-id)
+									:location (make-jdi-location :virtual-machine vm
+																 :class-id class-id
+																 :method-id method-id
+																 :line-code-index line-code-index))))
+	(setf (jdibug-active-frame jdibug-this) fake-frame)
+	(setf (jdibug-suspended-frames jdibug-this) (nreverse (cons fake-frame (jdibug-suspended-frames jdibug-this)))))
 
   (let ((class (gethash class-id (jdi-virtual-machine-classes vm))))
 	(jdibug-goto-location (jdi-class-find-location class method-id line-code-index)))
@@ -1350,7 +1356,6 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (if (null (jdibug-active-frame jdibug-this))
       (message "JDIbug Can not step. Not suspended.")
     (jdi-thread-send-step (jdi-frame-thread (jdibug-active-frame jdibug-this)) depth)
-	;; TODO: select the next suspended thread
 	(setf (jdibug-active-frame jdibug-this) nil)))
 
 (defun jdibug-step-over ()
@@ -1376,9 +1381,34 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (if (jdibug-current-line-overlay jdibug-this)
       (delete-overlay (jdibug-current-line-overlay jdibug-this)))
   (jdi-thread-resume (jdi-frame-thread (jdibug-active-frame jdibug-this)))
-  ;; TODO: select next suspended thread
-  (setf (jdibug-active-frame jdibug-this) nil)
   (run-hooks 'jdibug-resumed-hook)
+
+  (setf (jdibug-suspended-frames jdibug-this) 
+		(remove-if (lambda (obj)
+					 (and (equal (jdi-thread-id (jdi-frame-thread obj))
+								 (jdi-thread-id (jdi-frame-thread (jdibug-active-frame jdibug-this))))
+						  (equal (jdi-location-class-id (jdi-frame-location obj))
+								 (jdi-location-class-id (jdi-frame-location (jdibug-active-frame jdibug-this))))
+						  (equal (jdi-location-method-id (jdi-frame-location obj))
+								 (jdi-location-method-id (jdi-frame-location (jdibug-active-frame jdibug-this))))
+						  (equal (jdi-location-line-code-index (jdi-frame-location obj))
+								 (jdi-location-line-code-index (jdi-frame-location (jdibug-active-frame jdibug-this))))))
+																					  
+				   (jdibug-suspended-frames jdibug-this)))
+  (setf (jdibug-active-frame jdibug-this) (car (jdibug-suspended-frames jdibug-this)))
+
+  (when (jdibug-active-frame jdibug-this)
+	(if (jdibug-refresh-timer jdibug-this)
+		(cancel-timer (jdibug-refresh-timer jdibug-this)))
+	(setf (jdibug-refresh-timer jdibug-this)
+		  (run-with-timer jdibug-refresh-delay nil 
+						  'jdibug-refresh-now 
+						  (jdi-mirror-virtual-machine (jdibug-active-frame jdibug-this))
+						  (jdi-thread-id (jdi-frame-thread (jdibug-active-frame jdibug-this)))
+						  (jdi-location-class-id (jdi-frame-location (jdibug-active-frame jdibug-this)))
+						  (jdi-location-method-id (jdi-frame-location (jdibug-active-frame jdibug-this)))
+						  (jdi-location-line-code-index (jdi-frame-location (jdibug-active-frame jdibug-this))))))
+
   (message "JDIbug resumed"))
 
 (defun jdibug-connected-p ()
