@@ -1056,9 +1056,10 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (jdibug-info "jdibug-connected-p")
   (let ((connected 0))
 	(mapc (lambda (vm) 
-			(jdibug-info "process-status=%s" (process-status (jdwp-process (jdi-virtual-machine-jdwp vm))))
-			(if (equal (process-status (jdwp-process (jdi-virtual-machine-jdwp vm))) 'open)
-				(incf connected)))
+			(let ((proc (jdwp-process (jdi-virtual-machine-jdwp vm))))
+			  (if (and proc
+					   (equal (process-status proc) 'open))
+				  (incf connected))))
 		  (jdibug-virtual-machines jdibug-this))
 	(jdibug-info "connected = %s" connected)
 	(if (equal connected 0)
