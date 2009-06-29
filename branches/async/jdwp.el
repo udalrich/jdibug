@@ -664,11 +664,11 @@
 ;;   (catch 'done
 ;; 	(while t
 ;; 	  (accept-process-output (jdwp-process jdwp) 1 0 t)
-;; 	  (jdwp-info "jdwp-residual-output:%s" (jdwp-residual-output jdwp))
+;; 	  (jdwp-debug "jdwp-residual-output:%s" (jdwp-residual-output jdwp))
 ;; 	  (if (and (>= (length (jdwp-residual-output jdwp)) (length jdwp-handshake))
 ;; 			   (string= jdwp-handshake (substring (jdwp-residual-output jdwp) 0 (length jdwp-handshake))))
 ;; 		  (throw 'done nil))))
-;;   (jdwp-info "received handshake")
+;;   (jdwp-debug "received handshake")
 ;;   (setf (jdwp-handshaked-p jdwp) t)
 ;;   (jdwp-consume-output jdwp (length jdwp-handshake)))
 
@@ -679,7 +679,7 @@
 	(run-with-timer 0 nil 'jdwp-monitor jdwp)))
 
 ;; (defun jdwp-process-filter (process string)
-;;   (jdwp-info "jdwp-process-filter")
+;;   (jdwp-debug "jdwp-process-filter")
 ;;   (jdwp-trace "string=%s" string)
 ;;   (let* ((jdwp (process-get process 'jdwp)))
 ;;     (jdwp-append-output jdwp process string)
@@ -704,8 +704,8 @@
 ;; 					 (command-data (nth 0 value))
 ;; 					 (cont (nth 1 value))
 ;; 					 (cont-args (nth 2 value)))
-;; 				(jdwp-info "received reply packet for id:%s:cont:%s:cont-args:%s" id cont cont-args)
-;; 				(jdwp-info "requests-alist:%s" (jdwp-requests-alist jdwp))
+;; 				(jdwp-debug "received reply packet for id:%s:cont:%s:cont-args:%s" id cont cont-args)
+;; 				(jdwp-debug "requests-alist:%s" (jdwp-requests-alist jdwp))
 ;; 				(multiple-value-bind (jdwp-reply jdwp-error jdwp-jdwp jdwp-id)
 ;; 					(jdwp-process-reply jdwp packet command-data)
 ;; 				  (apply cont cont-args)))
@@ -715,7 +715,7 @@
 ;; 								   (jdwp-process-command jdwp packet))
 ;; 								 jdwp packet)
 ;; 			;;			  (jdwp-process-command jdwp packet)
-;; 			(jdwp-info "received command packet")))))))
+;; 			(jdwp-debug "received command packet")))))))
 
 (defun jdwp-process-id-sizes (jdwp reply)
   (setf (jdwp-field-id-size jdwp) (bindat-get-field reply :field-id-size))
@@ -826,7 +826,7 @@
 	  (jdwp-trace "process-reply packet-header:%s" packet)
       (if (not (= error 0))
 		  (progn
-			(jdwp-info "received error:%d:%s for id:%d command:%s" error (jdwp-error-string error) id (getf protocol :name))
+			(jdwp-debug "received error:%d:%s for id:%d command:%s" error (jdwp-error-string error) id (getf protocol :name))
 			(list nil error jdwp id))
 		(if reply-spec
 			(let ((reply-data   (bindat-unpack reply-spec str 11)))
@@ -854,7 +854,7 @@
 		  (let* ((packet          (bindat-unpack jdwp-event-spec str 11))
 				 (suspend-policy  (bindat-get-field packet :suspend-policy))
 				 (events          (bindat-get-field packet :events)))
-			(jdwp-info "event suspend-policy:%d events:%d" suspend-policy events)
+			(jdwp-debug "event suspend-policy:%d events:%d" suspend-policy events)
 			(jdwp-trace "event:%s" (bindat-get-field packet :event))
 			(dolist (event (bindat-get-field packet :event))
 			  (run-hook-with-args 'jdwp-event-hooks jdwp event)))
@@ -871,7 +871,7 @@
     (let ((packet nil)
 		  (total-length (jdwp-output-length jdwp))
 		  (first-packet-length (jdwp-output-first-packet-length jdwp)))
-;;	  (jdwp-info "jdwp-get-packet total-length=%s first-packet-length=%s" total-length first-packet-length)
+;;	  (jdwp-debug "jdwp-get-packet total-length=%s first-packet-length=%s" total-length first-packet-length)
 	  (when (and (>= total-length 11)
 				 (>= total-length first-packet-length)
 		  (setq packet (substring (jdwp-residual-output jdwp) 0 first-packet-length))
@@ -882,10 +882,10 @@
   "This will be true when we are 'in' jdwp-accept-more-output")
 
 (defun jdwp-accept-more-output (jdwp)
-  (jdwp-info "jdwp-accept-more-output")
+  (jdwp-debug "jdwp-accept-more-output")
   (let ((jdwp-accepting-more-output t))
 	(while (accept-process-output (jdwp-process jdwp) 0.01)
-	  (jdwp-info "accepted some output"))))
+	  (jdwp-debug "accepted some output"))))
 
 (defun jdwp-ordinary-insertion-filter (proc string)
   (with-current-buffer (process-buffer proc)
@@ -1056,7 +1056,7 @@
 					 (if (> (length outstr) 100)
 						 (substring outstr 0 100)
 					   outstr)))
-		(jdwp-info "data:%s" data)
+		(jdwp-debug "data:%s" data)
 		(let ((inhibit-eol-conversion t))
 		  (setf (jdwp-current-reply jdwp) nil)
 		  (process-send-string (jdwp-process jdwp) command-packed)
@@ -1073,7 +1073,7 @@
 ;; 				(accept-process-output (jdwp-process jdwp) 1 0 t)
 ;; 				(if (jdwp-current-reply jdwp)
 ;; 					(progn
-;; 					  (jdwp-info "got reply:%s" (jdwp-string-to-hex (jdwp-current-reply jdwp) 100))
+;; 					  (jdwp-debug "got reply:%s" (jdwp-string-to-hex (jdwp-current-reply jdwp) 100))
 ;; 					  (throw 'done (jdwp-process-reply jdwp (jdwp-current-reply jdwp) command-data))))))))))))
 ;;				  (sit-for 0))))))))))
 
