@@ -450,16 +450,6 @@ And position the point at the line number."
   (unless (jdibug-connected-p)
 	(run-hooks 'jdibug-detached-hook)))
 
-(defun jdibug-handle-resolved-breakpoint (jdi resolved-breakpoint)
-  (jdibug-info "jdibug-handle-resolved-breakpoint")
-  (let ((bp (find-if (lambda (bp)
-					   (and (equal (jdibug-breakpoint-source-file bp) (jdi-breakpoint-request-source-file resolved-breakpoint))
-							(equal (jdibug-breakpoint-line-number bp) (jdi-breakpoint-request-line-number resolved-breakpoint))))
-					 (jdibug-breakpoints jdibug-this))))
-    (setf (jdibug-breakpoint-status bp) 'enabled)
-    (jdibug-breakpoint-update bp)
-    (message "breakpoint-resolved:%s" resolved-breakpoint)))
-
 (defun jdibug-highlight-current-line (line-number)
   (jdibug-info "jdibug-highlight-current-line:%d:current-buffer=%s" line-number (current-buffer))
   (goto-line line-number)

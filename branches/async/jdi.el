@@ -1107,17 +1107,6 @@
 			 (jdi-virtual-machine-classes-by-signature vm))
 	(run-hook-with-args 'jdi-class-prepare-hooks newclass)))
 
-;; 	  ;; check whether we have any pending breakpoints for this class
-;; 	  ;; we never delete the breakpoints requests, as even though we might
-;; 	  ;; have installed it for the class, the class might be loaded again
-;; 	  ;; later by another class loader, and we want to install the breakpoint
-;; 	  ;; for THAT class as well
-;; 	  (dolist (br (jdi-breakpoint-requests jdi))
-;; 		(when (equal (jdi-breakpoint-request-source-file br) (jdi-class-signature-to-source jdi signature))
-;; 		  (jdi-resume jdi)
-;; 		  (jdi-set-breakpoint jdi (jdi-breakpoint-request-source-file br) (jdi-breakpoint-request-line-number br))
-;; 		  (funcall (jdi-breakpoint-resolved-handler jdi) jdi br))))))
-
 (defun jdi-handle-class-unload-event (jdwp event)
   (jdi-info "jdi-handle-class-unload-event")
   ())
@@ -1341,9 +1330,6 @@ so finding a method by signature will return the child's method first."
 
 (defvar jdi-detached-hooks nil
   "callback to be called when debuggee detached from us, called with (jdi-virtual-machine)")
-
-(defvar jdi-breakpoint-resolved-hooks nil
-  "handler to be called when the class is loaded for a breakpoint that wasn't resolved previously")
 
 (defvar jdi-class-prepare-hooks nil
   "handler to be called when a class is prepared, called with (jdi-class)")
