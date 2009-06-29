@@ -260,7 +260,6 @@ jdibug-source-paths will be ignored if this is set to t."
 
 		(jdibug-active-frame            jdibug-this) nil)
 
-  (jdibug-trace "number of debuggee:%d" (length (jdibug-jdi jdibug-this)))
   (jdibug-message "JDIbug disconnecting... ")
   (mapc (lambda (vm)
 		  (jdibug-message (format "%s:%s" 
@@ -374,7 +373,8 @@ And position the point at the line number."
 (defun jdibug-handle-change-frame (frame)
   (jdibug-info "jdibug-handle-change-frame")
 
-  (jdibug-goto-location (jdi-class-find-location (jdi-frame-class frame)
+  (jdibug-goto-location (jdi-class-find-location (gethash (jdi-location-class-id (jdi-frame-location frame)) 
+														  (jdi-virtual-machine-classes (jdi-mirror-virtual-machine frame)))
 												 (jdi-location-method-id (jdi-frame-location frame))
 												 (jdi-location-line-code-index (jdi-frame-location frame))))
 
@@ -682,13 +682,6 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
       :value 
       ,(format "%s: %s" (jdi-value-name value) (jdi-value-string value)))))
 
-(defun jdibug-refresh-locals-buffer (frame location)
-  (jdibug-info "jdibug-refresh-locals-buffer:type-of frame:%s" (type-of frame))
-  (if (jdibug-locals-buffer-timer jdibug-this)
-	  (cancel-timer (jdibug-locals-buffer-timer jdibug-this)))
-  (setf (jdibug-locals-buffer-timer jdibug-this)
-		(run-with-timer jdibug-refresh-locals-buffer-delay nil 'jdibug-refresh-locals-buffer-now frame location)))
-
 (defun jdibug-refresh-locals-buffer-now (frame location)
   (condition-case err
 	  (progn
@@ -789,13 +782,6 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		   :format "%[%t%]\n")
 	:open t
 	:args ,(mapcar 'jdibug-make-virtual-machine-tree (jdibug-virtual-machines jdibug-this))))
-
-(defun jdibug-refresh-frames-buffer ()
-  (jdibug-info "jdibug-refresh-frames-buffer")
-  (if (jdibug-frames-buffer-timer jdibug-this)
-	  (cancel-timer (jdibug-frames-buffer-timer jdibug-this)))
-  (setf (jdibug-frames-buffer-timer jdibug-this)
-		(run-with-timer jdibug-refresh-frames-buffer-delay nil 'jdibug-refresh-frames-buffer-now)))
 
 (defun jdibug-refresh-frames-buffer-now ()
   (jdibug-info "jdibug-refresh-frames-buffer-now")
@@ -1119,8 +1105,8 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (message "JDIbug resumed"))
 
 (defun jdibug-connected-p ()
-  (jdibug-info "jdibug-connected-p")
   (interactive)
+  (jdibug-info "jdibug-connected-p")
   (let ((connected 0))
 	(mapc (lambda (vm) 
 			(jdibug-info "process-status=%s" (process-status (jdwp-process (jdi-virtual-machine-jdwp vm))))
