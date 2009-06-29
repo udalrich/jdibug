@@ -378,6 +378,15 @@ And position the point at the line number."
 
 (defun jdibug-handle-breakpoint (vm thread-id class-id method-id line-code-index)
   (jdibug-info "jdibug-handle-breakpoint")
+
+  (setf (jdibug-active-frame jdibug-this)
+		(make-jdi-frame :virtual-machine vm
+						:thread (make-jdi-thread :virtual-machine vm :id thread-id)
+						:location (make-jdi-location :virtual-machine vm
+													 :class-id class-id
+													 :method-id method-id
+													 :line-code-index line-code-index)))
+
   (if (jdibug-refresh-timer jdibug-this)
 	  (cancel-timer (jdibug-refresh-timer jdibug-this)))
   (setf (jdibug-refresh-timer jdibug-this)
@@ -386,6 +395,18 @@ And position the point at the line number."
 
 (defun jdibug-handle-step (vm thread-id class-id method-id line-code-index)
   (jdibug-info "jdibug-handle-step")
+
+  (setf (jdibug-active-frame jdibug-this)
+		(make-jdi-frame :virtual-machine vm
+						:thread (make-jdi-thread :virtual-machine vm :id thread-id)
+						:location (make-jdi-location :virtual-machine vm
+													 :class-id class-id
+													 :method-id method-id
+													 :line-code-index line-code-index)))
+
+  (let ((class (gethash class-id (jdi-virtual-machine-classes vm))))
+	(jdibug-goto-location (jdi-class-find-location class method-id line-code-index)))
+
   (if (jdibug-refresh-timer jdibug-this)
 	  (cancel-timer (jdibug-refresh-timer jdibug-this)))
   (setf (jdibug-refresh-timer jdibug-this)
@@ -393,6 +414,11 @@ And position the point at the line number."
 
 (defun jdibug-handle-change-frame (frame)
   (jdibug-info "jdibug-handle-change-frame")
+
+  (jdibug-goto-location (jdi-class-find-location (jdi-frame-class frame)
+												 (jdi-location-method-id (jdi-frame-location frame))
+												 (jdi-location-line-code-index (jdi-frame-location frame))))
+
   (if (jdibug-refresh-timer jdibug-this)
 	  (cancel-timer (jdibug-refresh-timer jdibug-this)))
   (setf (jdibug-refresh-timer jdibug-this)
@@ -423,7 +449,7 @@ And position the point at the line number."
 										  (equal (jdi-thread-id other)
 												 thread-id))
 										(jdi-virtual-machine-suspended-threads vm))))
-				   (when (null (jdibug-active-frame jdibug-this))
+				   (when (null (jdi-frame-id (jdibug-active-frame jdibug-this)))
 					 (setf (jdibug-active-frame jdibug-this) (car (jdi-thread-frames thread))))
 				   (jdibug-refresh-locals-buffer-now (jdibug-active-frame jdibug-this) location)
 				   (jdibug-refresh-frames-buffer-now)))))))))
@@ -1312,6 +1338,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		(goto-line orig-line))))
 
 (defun jdibug-send-step (depth)
+  (jdibug-info "jdibug-send-step")
   (mapc (lambda (buffer) 
 		  (with-current-buffer buffer
 			(let ((inhibit-read-only t))
