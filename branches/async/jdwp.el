@@ -779,7 +779,7 @@
 		(when (jdwp-process jdwp)
 		  (process-put               (jdwp-process jdwp) 'jdwp jdwp)
 		  (set-process-filter        (jdwp-process jdwp) 'jdwp-process-filter)
-		  ;; 	  (set-process-sentinel      (jdwp-process jdwp) 'jdwp-process-sentinel)
+		  (set-process-sentinel      (jdwp-process jdwp) 'jdwp-process-sentinel)
 		  (with-current-buffer (process-buffer (jdwp-process jdwp))
 			(set-buffer-multibyte nil))
 		  (set-process-coding-system (jdwp-process jdwp) 'no-conversion 'no-conversion)
@@ -803,7 +803,7 @@
 (defun jdwp-process-sentinel (proc string)
   (let ((jdwp (process-get proc 'jdwp)))
     (jdwp-trace "jdwp-process-sentinel:%s" string)
-	(run-hook-with-args jdwp-disconnected-hooks jdwp)))
+	(run-hook-with-args 'jdwp-event-hooks jdwp jdwp-event-vm-death)))
 
 ;; declare the dynamic variables for our unpacker
 (defmacro jdwp-with-size (jdwp &rest body)

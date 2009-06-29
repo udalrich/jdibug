@@ -1122,6 +1122,11 @@
   (jdi-info "jdi-handle-class-unload-event")
   ())
 
+(defun jdi-handle-vm-death (jdwp event)
+  (jdi-info "jdi-handle-vm-death")
+  (let ((vm (jdwp-get jdwp 'jdi-virtual-machine)))
+	(run-hook-with-args 'jdi-detached-hooks vm)))
+
 ;;; Customized display and expanders:
 (defvar jdi-value-custom-set-strings nil
   "a list of (class setter) where
@@ -1335,7 +1340,7 @@ so finding a method by signature will return the child's method first."
   "callback to be called when execution is stopped from stepping, called with (jdi-virtual-machine thread-id class-id method-id line-code-index)")
 
 (defvar jdi-detached-hooks nil
-  "callback to be called when debuggee detached from us, called with (jdi)")
+  "callback to be called when debuggee detached from us, called with (jdi-virtual-machine)")
 
 (defvar jdi-breakpoint-resolved-hooks nil
   "handler to be called when the class is loaded for a breakpoint that wasn't resolved previously")
@@ -1353,12 +1358,13 @@ so finding a method by signature will return the child's method first."
 				   `(,jdwp-event-single-step   . jdi-handle-step-event)
 				   `(,jdwp-event-class-prepare . jdi-handle-class-prepare-event)
 				   `(,jdwp-event-class-unload  . jdi-handle-class-unload-event)
+				   `(,jdwp-event-vm-death      . jdi-handle-vm-death)
 				   )))
 	(mapc (lambda (handler)
-			(jdi-trace "compare %s with %s" (car handler) (bindat-get-field event :event-kind))
-			(if (equal (bindat-get-field event :event-kind)
-					   (car handler))
-				(funcall (cdr handler) jdwp event)))
+			(let ((event-kind (if (integerp event) event (bindat-get-field event :event-kind))))
+			  (jdi-trace "compare %s with %s" (car handler) event-kind)
+			  (if (equal event-kind	(car handler))
+				  (funcall (cdr handler) jdwp event))))
 		  handlers)))
 
 (add-hook 'jdwp-event-hooks 'jdi-handle-event)

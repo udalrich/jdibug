@@ -484,7 +484,7 @@ And position the point at the line number."
 				bps-matched-class)
 		  (cont-values))))))
 
-(defun jdibug-handle-detach (jdi)
+(defun jdibug-handle-detach (vm)
   (interactive)
   (if (jdibug-current-line-overlay jdibug-this)
 	  (delete-overlay (jdibug-current-line-overlay jdibug-this)))
@@ -492,7 +492,7 @@ And position the point at the line number."
 		  (if (jdibug-breakpoint-overlay bp)
 			  (delete-overlay (jdibug-breakpoint-overlay bp))))
 		(jdibug-breakpoints jdibug-this))
-  (message "JDIbug %s:%s vm detached" (jdwp-server (jdi-jdwp jdi)) (jdwp-port (jdi-jdwp jdi)))
+  (message "JDIbug %s:%s vm detached" (jdi-virtual-machine-host vm) (jdi-virtual-machine-port vm))
   (unless (jdibug-connected-p)
 	(run-hooks 'jdibug-detached-hook)))
 
@@ -1414,12 +1414,15 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (message "JDIbug resumed"))
 
 (defun jdibug-connected-p ()
+  (jdibug-info "jdibug-connected-p")
   (interactive)
   (let ((connected 0))
 	(mapc (lambda (vm) 
-			(if (jdwp-process (jdi-virtual-machine-jdwp vm))
+			(jdibug-info "process-status=%s" (process-status (jdwp-process (jdi-virtual-machine-jdwp vm))))
+			(if (equal (process-status (jdwp-process (jdi-virtual-machine-jdwp vm))) 'open)
 				(incf connected)))
 		  (jdibug-virtual-machines jdibug-this))
+	(jdibug-info "connected = %s" connected)
 	(if (equal connected 0)
 		nil
 	  connected)))
