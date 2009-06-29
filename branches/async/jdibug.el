@@ -431,7 +431,10 @@ And position the point at the line number."
 										 (jdi-mirror-virtual-machine class)
 										 (jdi-class-signature class)
 										 (jdibug-breakpoint-line-number bp))
-					  (push result (jdibug-breakpoint-event-requests bp)))))
+					  (when result
+						(push result (jdibug-breakpoint-event-requests bp))
+						(setf (jdibug-breakpoint-status bp) 'enabled)
+						(jdibug-breakpoint-update bp)))))
 				bps-matched-class)
 		  (cont-values))))))
 
