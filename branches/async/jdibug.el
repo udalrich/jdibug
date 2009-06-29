@@ -212,13 +212,9 @@ jdibug-source-paths will be ignored if this is set to t."
 								  (jdibug-frames-buffer jdibug-this)      (get-buffer-create jdibug-frames-buffer-name)
 								  (jdibug-breakpoints-buffer jdibug-this) (get-buffer-create jdibug-breakpoints-buffer-name))
 
-;; 							(with-current-buffer (jdibug-frames-buffer jdibug-this)
-;; 							  (toggle-read-only 1))
-;; 							(dolist (buf (list (jdibug-frames-buffer jdibug-this)
-;; 											   (jdibug-locals-buffer jdibug-this)
-;; 											   (jdibug-breakpoints-buffer jdibug-this)))
-;; 							  (with-current-buffer buf
-;; 								(toggle-read-only 1)))
+							(with-current-buffer (jdibug-breakpoints-buffer jdibug-this)
+							  (use-local-map jdibug-breakpoints-mode-map)
+							  (toggle-read-only 1))
 
 							(lexical-let* ((bps (jdibug-breakpoints jdibug-this))
 										   (signatures (loop for bp in bps
@@ -488,38 +484,6 @@ And position the point at the line number."
   `((t (:foreground "navajo white" :background "DodgerBlue")))
   "Face for current frame"
   :group 'jdibug)
-
-(defun jdibug-make-thread-group-node (jdibug thread-group)
-  (let ((child-group-nodes (mapcar (lambda (ctg) (jdibug-make-thread-group-node jdibug ctg))
-								   (jdi-thread-group-thread-groups thread-group)))
-		(child-thread-nodes (mapcar (lambda (thread) (jdibug-make-thread-node jdibug thread))
-									(jdi-thread-group-threads thread-group))))
-    `(tree-widget
-      :node (push-button
-			 :tag 
-			 ,(format "%s (%s)" (jdi-thread-group-name thread-group) (jdi-thread-group-id thread-group))
-			 :format "%[%t%]\n")
-      :open t
-      :args ,(append child-group-nodes child-thread-nodes))))
-
-(defun jdibug-make-thread-node (jdibug thread)
-  `(item 
-    :value 
-    ,(format "%s (%s) (%d) (%d)" (jdi-thread-name thread) (jdi-thread-id thread) (jdi-thread-status thread) (jdi-thread-suspend-status thread))))
-
-(defun jdibug-make-threads-tree (jdibug)
-  `(tree-widget
-    :node (push-button
-		   :tag "*"
-		   :format "%[%t%]\n")
-    :open t
-    :args ,(mapcar (lambda (tg) (jdibug-make-thread-group-node jdibug tg)) (jdi-thread-groups (jdibug-jdi jdibug)))))
-
-(defun jdibug-refresh-threads-buffer (jdibug)
-  (with-current-buffer (jdibug-threads-buffer jdibug)
-    (let ((inhibit-read-only t))
-      (erase-buffer))
-	(widget-create (jdibug-make-threads-tree jdibug))))
 
 (defun jdibug-expand-method-node (tree)
   (jdibug-trace "jdibug-expand-method-node")
@@ -813,16 +777,6 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		(message "not an object")
 	  (message "Class: %s" (jdi-class-signature (jdi-value-class value))))))
 
-(defun jdibug-find-jdi-for-source-file (jdibug source-file)
-  "Return the correct JDI that contains the source file. Currently do not handle same source file for multiple Debuggee!"
-  (jdibug-trace "jdibug-find-jdi-for-source-file:%s" source-file)
-  (let ((result (find-if (lambda (jdi) 
-						   (jdibug-trace "looking for %s in jdi" source-file)
-						   (jdi-file-in-source-paths-p jdi source-file))
-						 (jdibug-jdi jdibug))))
-	(jdibug-trace (if result "found" "not found"))
-	result))
-			 
 (defun jdibug-file-in-source-paths-p (file)
   (jdibug-debug "jdibug-file-in-source-paths-p:%s" file)
   (let ((result (find-if (lambda (sp) 
@@ -906,14 +860,14 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (jdibug-breakpoint-update bp)
   (message "breakpoint disabled"))
 
-(defun jdibug-enable-breakpoint (jdibug bp)
-  (mapc (lambda (jdi)
-		  (jdi-set-breakpoint jdi (jdibug-breakpoint-source-file bp) (jdibug-breakpoint-line-number bp))
-		  (setf (jdibug-breakpoint-status bp) 'enabled)
-		  (jdibug-breakpoint-update bp)
-		  (message "breakpoint enabled"))
-		(jdibug-jdi jdibug)))
-    
+(defun jdibug-enable-breakpoint (bp)
+  (mapc (lambda (er)
+		  (jdi-event-request-enable er))
+		(jdibug-breakpoint-event-requests bp))
+  (setf (jdibug-breakpoint-status bp) 'enabled)
+  (jdibug-breakpoint-update bp)
+  (message "breakpoint enabled"))
+
 (defun jdibug-remove-breakpoint (bp)
   (jdibug-disable-breakpoint bp)
   (setf (jdibug-breakpoints jdibug-this) (delete bp (jdibug-breakpoints jdibug-this)))
@@ -984,9 +938,9 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	(if (equal (jdibug-breakpoint-status bp) 'enabled)
 		(progn
 		  (message ":action disable breakpoint")
-		  (jdibug-disable-breakpoint jdibug-this bp))
+		  (jdibug-disable-breakpoint bp))
 	  (message ":action enable breakpoint")
-	  (jdibug-enable-breakpoint jdibug-this bp))))
+	  (jdibug-enable-breakpoint bp))))
 
 (defun jdibug-breakpoints-delete ()
   (interactive)
