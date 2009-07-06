@@ -189,6 +189,15 @@
 				if (member proc-id all-proc-id)
 				collect proc-id))))
 
+(defun cont-mapcar (function sequence)
+  (lexical-let ((sequence sequence)
+				(cont-results))
+	(dolist (item sequence)
+	  (cont-bind (cont-result) (funcall function item)
+		(setq cont-results (cons cont-result cont-results))
+		(if (= (length cont-results) (length sequence))
+			(cont-values (nreverse cont-results)))))))
+
 (eval-when-compile
   (defun assert-equal (expected value)
 	(unless (equal expected value)
@@ -398,6 +407,30 @@
   (assert-equal '("there" "aloha again" "start") cont-test-saved-reply)
   (cont-values-this cont-test-saved-cont-3 "there again")
   (assert-equal '("end" "there again" "there" "aloha again" "start") cont-test-saved-reply)
+
+  ;;;;
+  ;; Test cont-mapcar
+  ;;;;
+  (cont-init)
+  (setq cont-test-saved-reply nil)
+  (setq cont-test-saved-cont nil)
+
+  (defun cont-test-send-message (arg)
+	(push `(,arg . ,(cont-get-current-id)) cont-test-saved-cont))
+
+  (cont-bind (replies) (cont-mapcar 'cont-test-send-message '("1" "2" "3"))
+	(setq cont-test-saved-reply replies))
+
+  (assert-equal nil cont-test-saved-reply)
+
+  (cont-values-this (aget cont-test-saved-cont "1") "2")
+  (assert-equal nil cont-test-saved-reply)
+
+  (cont-values-this (aget cont-test-saved-cont "2") "4")
+  (assert-equal nil cont-test-saved-reply)
+
+  (cont-values-this (aget cont-test-saved-cont "3") "6")
+  (assert-equal '("2" "4" "6") cont-test-saved-reply)
 
   (assert (cont-clear-p))
 
