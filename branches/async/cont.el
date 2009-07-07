@@ -198,6 +198,11 @@
 		(if (= (length cont-results) (length sequence))
 			(cont-values (nreverse cont-results)))))))
 
+(defun cont-mappend (function sequence)
+  (cont-bind (values) (cont-mapcar function sequence)
+	(cont-debug "cont-mappend:values=%s" values)
+	(cont-values (apply 'append values))))
+
 (eval-when-compile
   (defun assert-equal (expected value)
 	(unless (equal expected value)
@@ -431,6 +436,28 @@
 
   (cont-values-this (aget cont-test-saved-cont "3") "6")
   (assert-equal '("2" "4" "6") cont-test-saved-reply)
+
+
+  ;;;;
+  ;; Test cont-mapcan
+  ;;;;
+  (cont-init)
+  (setq cont-test-saved-reply nil)
+  (setq cont-test-saved-cont nil)
+
+  (cont-bind (replies) (cont-mappend 'cont-test-send-message '("1" "2" "3"))
+	(setq cont-test-saved-reply replies))
+
+  (assert-equal nil cont-test-saved-reply)
+
+  (cont-values-this (aget cont-test-saved-cont "1") (list "2" "3"))
+  (assert-equal nil cont-test-saved-reply)
+
+  (cont-values-this (aget cont-test-saved-cont "2") (list "4" "6"))
+  (assert-equal nil cont-test-saved-reply)
+
+  (cont-values-this (aget cont-test-saved-cont "3") (list "6" "9"))
+  (assert-equal '("2" "3" "4" "6" "6" "9") cont-test-saved-reply)
 
   (assert (cont-clear-p))
 
