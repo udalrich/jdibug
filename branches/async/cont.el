@@ -191,12 +191,17 @@
 
 (defun cont-mapcar (function sequence)
   (lexical-let ((sequence sequence)
-				(cont-results))
-	(dolist (item sequence)
-	  (cont-bind (cont-result) (funcall function item)
-		(setq cont-results (cons cont-result cont-results))
-		(if (= (length cont-results) (length sequence))
-			(cont-values (nreverse cont-results)))))))
+				(cont-results (make-vector (length sequence) nil))
+				(cont-remaining (length sequence)))
+	(let ((index 0)) ;; this cannot be lexical
+	  (dolist (item sequence)
+		(lexical-let ((index index))
+		  (cont-bind (cont-result) (funcall function item)
+			(aset cont-results index cont-result)
+			(decf cont-remaining)
+			(if (= 0 cont-remaining)
+				(cont-values (append cont-results nil)))))
+		(incf index)))))
 
 (defun cont-mappend (function sequence)
   (cont-bind (values) (cont-mapcar function sequence)
@@ -453,10 +458,13 @@
   (cont-values-this (aget cont-test-saved-cont "1") (list "2" "3"))
   (assert-equal nil cont-test-saved-reply)
 
-  (cont-values-this (aget cont-test-saved-cont "2") (list "4" "6"))
+  ;; the result should be in the order of the sequence
+  ;; not in the order of result obtained, so we try with the 3rd item returning
+  ;; first
+  (cont-values-this (aget cont-test-saved-cont "3") (list "6" "9"))
   (assert-equal nil cont-test-saved-reply)
 
-  (cont-values-this (aget cont-test-saved-cont "3") (list "6" "9"))
+  (cont-values-this (aget cont-test-saved-cont "2") (list "4" "6"))
   (assert-equal '("2" "3" "4" "6" "6" "9") cont-test-saved-reply)
 
   (assert (cont-clear-p))
