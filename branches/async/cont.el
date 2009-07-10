@@ -203,6 +203,18 @@
 				(cont-values (append cont-results nil)))))
 		(incf index)))))
 
+(defun cont-mapc (function sequence)
+  (lexical-let ((sequence sequence)
+				(cont-remaining (length sequence)))
+	(let ((index 0)) ;; this cannot be lexical
+	  (dolist (item sequence)
+		(lexical-let ((index index))
+		  (cont-bind (cont-result) (funcall function item)
+			(decf cont-remaining)
+			(if (= 0 cont-remaining)
+				(cont-values))))
+		(incf index)))))
+
 (defun cont-mappend (function sequence)
   (cont-bind (values) (cont-mapcar function sequence)
 	(cont-debug "cont-mappend:values=%s" values)
@@ -444,7 +456,7 @@
 
 
   ;;;;
-  ;; Test cont-mapcan
+  ;; Test cont-mappend
   ;;;;
   (cont-init)
   (setq cont-test-saved-reply nil)
@@ -466,6 +478,27 @@
 
   (cont-values-this (aget cont-test-saved-cont "2") (list "4" "6"))
   (assert-equal '("2" "3" "4" "6" "6" "9") cont-test-saved-reply)
+
+  ;;;;
+  ;; Test cont-mapc
+  ;;;;
+  (cont-init)
+  (setq cont-test-saved-reply nil)
+  (setq cont-test-saved-cont nil)
+
+  (cont-bind () (cont-mapc 'cont-test-send-message '("1" "2" "3"))
+	(setq cont-test-saved-reply "Done"))
+
+  (assert-equal nil cont-test-saved-reply)
+
+  (cont-values-this (aget cont-test-saved-cont "1") (list "2" "3"))
+  (assert-equal nil cont-test-saved-reply)
+
+  (cont-values-this (aget cont-test-saved-cont "3") (list "6" "9"))
+  (assert-equal nil cont-test-saved-reply)
+
+  (cont-values-this (aget cont-test-saved-cont "2") (list "4" "6"))
+  (assert-equal "Done" cont-test-saved-reply)
 
   (assert (cont-clear-p))
 
