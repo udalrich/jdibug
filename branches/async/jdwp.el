@@ -59,7 +59,7 @@
   ;; jdwp-cont that will be executed after we are connected and ready
   ready-cont
 
-  ;; an alist with the key=request-id and value=(command-data cont cont-args)
+  ;; an alist with the key=request-id and value=struct jdwp-request
   requests-alist
 
   current-reply
@@ -73,6 +73,13 @@
 
   server
   port)
+
+(defstruct jdwp-request
+  name
+  data
+  command-data
+  ;; list of continuations
+  conts)
 
 ;;; Constants:
 (defconst jdwp-event-single-step         1)
@@ -771,12 +778,15 @@
 				 (let* ((id (bindat-get-field
 							 (bindat-unpack '((:id u32)) (substring packet 4 8))
 							 :id))
-						(value (cdr (assoc id (jdwp-requests-alist jdwp))))
-						(command-data (nth 0 value))
-						(cont (nth 1 value)))
-				   (jdwp-trace "received reply packet for id:%s:cont:%s" id cont)
+						(request (aget (jdwp-requests-alist jdwp) id))
+						(command-data (jdwp-request-command-data request))
+						(conts (jdwp-request-conts request)))
+				   (jdwp-trace "received reply packet for id:%s" id)
 				   (jdwp-trace "requests-alist:%s" (elog-trim (jdwp-requests-alist jdwp) 100))
-				   (apply 'cont-values-this (cons cont (jdwp-process-reply jdwp packet command-data))))
+				   (mapc (lambda (cont)
+						   (apply 'cont-values-this (cons cont (jdwp-process-reply jdwp packet command-data))))
+						 conts)
+				   (setf (jdwp-requests-alist jdwp) (assq-delete-all id (jdwp-requests-alist jdwp))))
 			   ;; command packet
 			   (jdwp-process-command jdwp packet)
 			   ;;			  (jdwp-process-command jdwp packet)
@@ -1046,37 +1056,49 @@
     jdwp
     (if (null (jdwp-process jdwp))
 		(jdwp-trace "jdwp is not connected")
-      (let* ((protocol     (jdwp-get-protocol name))
-			 (reply-spec   (getf protocol :reply-spec))
-			 (command-spec (getf protocol :command-spec))
-			 (commandset   (getf protocol :commandset))
-			 (command      (getf protocol :command))
-			 (outdata      (jdwp-bindat-pack command-spec data))
-			 (id           (jdwp-get-next-id jdwp))
-			 (command-data `((:name        . ,name)
-							 (:length      . ,(+ 11 (length outdata)))
-							 (:id          . ,id)
-							 (:flags       . 0)
-							 (:commandset  . ,commandset)
-							 (:command     . ,command)
-							 (:data        . ,data)
-							 (:outdata     . ,outdata)
-							 (:sent-time   . ,(if jdwp-info-flag (current-time) 0))))
-			 (command-packed (jdwp-bindat-pack jdwp-command-spec command-data)))
-		(jdwp-info "sending command [%-20s] id:%-4d len:%-4d data:%s" 
-				   name 
-				   id 
-				   (+ 11 (length outdata)) 
-				   (let ((outstr (jdwp-string-to-hex outdata)))
-					 (if (> (length outstr) 100)
-						 (substring outstr 0 100)
-					   outstr)))
-		(jdwp-debug "data:%s" data)
-		(let ((inhibit-eol-conversion t))
-		  (setf (jdwp-current-reply jdwp) nil)
-		  (process-send-string (jdwp-process jdwp) command-packed)
-		  (push `(,id . (,command-data ,(cont-get-current-id))) (jdwp-requests-alist jdwp))
-		  )))))
+	  (let ((ongoing (find-if (lambda (pair)
+								(and (equal (jdwp-request-name (cdr pair)) name)
+									 (equal (jdwp-request-data (cdr pair)) data)))
+							  (jdwp-requests-alist jdwp))))
+		(if ongoing
+			(progn
+			  (jdwp-info "ongoing command %s %s" name data)
+			  (setf (jdwp-request-conts (cdr ongoing)) (cons (cont-get-current-id) (jdwp-request-conts (cdr ongoing)))))
+		  (let* ((protocol     (jdwp-get-protocol name))
+				 (reply-spec   (getf protocol :reply-spec))
+				 (command-spec (getf protocol :command-spec))
+				 (commandset   (getf protocol :commandset))
+				 (command      (getf protocol :command))
+				 (outdata      (jdwp-bindat-pack command-spec data))
+				 (id           (jdwp-get-next-id jdwp))
+				 (command-data `((:name        . ,name)
+								 (:length      . ,(+ 11 (length outdata)))
+								 (:id          . ,id)
+								 (:flags       . 0)
+								 (:commandset  . ,commandset)
+								 (:command     . ,command)
+								 (:data        . ,data)
+								 (:outdata     . ,outdata)
+								 (:sent-time   . ,(if jdwp-info-flag (current-time) 0))))
+				 (command-packed (jdwp-bindat-pack jdwp-command-spec command-data)))
+			(jdwp-info "sending command [%-20s] id:%-4d len:%-4d data:%s" 
+					   name 
+					   id 
+					   (+ 11 (length outdata)) 
+					   (let ((outstr (jdwp-string-to-hex outdata)))
+						 (if (> (length outstr) 100)
+							 (substring outstr 0 100)
+						   outstr)))
+			(jdwp-debug "data:%s" data)
+			(let ((inhibit-eol-conversion t))
+			  (setf (jdwp-current-reply jdwp) nil)
+			  (process-send-string (jdwp-process jdwp) command-packed)
+			  (push `(,id . ,(make-jdwp-request :name name
+												:data data
+												:command-data command-data
+												:conts (list (cont-get-current-id))))
+					(jdwp-requests-alist jdwp))
+			  )))))))
 ;;;		  (accept-process-output (jdwp-process jdwp) 0 0 t))))))
 
 ;; 		  (catch 'done
