@@ -104,8 +104,7 @@
 ;; A value retrieved from the target VM. The first byte is a signature byte which is used to identify the type. See JDWP.Tag for the possible values of this byte. It is followed immediately by the value itself. This value can be an objectID (see Get ID Sizes) or a primitive value (1 to 8 bytes). More details about each value type can be found in the next table. 
 (defstruct (jdi-value (:include jdi-mirror))
   type
-  value 
-  variable)
+  value)
 ;;   name
 ;;   signature
 ;;   generic-signature
@@ -148,6 +147,20 @@
 (defconst jdi-access-transient     #x0080)
 (defconst jdi-access-native        #x0100)
 (defconst jdi-access-abstract      #x0400)
+
+(defun jdi-field-or-variable-name (field-or-variable)
+  (cond ((jdi-field-p field-or-variable)
+		 (jdi-field-name field-or-variable))
+		((jdi-variable-p field-or-variable)
+		 (jdi-variable-name field-or-variable))
+		(t (error "not a field nor variable"))))
+
+(defun jdi-field-or-variable-signature (field-or-variable)
+  (cond ((jdi-field-p field-or-variable)
+		 (jdi-field-signature field-or-variable))
+		((jdi-variable-p field-or-variable)
+		 (jdi-variable-signature field-or-variable))
+		(t (error "not a field nor variable"))))
 
 (defun jdi-mirror-jdwp (mirror)
   (jdi-virtual-machine-jdwp (jdi-mirror-virtual-machine mirror)))
@@ -630,38 +643,6 @@
 											   :slot slot2)))
 		(cont-values (jdi-method-variables method))))))
 
-(defun jdi-method-get-values (method)
-  (jdi-debug "jdi-method-get-values:%s" (jdi-method-name method))
-  (if (jdi-method-values method)
-	  (cont-values t)
-
-	(lexical-let ((method method))
-	  (cont-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp method)
-														  "variable-table"
-														  `((:ref-type . ,(jdi-class-id (jdi-method-class method)))
-															(:method-id . ,(jdi-method-id method))))
-		(jdi-trace "variable-table arg-count:%s slots:%s" (bindat-get-field reply :arg-cnt) (bindat-get-field reply :slots))
-
-		(setf (jdi-method-values method)
-			  (loop for slot in (bindat-get-field reply :slot)
-					for code-index = (jdwp-get-int slot :code-index)
-					for line-code-length = (bindat-get-field slot :length)
-					do (jdi-trace "slot:%s code-index:%s length:%s name:%s signature:%s generic-signature:%s" 
-								  (bindat-get-field slot :slot) 
-								  code-index
-								  line-code-length
-								  (jdwp-get-string slot :name) 
-								  (jdwp-get-string slot :signature)
-								  (jdwp-get-string slot :generic-signature))
-					collect (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine method)
-											:slot (bindat-get-field slot :slot)
-											:code-index code-index
-											:code-index-length line-code-length
-											:name (jdwp-get-string slot :name)
-											:signature (jdwp-get-string slot :signature)
-											:generic-signature (jdwp-get-string slot :generic-signature))))
-		(cont-values t)))))
-
 (defun jdi-frame-get-visible-variables (frame)
   (jdi-debug "jdi-frame-get-visible-variables")
   ;; we don't cache the variables as the location within the same frame might change
@@ -694,54 +675,8 @@
 		(cont-values (loop for variable in variables
 						   for value in (bindat-get-field reply :value)
 						   collect (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine frame)
-												   :variable variable
 												   :type (bindat-get-field value :slot-value :type)
 												   :value (bindat-get-field value :slot-value :u :value))))))))
-
-(defun jdi-frame-get-locals (frame location)
-  "[ASYNC] returns a list of jdi-value that is visible in the current frame current location"
-  (lexical-let* ((frame frame)
-				 (location location)
-				 (current-frame-line-code (jdwp-vec-to-int (jdi-location-line-code-index location))))
-	(jdi-debug "jdi-frame-get-locals: frame-id=%s" (jdi-frame-id frame))
-	(jdi-time-start)
-	(cont-bind (result) (jdi-method-get-values (jdi-location-method location))
-	  (jdi-time-end "jdi-method-get-values")
-	  (jdi-debug "typeof frame=%s" (type-of frame))
-	  (setf (jdi-frame-values frame)
-			(loop for method-value in (jdi-method-values (jdi-location-method location))
-				  if (and (>= current-frame-line-code (jdi-value-code-index method-value))
-						  (<  current-frame-line-code (+ (jdi-value-code-index method-value) (jdi-value-code-index-length method-value))))
-				  collect method-value))
-
-	  (loop for value in (jdi-frame-values frame)
-			do (jdi-debug "valid-slot:%s" (jdi-value-name value)))
-
-	  (lexical-let ((thread-id (jdi-thread-id (jdi-frame-thread frame)))
-					(frame-id (jdi-frame-id frame)))
-		(let ((data `((:thread . ,thread-id)
-					  (:frame  . ,frame-id)
-					  (:slots  . ,(length (jdi-frame-values frame)))
-					  ,(nconc (list :slot)
-							  (mapcar (lambda (value) 
-										`((:slot . ,(jdi-value-slot value))
-										  (:sigbyte . ,(jdi-value-sigbyte value))))
-									  (jdi-frame-values frame))))))
-		  (cont-bind (reply error jdwp id) (jdwp-send-command 
-											(jdi-mirror-jdwp frame) 
-											"stack-get-values" 
-											data)
-			(loop for value-struct in (jdi-frame-values frame)
-				  for value-reply  in (bindat-get-field reply :value)
-				  do
-				  (setf (jdi-value-type value-struct) (bindat-get-field value-reply :slot-value :type))
-				  (setf (jdi-value-value value-struct) (bindat-get-field value-reply :slot-value :u :value))
-				  (jdi-debug "jdi-frame-get-locals:setting value:%s to type %s" (jdi-value-name value-struct) (jdi-value-type value-struct)))
-			(jdi-time-start)
-			(cont-bind () (jdi-values-get-class-and-super-and-interfaces (jdi-frame-values frame))
-			  (cont-wait (mapc 'jdi-value-get-string (jdi-frame-values frame))
-				(jdi-time-end "mapc jdi-value-get-string")
-				(cont-values (jdi-frame-values frame))))))))))
 
 (defun jdi-value-object-p (value)
   (equal (jdi-value-type value) jdwp-tag-object))
@@ -763,14 +698,6 @@
 														if (jdi-value-class value)
 														append (jdi-class-all-super (jdi-value-class value))))
 		  (cont-values))))))
-
-(defun jdi-values-get-string (values)
-  (jdi-debug "jdi-values-get-string %s values" (length values))
-  (lexical-let ((values values))
-	(if (null values)
-		(cont-values t)
-	  (cont-bind (result) (jdi-value-get-string (car values))
-		(jdi-values-get-string (cdr values))))))
 
 (defun jdi-class-name (class-or-signature)
   (jdi-debug "jdi-class-name")
@@ -828,7 +755,7 @@
 
 (defun jdi-value-get-class (value)
   "populate the jdi-value-class field"
-  (jdi-debug "jdi-value-get-class:variable-name=%s type=%s" (jdi-variable-name (jdi-value-variable value)) (jdi-value-type value))
+  (jdi-debug "jdi-value-get-class:type=%s value=%s" (jdi-value-type value) (jdi-value-value value))
   (if (equal (jdi-value-value value) [0 0 0 0 0 0 0 0])
 	  (cont-values nil)
 
@@ -862,7 +789,7 @@
 	  (prin1 str))))
 
 (defun jdi-value-has-children-p (value)
-  (jdi-debug "jdi-value-has-children-p:variable-name:%s" (jdi-variable-name (jdi-value-variable value)))
+  (jdi-debug "jdi-value-has-children-p")
   (and (not (equal (jdi-value-value value)
 				   [0 0 0 0 0 0 0 0]))
 	   (or (equal (jdi-value-type value) jdwp-tag-object)
@@ -894,75 +821,60 @@
 
 (defun jdi-class-get-all-fields (class)
   (jdi-debug "jdi-class-get-all-fields")
-  (cont-bind (supers) (jdi-class-get-all-super class)
-	(cont-mapcar 'jdi-class-get-fields supers)))
+  (lexical-let ((class class))
+	(cont-bind (supers) (jdi-class-get-all-super class)
+	  (cont-mappend 'jdi-class-get-fields (cons class supers)))))
 
-(defun jdi-value-get-nonstatic-values (value)
-  (jdi-debug "jdi-value-get-nonstatic-values")
+(defun jdi-value-get-all-fields (value)
+  (cont-bind (class) (jdi-value-get-class value)
+	(lexical-let ((class class))
+	  (cont-bind (supers) (jdi-class-get-all-super class)
+		(cont-mappend 'jdi-class-get-fields (cons class supers))))))
+
+(defun jdi-value-get-values (value fields)
+  "Gets the value of multiple instance and/or static fields in this object. 
+The Fields must be valid for this ObjectReference; that is, they must be from the mirrored object's class or a superclass of that class."
+
+  (jdi-debug "jdi-value-get-values")
   (lexical-let* ((value value)
-				 (class (jdi-value-class value))
-				 (fields (loop for field in (jdi-class-all-fields class)
-							   if (not (jdi-field-static-p field)) collect field))
-				 (values (mapcar (lambda (field) (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
-																 :name (jdi-field-name field)
-																 :signature (jdi-field-signature field)
-																 :generic-signature (jdi-field-generic-signature field)))
-						 fields)))
-	(jdi-debug "number of nonstatic fields:%s" (length fields))
-	(if (= (length fields) 0)
-		(cont-values t)
-
-	  (cont-bind (reply error jdwp id)
-		(jdwp-send-command (jdi-mirror-jdwp value) "object-get-values"
-						   `((:object . ,(jdi-value-value value))
-							 (:fields . ,(length fields))
-							 ,(nconc (list :field)
-									 (mapcar (lambda (field)
-											   `((:id . ,(jdi-field-id field))))
-											 fields))))
-
-		(loop for jdi-value in values
-			  for value in (bindat-get-field reply :value)
-			  do
-			  (setf (jdi-value-type jdi-value) (bindat-get-field value :value :type))
-			  (setf (jdi-value-value jdi-value) (bindat-get-field value :value :u :value)))
-		(jdi-debug "adding %s values to existing %s" (length values) (length (jdi-value-values value)))
-		(setf (jdi-value-values value) (append (jdi-value-values value) values))
-		(cont-bind () (jdi-values-get-class-and-super-and-interfaces (jdi-value-values value))
-		  (cont-values t))))))
-
-(defun jdi-value-get-static-values (value)
-  "Populate the values for the static fields in jdi-value"
-  (jdi-debug "jdi-value-get-static-values")
-  (lexical-let* ((value value)
-				 (class (jdi-value-class value))
-				 (fields (loop for field in (jdi-class-all-fields class)
-							   if (jdi-field-static-p field) collect field))
-				 (values (mapcar (lambda (field) (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
-																 :name (jdi-field-name field)
-																 :signature (jdi-field-signature field)
-																 :generic-signature (jdi-field-generic-signature field)))
-								 fields)))
-	(jdi-debug "number of static fields:%s" (length fields))
-	(if (= (length fields) 0)
-		(cont-values t)
-
-	  (cont-bind (reply error jdwp id)
-		(jdwp-send-command (jdi-mirror-jdwp value) "reference-get-values"
-						   `((:ref-type . ,(jdi-class-id (jdi-value-class value)))
-							 (:fields . ,(length fields))
-							 ,(nconc (list :field)
-									 (mapcar (lambda (field)
-											   `((:id . ,(jdi-field-id field))))
-											 fields))))
-		(loop for jdi-value in values
-			  for value in (bindat-get-field reply :value)
-			  do
-			  (setf (jdi-value-type jdi-value) (bindat-get-field value :value :type))
-			  (setf (jdi-value-value jdi-value) (bindat-get-field value :value :u :value)))
-		(setf (jdi-value-values value) (append (jdi-value-values value) values))
-		(cont-bind () (jdi-values-get-class-and-super-and-interfaces (jdi-value-values value))
-		  (cont-values t))))))
+				 (fields fields)
+				 (static-fields (loop for field in fields
+									  if (jdi-field-static-p field) collect field))
+				 (nonstatic-fields (loop for field in fields
+										 unless (jdi-field-static-p field) collect field))
+				 (values))
+	(cont-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp value) "object-get-values"
+														`((:object . ,(jdi-value-value value))
+														  (:fields . ,(length nonstatic-fields))
+														  ,(nconc (list :field)
+																  (mapcar (lambda (field)
+																			`((:id . ,(jdi-field-id field))))
+																		  nonstatic-fields))))
+	  (loop for field in nonstatic-fields
+			for value2 in (bindat-get-field reply :value)
+			do (push (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
+									 :type (bindat-get-field value2 :value :type)
+									 :value (bindat-get-field value2 :value :u :value))
+					 values)
+			do (jdi-debug "jdi-value-get-values: nonstatic type=%s value=%s" (bindat-get-field value2 :value :type)
+						  (bindat-get-field value2 :value :u :type)))
+	  (cont-bind (class) (jdi-value-get-class value)
+		(cont-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp value) "reference-get-values"
+															`((:ref-type . ,(jdi-class-id class))
+															  (:fields . ,(length static-fields))
+															  ,(nconc (list :field)
+																	  (mapcar (lambda (field)
+																				`((:id . ,(jdi-field-id field))))
+																			  static-fields))))
+		  (loop for field in static-fields
+				for value2 in (bindat-get-field reply :value)
+				do (push (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
+										 :type (bindat-get-field value2 :value :type)
+										 :value (bindat-get-field value2 :value :u :value))
+						 values)
+				do (jdi-debug "jdi-value-get-values: static type=%s value=%s" (bindat-get-field value2 :value :type)
+							  (bindat-get-field value2 :value :u :type)))
+		  (cont-values values))))))
 
 (defun jdi-class-all-super (class)
   "Returns all the classes in this class's hierarchy, including this class itself"
@@ -1116,11 +1028,11 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 	(if (jdi-class-fields class)
 		(cont-values (jdi-class-fields class))
 
-	  (jdi-debug "jdi-class-resolve-fields for %s" (jdi-class-name class))
+	  (jdi-debug "jdi-class-get-fields")
 	  (cont-bind (reply error jdwp id)
 		(jdwp-send-command (jdi-mirror-jdwp class) "fields" `((:ref-type . ,(jdi-class-id class))))
 
-		(jdi-trace "%s's fields:%s" (jdi-class-name class) (bindat-get-field reply :declared))
+		(jdi-trace "jdi-class-get-fields: %s's fields:%s" (jdi-class-id class) (bindat-get-field reply :declared))
 		(dolist (field (bindat-get-field reply :field))
 		  (let ((new-field (make-jdi-field :virtual-machine (jdi-mirror-virtual-machine class)
 										   :id (bindat-get-field field :id)
@@ -1128,7 +1040,7 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 										   :signature (jdwp-get-string field :signature)
 										   :generic-signature (jdwp-get-string field :generic-signature)
 										   :mod-bits (bindat-get-field field :mod-bits))))
-			(jdi-trace "id:%s name:%s signature:%s generic-signature:%s modbits:%s" 
+			(jdi-trace "jdi-class-get-fields: id:%s name:%s signature:%s generic-signature:%s modbits:%s" 
 					   (bindat-get-field field :id) 
 					   (jdwp-get-string field :name) 
 					   (jdwp-get-string field :signature)
@@ -1136,24 +1048,6 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 					   (jdi-field-mod-bits-string new-field))
 			(push new-field (jdi-class-fields class))))
 		(cont-values (jdi-class-fields class))))))
-
-(defun jdi-value-object-get-values (value)
-  (jdi-debug "jdi-value-object-get-values")
-  (lexical-let ((value value))
-	(cont-wait (mapc 'jdi-class-get-fields (jdi-class-all-super (jdi-value-class value)))
-
-	  (let ((expander-func (jdi-value-custom-expanders-find value)))
-		(if expander-func
-			(cont-bind (result) (funcall expander-func value)
-			  (cont-wait (mapc 'jdi-value-get-string (jdi-value-values value))
-				(cont-values)))
-
-		  (setf (jdi-value-values value) nil)
-		  (cont-bind (result) (jdi-value-get-static-values value)
-			(cont-bind (result) (jdi-value-get-nonstatic-values value)
-			  (jdi-debug "done jdi-value-object-get-values")
-			  (cont-wait (mapc 'jdi-value-get-string (jdi-value-values value))
-				(cont-values)))))))))
 
 (defun jdi-value-array-get-values (value)
   (jdi-debug "jdi-value-get-array-values:value=%s" (jdi-value-value value))
@@ -1175,13 +1069,13 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 					(loop for value-reply in (bindat-get-field array :value)
 						  for i from 0 to (- (jdi-value-array-length value) 1)
 						  collect (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
-												  :name (format "%s[%s]" (jdi-value-name value) i)
+												  ;:name (format "%s[%s]" (jdi-value-name value) i)
 												  :type (bindat-get-field value-reply :value :type)
 												  :value (bindat-get-field value-reply :value :u :value)))
 				  (loop for value-reply in (bindat-get-field array :value)
 						for i from 0 to (- (jdi-value-array-length value) 1)
 						collect (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
-												:name (format "%s[%s]" (jdi-value-name value) i)
+												;:name (format "%s[%s]" (jdi-value-name value) i)
 												:type (bindat-get-field array :type)
 												:value (bindat-get-field value-reply :value)))))
 		  (jdi-values-get-string (jdi-value-values value)))))))
@@ -1204,11 +1098,8 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 											  :class class
 											  :method method
 											  :line-code-index line-code-index))
-				 (thread (find-if (lambda (obj)
-									(equal (jdi-thread-id obj)
-										   thread-id))
-								  (jdi-virtual-machine-threads vm)))
-
+				 (thread (make-jdi-thread :virtual-machine vm
+										  :id thread-id))
 				 (frame (make-jdi-frame :virtual-machine vm
 										:thread thread
 										:location location)))
