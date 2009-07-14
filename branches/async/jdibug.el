@@ -1313,7 +1313,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 						   (funcall setter2 field-or-variable value))
 						  (t
 						   (cont-bind (signature) (jdi-class-get-signature class)
-							 (cont-values (format "%s {id=%s}" 
+							 (cont-values (format "%s (id=%s)" 
 												  (jdi-class-name (jdi-field-or-variable-signature field-or-variable))
 												  (jdwp-vec-to-int (jdi-value-value value)))))))))))))))))
 
