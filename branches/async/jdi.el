@@ -842,7 +842,7 @@ The Fields must be valid for this ObjectReference; that is, they must be from th
 									  if (jdi-field-static-p field) collect field))
 				 (nonstatic-fields (loop for field in fields
 										 unless (jdi-field-static-p field) collect field))
-				 (values))
+				 (results (make-hash-table)))
 	(cont-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp value) "object-get-values"
 														`((:object . ,(jdi-value-value value))
 														  (:fields . ,(length nonstatic-fields))
@@ -852,10 +852,10 @@ The Fields must be valid for this ObjectReference; that is, they must be from th
 																		  nonstatic-fields))))
 	  (loop for field in nonstatic-fields
 			for value2 in (bindat-get-field reply :value)
-			do (push (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
-									 :type (bindat-get-field value2 :value :type)
-									 :value (bindat-get-field value2 :value :u :value))
-					 values)
+			do (puthash field (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
+											  :type (bindat-get-field value2 :value :type)
+											  :value (bindat-get-field value2 :value :u :value))
+						results)
 			do (jdi-debug "jdi-value-get-values: nonstatic type=%s value=%s" (bindat-get-field value2 :value :type)
 						  (bindat-get-field value2 :value :u :type)))
 	  (cont-bind (class) (jdi-value-get-class value)
@@ -868,13 +868,14 @@ The Fields must be valid for this ObjectReference; that is, they must be from th
 																			  static-fields))))
 		  (loop for field in static-fields
 				for value2 in (bindat-get-field reply :value)
-				do (push (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
-										 :type (bindat-get-field value2 :value :type)
-										 :value (bindat-get-field value2 :value :u :value))
-						 values)
+				do (puthash field (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
+												  :type (bindat-get-field value2 :value :type)
+												  :value (bindat-get-field value2 :value :u :value))
+							results)
 				do (jdi-debug "jdi-value-get-values: static type=%s value=%s" (bindat-get-field value2 :value :type)
 							  (bindat-get-field value2 :value :u :type)))
-		  (cont-values values))))))
+		  (cont-values (loop for field in fields
+							 collect (gethash field results))))))))
 
 (defun jdi-class-all-super (class)
   "Returns all the classes in this class's hierarchy, including this class itself"
