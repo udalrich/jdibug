@@ -798,6 +798,9 @@
 (defun jdi-field-static-p (field)
   (not (equal (logand (jdi-field-mod-bits field) jdi-access-static) 0)))
 
+(defun jdi-field-final-p (field)
+  (not (equal (logand (jdi-field-mod-bits field) jdi-access-final) 0)))
+
 (defun jdi-remove-duplicated (fields)
   "Return a list of jdi-fields, without duplicated names, the first field is kept."
   (let (names filtered)

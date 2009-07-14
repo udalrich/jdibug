@@ -585,7 +585,8 @@ And position the point at the line number."
 				 (variables (widget-get tree :jdi-variables))
 				 (alist (loop for variable in variables
 							  for value in values
-							  collect `(,variable . ,value))))
+							  collect `(,variable . ,value))
+						(lambda (o1 o2))))
 	(let ((cont-current-proc-id (jdibug-refresh-proc jdibug-this)))
 	  (cont-bind (strings) (cont-mapcar (lambda (item)
 										  (jdibug-value-get-string (car item) (cdr item)))
@@ -595,7 +596,7 @@ And position the point at the line number."
 									 (loop for variable in variables
 										   for value in values
 										   for string in strings
-										   collect (jdibug-make-tree-from-value value (jdi-variable-name variable) string))))))
+										   collect (jdibug-make-tree-from-variable-value variable value string))))))
   (list 
    `(item 
 	 :value "loading...")))
@@ -649,7 +650,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		   (let ((cont-current-proc-id (jdibug-refresh-proc jdibug-this)))
 			 (cont-bind (class) (jdi-value-get-class value)
 			   (cont-bind (fields) (jdi-class-get-all-fields class)
-				 (lexical-let ((fields fields))
+				 (lexical-let ((fields (sort fields 'jdibug-field-sorter)))
 				   (cont-bind (values) (jdi-value-get-values value fields)
 					 (lexical-let ((values values))
 					   (cont-bind (strings) (cont-mapcar (lambda (item)
@@ -663,7 +664,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 													  tree (append (loop for v in values
 																		 for f in fields
 																		 for s in strings
-																		 collect (jdibug-make-tree-from-value v (jdi-field-name f) s))
+																		 collect (jdibug-make-tree-from-field-value f v s))
 																   (list (jdibug-make-methods-node value))))))))))))
 		  ((= (jdi-value-type value) jdwp-tag-array)
 		   (let ((cont-current-proc-id (jdibug-refresh-proc jdibug-this)))
@@ -677,11 +678,34 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
    `(item 
 	 :value "loading...")))
 
-(defun jdibug-make-tree-from-value (value name string)
+(defun jdibug-make-tree-from-field-value (field value string)
+  (let ((display (format "%s%s: %s" 
+						 (if (or (jdi-field-static-p field) (jdi-field-final-p field))
+							 (format "(%s%s) " 
+									 (if (jdi-field-static-p field) "S" "")
+									 (if (jdi-field-final-p field) "F" ""))
+						   "")
+						 (jdi-field-name field)
+						 string)))
+	(if (jdi-value-has-children-p value)
+		`(tree-widget
+		  :node (push-button
+				 :tag ,display
+				 :format "%[%t%]\n")
+		  :open nil
+		  :args nil
+		  :jdi-value ,value
+		  :expander jdibug-value-expander
+		  :dynargs jdibug-value-expander)
+	  `(item 
+		:value 
+		,display))))
+
+(defun jdibug-make-tree-from-variable-value (variable value string)
   (if (jdi-value-has-children-p value)
       `(tree-widget
 		:node (push-button
-			   :tag ,(format "%s: %s" name string)
+			   :tag ,(format "%s: %s" (jdi-variable-name variable) string)
 			   :format "%[%t%]\n")
 		:open nil
 		:args nil
@@ -690,7 +714,15 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		:dynargs jdibug-value-expander)
     `(item 
       :value 
-      ,(format "%s: %s" name string))))
+      ,(format "%s: %s" (jdi-variable-name variable) string))))
+
+(defun jdibug-variable-sorter (o1 o2)
+  (string< (jdi-variable-name o1) (jdi-variable-name o2)))
+
+(defun jdibug-field-sorter (o1 o2)
+  (if (= (jdi-field-mod-bits o1) (jdi-field-mod-bits o2))
+	  (string< (jdi-field-name o1) (jdi-field-name o2))
+	(> (jdi-field-mod-bits o1) (jdi-field-mod-bits o2))))
 
 (defun jdibug-refresh-locals-buffer-now ()
   (condition-case err
@@ -712,7 +744,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 
 			(jdibug-time-start)
 			(cont-bind (variables) (jdi-frame-get-visible-variables frame)
-			  (lexical-let ((variables variables))
+			  (lexical-let ((variables (sort variables 'jdibug-variable-sorter)))
 				(jdibug-debug "jdi-frame-get-visible-variables returned %s variables" (length variables))
 				(cont-bind (values) (jdi-frame-get-values frame variables)
 				  (with-current-buffer (jdibug-locals-buffer jdibug-this)
