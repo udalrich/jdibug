@@ -644,7 +644,6 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (jdibug-trace "jdibug-expand-value-node")
   (lexical-let* ((tree tree)
 				 (value (widget-get tree :jdi-value)))
-	(jdibug-trace "Expanding value:%s" (jdi-value-name value))
 	(jdibug-time-start)
 	(cond ((= (jdi-value-type value) jdwp-tag-object)
 		   (let ((cont-current-proc-id (jdibug-refresh-proc jdibug-this)))
