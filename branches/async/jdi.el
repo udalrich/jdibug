@@ -13,7 +13,7 @@
   (event-request-manager (make-jdi-event-request-manager))
   host 
   port
-  classes ;; hash table where key=class-id value=jdi-class
+  (classes (make-hash-table :test 'equal)) ;; hash table where key=class-id value=jdi-class
   classes-by-signature ;; hash table where key=signature value=jdi-class
 
   threads
@@ -241,31 +241,6 @@
 			(cont-bind () (jdi-virtual-machine-set-standard-events vm)
 			  (cont-values t))))))))
 
-;; 			  (cont-bind () (jdi-virtual-machine-get-threads vm)
-;; 				(cont-values t)))))))))
-
-;; 			  (cont-bind (reply error jdwp id) (jdwp-send-command jdwp "all-classes" nil)
-;; 				(jdi-debug "number of classes loaded:%s" (bindat-get-field reply :classes))
-;; 				(setf (jdi-virtual-machine-classes vm) (make-hash-table :test 'equal))
-;; 				(setf (jdi-virtual-machine-classes-by-signature vm) (make-hash-table :test 'equal))
-;; 				(loop for class in       (bindat-get-field reply :class)
-;; 					  for type-id      = (bindat-get-field class :type-id)
-;; 					  for signature    = (jdwp-get-string class :signature)
-;; 					  for ref-type-tag = (bindat-get-field class :ref-type-tag)
-;; 					  for status       = (bindat-get-field class :status)
-;; 					  for newclass     = (make-jdi-class 
-;; 										  :virtual-machine vm
-;; 										  :id type-id	
-;; 										  :signature signature
-;; 										  :ref-type-tag ref-type-tag
-;; 										  :status status)
-;; 					  do
-;; 					  (jdi-trace "signature:%s id:%s" signature type-id)
-;; 					  (puthash type-id newclass (jdi-virtual-machine-classes vm))
-;; 					  (puthash signature (cons newclass (gethash signature (jdi-virtual-machine-classes-by-signature vm)))
-;; 							   (jdi-virtual-machine-classes-by-signature vm)))
-;; 				(cont-values t)))))))))
-
 (defun jdi-virtual-machine-get-threads (vm)
   (jdi-debug "jdi-virtual-machine-get-threads")
 ;;   (if (jdi-virtual-machine-threads vm)
@@ -305,9 +280,7 @@
 						 for type-id      =  (bindat-get-field class :type-id)
 						 for ref-type-tag =  (bindat-get-field class :ref-type-tag)
 						 for status       =  (bindat-get-field class :status)
-						 for newclass     =  (make-jdi-class 
-											  :virtual-machine vm
-											  :id type-id	
+						 for newclass     =  (jdi-virtual-machine-get-class-create vm type-id	
 											  :signature signature
 											  :ref-type-tag ref-type-tag
 											  :status status)
@@ -332,6 +305,22 @@
   (jdi-debug "jdi-virtual-machine-suspended-threads")
   (loop for frame in (jdi-virtual-machine-suspended-frames vm)
 		collect (jdi-frame-thread frame)))
+
+(defun* jdi-virtual-machine-get-class-create (vm id &key signature ref-type-tag status)
+  (let ((found (gethash id (jdi-virtual-machine-classes vm))))
+	(jdi-debug "jdi-virtual-machine-get-class-create id=%s: %s" id (if found "found" "not found"))
+	(if found
+		(progn 
+		  (if signature (setf (jdi-class-signature found) signature))
+		  (if ref-type-tag (setf (jdi-class-ref-type-tag found) ref-type-tag))
+		  (if status (setf (jdi-class-status found)) status))
+	  (puthash id (setq found (make-jdi-class :virtual-machine vm
+											  :id id
+											  :signature signature
+											  :ref-type-tag ref-type-tag
+											  :status status))
+			   (jdi-virtual-machine-classes vm)))
+	found))
 
 (defun jdi-thread-get-name (thread)
   (jdi-debug "jdi-thread-get-name")
@@ -513,21 +502,6 @@
 		location
 	  (jdi-error "failed to look line-code-index %s in class %s" line-code-index (jdi-class-name class)))))
 
-(defun jdi-location-get-class-and-method-and-line-number (location)
-  (jdi-debug "jdi-location-get-class-and-method-and-line-number")
-  (setf (jdi-location-class location) 
-		(gethash (jdi-class-id (jdi-location-class location)) (jdi-virtual-machine-classes (jdi-mirror-virtual-machine location))))
-  (when (jdi-location-class location)
-	(let ((stored-loc (jdi-class-find-location (jdi-location-class location)
-											   (jdi-method-id (jdi-location-method location))
-											   (jdi-location-line-code-index location))))
-	  (jdi-debug "after jdi-class-find-location")
-	  (if stored-loc
-		  (setf (jdi-location-method location)
-				(jdi-location-method stored-loc)
-				(jdi-location-line-number location)
-				(jdi-location-line-number stored-loc))))))
-
 (defun jdi-location-get-line-number (location)
   (jdi-debug "jdi-location-get-line-number:wanted-line-code-index=%s" (jdi-location-line-code-index location))
   (lexical-let ((location location))
@@ -567,8 +541,7 @@
 					  for type            = (bindat-get-field frame :location :type)
 					  for line-code-index = (bindat-get-field frame :location :index)
 
-					  for class           = (make-jdi-class :virtual-machine (jdi-mirror-virtual-machine thread) 
-															:id class-id)
+					  for class           = (jdi-virtual-machine-get-class-create (jdi-mirror-virtual-machine thread) class-id)
 					  for method          = (make-jdi-method :virtual-machine (jdi-mirror-virtual-machine thread)
 															 :id method-id
 															 :class class)
@@ -688,17 +661,6 @@
 	  (cont-bind () (jdi-methods-get-locations (apply 'append (mapcar 'jdi-class-methods classes)))
 		(cont-values)))))
 
-(defun jdi-values-get-class-and-super-and-interfaces (values)
-  (lexical-let ((values values))
-	(cont-bind () (jdi-values-get-class (remove-if-not 'jdi-value-object-p values))
-	  (cont-bind () (jdi-classes-get-super-r (loop for value in values
-												   if (jdi-value-class value)
-												   collect (jdi-value-class value)))
-		(cont-bind () (jdi-classes-get-interfaces (loop for value in values
-														if (jdi-value-class value)
-														append (jdi-class-all-super (jdi-value-class value))))
-		  (cont-values))))))
-
 (defun jdi-class-name (class-or-signature)
   (jdi-debug "jdi-class-name")
   (if (null class-or-signature)
@@ -733,25 +695,10 @@
 		 (cont-values)))))
 
 (jdi-multiple-get-defun jdi-values-get-class       jdi-value-value jdi-value-get-class      jdi-value-class)
-(jdi-multiple-get-defun jdi-classes-get-super      jdi-class-id    jdi-class-get-super      jdi-class-super)
 (jdi-multiple-get-defun jdi-classes-get-interfaces jdi-class-id    jdi-class-get-interfaces jdi-class-interfaces)
 
 (jdi-multiple-get-defun jdi-classes-get-methods   jdi-class-id  jdi-class-get-methods    jdi-class-methods)
 (jdi-multiple-get-defun jdi-methods-get-locations jdi-method-id jdi-method-get-locations jdi-method-locations)
-
-(defun jdi-classes-get-super-r (classes)
-  "recursive"
-  (jdi-debug "jdi-classes-get-super-r")
-  (if (null classes)
-	  (cont-values)
-	(mapc (lambda (class)
-			(jdi-debug "class-signature:%s" (jdi-class-signature class)))
-		  classes)
-	(lexical-let ((classes classes))
-	  (cont-wait (jdi-classes-get-super classes)
-		(jdi-classes-get-super-r (loop for class in classes
-									   if (jdi-class-super class)
-									   collect (jdi-class-super class)))))))
 
 (defun jdi-value-get-class (value)
   "populate the jdi-value-class field"
@@ -764,8 +711,7 @@
 														  "reference-type" 
 														  `((:object . ,(jdi-value-value value))))
 		(jdi-debug "jdi-value-get-class:type-id=%s" (bindat-get-field reply :type-id))
-		(cont-values (make-jdi-class :virtual-machine (jdi-mirror-virtual-machine value)
-									 :id (bindat-get-field reply :type-id)))))))
+		(cont-values (jdi-virtual-machine-get-class-create (jdi-mirror-virtual-machine value) (bindat-get-field reply :type-id)))))))
 
 (defun jdi-value-array-display-string (value size)
   "for array of three dimension, return i[2][][]."
@@ -811,17 +757,6 @@
 		  fields)
 	filtered))
 	
-(defun jdi-class-all-fields (class)
-  "Return a list of jdi-fields including those of parents."
-  (let ((all-fields (append (jdi-class-fields class)
-							(if (jdi-class-super class)
-								(jdi-class-all-fields (jdi-class-super class))))))
-	;; since the children's field always comes first in the list, we can just remove the later duplicated ones
-	(setf all-fields (jdi-remove-duplicated all-fields))
-	(jdi-debug "jdi-class-all-fields:%s" (mapcar 'jdi-field-name all-fields))
-    (sort all-fields (lambda (a b)
-					   (string< (jdi-field-name a) (jdi-field-name b))))))
-
 (defun jdi-class-get-all-fields (class)
   (jdi-debug "jdi-class-get-all-fields")
   (lexical-let ((class class))
@@ -880,11 +815,6 @@ The Fields must be valid for this ObjectReference; that is, they must be from th
 		  (cont-values (loop for field in fields
 							 collect (gethash field results))))))))
 
-(defun jdi-class-all-super (class)
-  "Returns all the classes in this class's hierarchy, including this class itself"
-  (unless (null class)
-	(cons class (jdi-class-all-super (jdi-class-super class)))))
-
 (defun jdi-class-get-all-super (class &optional supers)
   (jdi-debug "jdi-class-get-all-super")
   (if (null class) 
@@ -899,9 +829,10 @@ The Fields must be valid for this ObjectReference; that is, they must be from th
 (defun jdi-class-get-super (class)
   "populate the jdi-class-super of this class"
   (jdi-debug "jdi-class-get-super:id=%s" (jdi-class-id class))
-  (if (or (jdi-class-super class)
-		  (string= (jdi-class-signature class) "Ljava/lang/Object;"))
-	  (cont-values (jdi-class-super class))
+  (if (jdi-class-super class)
+	  (if (equal (jdi-class-super class) t)
+		  (cont-values nil)
+		(cont-values (jdi-class-super class)))
 	(lexical-let ((class class))
 	  (cont-bind (reply error jdwp id) (jdwp-send-command 
 										(jdi-mirror-jdwp class) 
@@ -909,9 +840,10 @@ The Fields must be valid for this ObjectReference; that is, they must be from th
 										`((:class . ,(jdi-class-id class))))
 		(if (equal (bindat-get-field reply :superclass)
 				   [0 0 0 0 0 0 0 0])
-			(cont-values nil)
-		  (setf (jdi-class-super class) (make-jdi-class :virtual-machine (jdi-mirror-virtual-machine class)
-														:id (bindat-get-field reply :superclass)))
+			(progn 
+			  (setf (jdi-class-super class) t)
+			  (cont-values nil))
+		  (setf (jdi-class-super class) (jdi-virtual-machine-get-class-create (jdi-mirror-virtual-machine class) (bindat-get-field reply :superclass)))
 		  (cont-values (jdi-class-super class)))))))
 
 (defun jdi-method-invoke (method)
@@ -938,8 +870,7 @@ Only the interfaces that are declared with the 'implements' keyword in this clas
 														  `((:ref-type . ,(jdi-class-id class))))
 		(setf (jdi-class-interfaces class)
 			  (loop for interface in (bindat-get-field reply :interface)
-					collect (make-jdi-class :virtual-machine (jdi-mirror-virtual-machine class)
-											:id (bindat-get-field interface :type))))
+					collect (jdi-virtual-machine-get-class-create (jdi-mirror-virtual-machine class) (bindat-get-field interface :type))))
 		(setf (jdi-class-interfaces-count class) (bindat-get-field reply :interfaces))
 		(cont-values (jdi-class-interfaces class))))))
 
@@ -960,50 +891,6 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 				  (interfaces interfaces))
 	  (cont-bind (interfaces2) (cont-mappend 'jdi-class-get-interfaces classes)
 		(jdi-class-get-all-interfaces-2 interfaces2 (append interfaces2 interfaces))))))
-
-;; (defun jdi-class-get-parent (class)
-;;   "Get the whole parent hierarchy of this class, stop only after reaching the Object class."
-;;   (jdi-debug "jdi-class-get-parent:name=%s" (jdi-class-name class))
-;;   (lexical-let ((class class))
-;; 	(cont-wait (progn
-;; 				 (jdi-class-get-super class)
-;; 				 (jdi-class-get-interfaces class))
-;; 	  (if (jdi-class-super class)
-;; 		  (jdi-class-get-parent (jdi-class-super class))
-;; 		(cont-values)))))
-								
-;; 	(cont-bind () (jdi-class-get-super class)
-;; 	  (cont-bind () (jdi-class-get-interfaces class)
-;; 	(if (jdi-class-super class)
-;; 		(cont-values)
-
-;; 	  (jdi-debug "jdi-class-get-parent for %s:%s" (jdi-class-signature class) (jdi-class-id class))
-
-;; 	  ;; NOTE: this do not resolve the super-interfaces, TODO
-;; 	  (cont-bind (reply error jdwp id)
-;; 		(jdwp-send-command (jdi-mirror-jdwp class) "interfaces" `((:ref-type . ,(jdi-class-id class))))
-;; 		(setf (jdi-class-interfaces class)
-;; 			  (loop for interface in (bindat-get-field reply :interface)
-;; 					collect (gethash (bindat-get-field interface :type) (jdi-virtual-machine-classes (jdi-mirror-virtual-machine class)))))
-;; 		(if jdi-debug-flag
-;; 			(loop for interface in (jdi-class-interfaces class)
-;; 				  do (jdi-debug "class:%s interface:%s"
-;; 							   (jdi-class-name class)
-;; 							   (jdi-class-name interface))))
-
-;; 		(cont-bind (reply error jdwp id)
-;; 		  (jdwp-send-command (jdi-mirror-jdwp class) "superclass" `((:class . ,(jdi-class-id class))))
-
-;; 		  (if (equal (bindat-get-field reply :superclass)
-;; 					 [0 0 0 0 0 0 0 0])
-;; 			  (cont-values)
-
-;; 			(let ((superclass (gethash (bindat-get-field reply :superclass) (jdi-virtual-machine-classes (jdi-mirror-virtual-machine class)))))
-;; 			  (jdi-trace "class %s superclass:%s" (jdi-class-name class) (jdi-class-name superclass))
-;; 			  (setf (jdi-class-super class) superclass)
-;; 			  (if (string= (jdi-class-signature superclass) "Ljava/lang/Object;")
-;; 				  (cont-values)
-;; 				(jdi-class-get-parent superclass)))))))))
 
 (defun jdi-access-string (bits)
   (let ((str)
@@ -1092,8 +979,7 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 				 (method-id (bindat-get-field event :u :location :method-id))
 				 (line-code-index (bindat-get-field event :u :location :index))
 
-				 (class (make-jdi-class :virtual-machine vm
-										:id class-id))
+				 (class (jdi-virtual-machine-get-class-create vm class-id))
 				 (method (make-jdi-method :virtual-machine vm
 										  :id method-id
 										  :class class))
@@ -1123,8 +1009,7 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 				 (method-id (bindat-get-field event :u :location :method-id))
 				 (line-code-index (bindat-get-field event :u :location :index))
 
-				 (class (make-jdi-class :virtual-machine vm
-										:id class-id))
+				 (class (jdi-virtual-machine-get-class-create vm class-id))
 				 (method (make-jdi-method :virtual-machine vm
 										  :id method-id
 										  :class class))
@@ -1148,7 +1033,7 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
   (lexical-let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
 				 (type-id (bindat-get-field event :u :type-id))
 				 (signature (jdwp-get-string event :u :signature))
-				 (newclass (make-jdi-class :virtual-machine vm :id type-id :signature signature)))
+				 (newclass (jdi-virtual-machine-get-class-create vm type-id :signature signature)))
 	(jdi-debug "class-loaded:%s" signature)
 	(puthash type-id newclass (jdi-virtual-machine-classes vm))
 	(puthash signature (cons newclass (gethash signature (jdi-virtual-machine-classes-by-signature vm)))
@@ -1186,20 +1071,6 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 									(string= signature super-signature))
 								  super-signatures))))))))
 
-;;   (catch 'found
-;;     (let ((class (jdi-value-class value)))
-;;       (while class
-;; 		(jdi-trace "jdi-value-instance-of-p: comparing %s with %s" (jdi-class-signature class) signature)
-;; 		(if (string= (jdi-class-signature class) signature)
-;; 			(throw 'found t))
-;; 		(dolist (interface (jdi-class-interfaces class))
-;; 		  (jdi-trace "jdi-value-instance-of-p interface: comparing %s with %s" (jdi-class-signature interface) signature)
-;; 		  (if (string= (jdi-class-signature interface) signature)
-;; 			  (throw 'found t)))
-;; 		(setq class (jdi-class-super class)))
-;;       ;; the return value if its not found
-;;       nil)))
-
 (defun jdi-value-extract-generic-class-name (generic-signature)
   (string-match "<L.*/\\(.*\\);>" generic-signature)
   (match-string 1 generic-signature))
@@ -1211,46 +1082,11 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 		(format "%s<%s>" (jdi-class-name class) (jdi-value-extract-generic-class-name (jdi-value-generic-signature value)))
 	  (jdi-class-name class))))
 
-(defun jdi-class-all-methods (class)
-  "Return a list of methods including those of parents.
-Methods of child class will appear in front of parent's in the list
-so finding a method by signature will return the child's method first."
-  (append (jdi-class-methods class) (if (jdi-class-super class)
-										(jdi-class-all-methods (jdi-class-super class)))))
-
 (defun jdi-method-native-p (method)
   (not (equal (logand (jdi-method-mod-bits method) jdi-access-native) 0)))
 
 (defun jdi-method-static-p (method)
   (not (equal (logand (jdi-method-mod-bits method) jdi-access-static) 0)))
-
-;; (defun jdi-value-invoke-method (value method-or-name &optional method-signature)
-;;   "Invoke a simple method (do not require arguments) in the object in jdi-value."
-;;   (jdi-debug "jdi-value-invoke-method:%s:%s" 
-;; 			(if (jdi-method-p method-or-name)
-;; 				(jdi-method-name method-or-name)
-;; 			  method-or-name)
-;; 			method-signature)
-;;   (lexical-let ((value value)
-;; 				(method-or-name method-or-name)
-;; 				(method-signature method-signature))
-;; 	(cont-bind (result) (jdi-class-get-methods (jdi-value-class value))
-;; 	  (lexical-let ((method (if (jdi-method-p method-or-name)
-;; 								method-or-name
-;; 							  (find-if (lambda (method)
-;; 										 (and (string= (jdi-method-name method) method-or-name)
-;; 											  (or (null method-signature)
-;; 												  (string= (jdi-method-signature method) method-signature))))
-;; 									   (jdi-class-all-methods (jdi-value-class value))))))
-;; 		(if method
-;; 			(jdwp-send-command (jdi-mirror-jdwp value) "object-invoke-method"
-;; 							   `((:object . ,(jdi-value-value value))
-;; 								 (:thread . ,(jdi-virtual-machine-suspended-thread-id (jdi-mirror-virtual-machine value)))
-;; 								 (:class . ,(jdi-class-id (jdi-value-class value)))
-;; 								 (:method-id . ,(jdi-method-id method))
-;; 								 (:arguments . 0)
-;; 								 (:options . ,jdwp-invoke-single-threaded)))
-;; 		  (cont-values nil nil nil nil))))))
 
 (defun jdi-value-invoke-method (value thread method arguments options)
   "Returns another jdi-value of the result."
