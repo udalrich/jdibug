@@ -198,6 +198,15 @@ jdibug-source-paths will be ignored if this is set to t."
 
   (jdibug-message "JDIbug connecting... ")
 
+  (setf (jdibug-threads-buffer jdibug-this)     (get-buffer-create jdibug-threads-buffer-name)
+		(jdibug-locals-buffer jdibug-this)      (get-buffer-create jdibug-locals-buffer-name)
+		(jdibug-frames-buffer jdibug-this)      (get-buffer-create jdibug-frames-buffer-name)
+		(jdibug-breakpoints-buffer jdibug-this) (get-buffer-create jdibug-breakpoints-buffer-name))
+
+  (with-current-buffer (jdibug-breakpoints-buffer jdibug-this)
+	(use-local-map jdibug-breakpoints-mode-map)
+	(toggle-read-only 1))
+
   (cont-bind (result) (cont-mapcar (lambda (connect-host-and-port)
 									 (lexical-let* ((host (nth 0 (split-string connect-host-and-port ":")))
 													(port (string-to-number (nth 1 (split-string connect-host-and-port ":"))))
@@ -215,15 +224,6 @@ jdibug-source-paths will be ignored if this is set to t."
 											  (jdibug-breakpoint-source-file bp)))))
 	  (setf (jdibug-breakpoints jdibug-this) nil)
 	  (cont-bind () (cont-mapc 'jdibug-set-breakpoint bps)
-
-		(setf (jdibug-threads-buffer jdibug-this)     (get-buffer-create jdibug-threads-buffer-name)
-			  (jdibug-locals-buffer jdibug-this)      (get-buffer-create jdibug-locals-buffer-name)
-			  (jdibug-frames-buffer jdibug-this)      (get-buffer-create jdibug-frames-buffer-name)
-			  (jdibug-breakpoints-buffer jdibug-this) (get-buffer-create jdibug-breakpoints-buffer-name))
-
-		(with-current-buffer (jdibug-breakpoints-buffer jdibug-this)
-		  (use-local-map jdibug-breakpoints-mode-map)
-		  (toggle-read-only 1))
 
 		(run-hooks 'jdibug-connected-hook)
 		(setf (jdibug-refresh-timer jdibug-this)
@@ -261,6 +261,7 @@ jdibug-source-paths will be ignored if this is set to t."
 		  (jdi-virtual-machine-disconnect vm)
 		  (jdibug-message "(disconnected) " t))
 		(jdibug-virtual-machines jdibug-this))
+  (setf (jdibug-virtual-machines jdibug-this) nil)
   (run-hooks 'jdibug-detached-hook))
 
 (defun jdibug-have-class-source-p (class)
