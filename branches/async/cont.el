@@ -10,7 +10,7 @@
 
 (defun cont-new (parent-id proc-id &optional func)
   "Make a new continuation and add it to the current running continuations list. Return the new id."
-  (cont-info "cont-new parent-id:%s proc-id:%s" parent-id proc-id)
+  (cont-debug "cont-new parent-id:%s proc-id:%s" parent-id proc-id)
   (let* ((id (cont-generate-id))
 		 (new-cont (make-cont :id id :parent-id parent-id :proc-id proc-id :func func)))
 	(cont-trace "cont-new:id=%s:parent-id=%s:func=\n    %s" 
@@ -65,7 +65,7 @@
 
 (defun cont-get (id)
   "Return a struct-cont from this id."
-  (cont-info "cont-get:%s" id)
+  (cont-debug "cont-get:%s" id)
   (if (null id)
 	  (make-cont :id nil :parent-id nil :func 'cont-identity)
 	(or (cdr (assoc id cont-alist))
@@ -79,8 +79,9 @@
 		(apply 'identity args))))
 
 (defun cont-delete (id)
-  (cont-info "cont-delete:%s:func=%s" id (if (assoc id cont-alist) (elog-trim (cont-func (cdr (assoc id cont-alist))) 500)
-										   nil))
+  (cont-debug "cont-delete:id=%s" id)
+  (cont-trace "cont-delete:func=%s" (if (assoc id cont-alist) (elog-trim (cont-func (cdr (assoc id cont-alist))) 500)
+									  nil))
   (if id
 	  (setq cont-alist (assq-delete-all id cont-alist))))
 
@@ -105,19 +106,20 @@
 	 cont-current-proc-id))
 
 (defun cont-values (&rest retvals)
-  (cont-info "cont-values:current-id=%s:retvals=%s" cont-current-id (elog-trim retvals 100))
+  (cont-debug "cont-values:current-id=%s" cont-current-id)
+  (cont-trace "cont-values:retvals=%s" (elog-trim retvals 100))
   (if (cont-have-child-p cont-current-id)
-	  (cont-info "have child, not deleting/applying")
+	  (cont-debug "have child, not deleting/applying")
 	(let* ((cont-previous-id cont-current-id)
 		   (cont-current (cont-get cont-current-id))
 		   ;; current-id = next-id that we are looking at
 		   (cont-current-id (cont-id (cont-get (cont-parent-id cont-current))))
 		   (cont-current-proc-id (cont-proc-id cont-current)))
 	  (cont-delete cont-previous-id)
-	  (cont-info "cont-values:deleted")
+	  (cont-debug "cont-values:deleted")
 	  (let ((result (apply (cont-func cont-current) retvals)))
 		(cont-gc)
-		(cont-info "applied")
+		(cont-debug "applied")
 		result))))
 
 (defun cont-values-this (id &rest retvals)
@@ -167,16 +169,16 @@
 
 (defun cont-kill (proc-id)
   "Stop all the continuations for the process id, and its child continuations."
-  (cont-info "cont-kill:%s" proc-id)
+  (cont-debug "cont-kill:%s" proc-id)
   (dolist (pair cont-alist)
 	(let ((cont (cdr pair)))
-	  (cont-info "cont-kill:checking id:%s proc-id:%s" (cont-id cont) (cont-proc-id cont))
+	  (cont-debug "cont-kill:checking id:%s proc-id:%s" (cont-id cont) (cont-proc-id cont))
 	  (when (equal (cont-proc-id cont) proc-id)
-		(cont-info "cont-kill:setting to identity:%s" (cont-id cont))
+		(cont-debug "cont-kill:setting to identity:%s" (cont-id cont))
 		(setf (cont-func cont) 'cont-identity))
 	  (when (and (equal (cont-proc-id cont) proc-id)
 				 (not (member (cont-id cont) cont-waiting-id-list)))
-		(cont-info "cont-kill:deleting because nobody's waiting:%s" (cont-id cont))
+		(cont-debug "cont-kill:deleting because nobody's waiting:%s" (cont-id cont))
 		(cont-delete (cont-id cont))))))
 
 (defun cont-gc ()
@@ -190,6 +192,7 @@
 				collect proc-id))))
 
 (defun cont-mapcar (function sequence)
+  (cont-debug "cont-mapcar: length of sequence = %s" (length sequence))
   (if (null sequence)
 	  (cont-values nil)
 	(lexical-let ((sequence sequence)
@@ -223,7 +226,7 @@
   (if (null sequence)
 	  (cont-values nil)
 	(cont-bind (values) (cont-mapcar function sequence)
-	  (cont-debug "cont-mappend:values=%s" values)
+	  (cont-trace "cont-mappend:values=%s" values)
 	  (cont-values (apply 'append values)))))
 
 (eval-when-compile
