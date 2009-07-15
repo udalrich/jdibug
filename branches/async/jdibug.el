@@ -493,19 +493,16 @@ And position the point at the line number."
   :group 'jdibug)
 
 (defun jdibug-expand-method-node (tree)
-  (jdibug-trace "jdibug-expand-method-node")
+  (jdibug-debug "jdibug-expand-method-node")
   (lexical-let* ((tree tree)
 				 (value (widget-get tree :jdi-value))
 				 (method (widget-get tree :jdi-method)))
 	(let ((cont-current-proc-id (jdibug-refresh-proc jdibug-this)))
-	  (cont-bind (reply error jdwp id)  (if (jdi-method-static-p method)
-											(jdi-method-invoke method)
-										  (jdi-value-invoke-method value method))
+	  (cont-bind (reply error jdwp id)  (jdi-value-invoke-method value (jdibug-active-thread jdibug-this) method nil nil)
 		(jdibug-debug "type:%s,value:%s" 
-					 (bindat-get-field reply :return-value :type)
-					 (bindat-get-field reply :return-value :u :value))
+					  (bindat-get-field reply :return-value :type)
+					  (bindat-get-field reply :return-value :u :value))
 		(lexical-let ((value (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
-											 ;:name "returns"
 											 :type (bindat-get-field reply :return-value :type) 
 											 :value (bindat-get-field reply :return-value :u :value))))
 		  (cont-bind (result) (jdibug-value-get-string value)
@@ -517,19 +514,20 @@ And position the point at the line number."
 	 :value "loading...")))
 
 (defun jdibug-make-method-node (value method)
-  (if (string= "()" (substring (jdi-method-signature method) 0 2))
-	  `(tree-widget
-		:node (push-button
-			   :tag ,(format "%s: %s" (jdi-method-name method) (jdi-method-signature method))
-			   :format "%[%t%]\n")
-		:open nil
-		:jdi-value  ,value
-		:jdi-method ,method
-		:dynargs jdibug-expand-method-node
-		:expander jdibug-expand-method-node)
-	`(item 
-	  :value 
-	  ,(format "%s: %s" (jdi-method-name method) (jdi-method-signature method)))))
+  (let ((display (format "%s: %s" (jdi-method-name method) (jdi-method-signature method))))
+	(if (string= "()" (substring (jdi-method-signature method) 0 2))
+		`(tree-widget
+		  :node (push-button
+				 :tag ,display
+				 :format "%[%t%]\n")
+		  :open nil
+		  :jdi-value  ,value
+		  :jdi-method ,method
+		  :dynargs jdibug-expand-method-node
+		  :expander jdibug-expand-method-node)
+	  `(item 
+		:value 
+		,display))))
 
 (defun jdibug-tree-set-and-refresh (buffer tree args)
   ;; have this run later, so we can call this function in expander, and do not have to worry
@@ -547,28 +545,28 @@ And position the point at the line number."
 	  (jdibug-tree-mode-reflesh-tree tree))))
 
 (defun jdibug-expand-methods (tree)
-  ())
-;;   (lexical-let ((tree tree)
-;; 				(value (widget-get tree :jdi-value)))
-;; 	(let ((cont-current-proc-id (jdibug-refresh-proc jdibug-this)))
-;; 	  (cont-bind () (jdi-classes-get-super-r (list (jdi-value-class value)))
-;; 		(cont-bind () (jdi-classes-get-methods (jdi-class-all-super (jdi-value-class value)))
-;; 		  (jdibug-tree-set-and-refresh (jdibug-locals-buffer jdibug-this)
-;; 									   tree (mapcar (lambda (method) 
-;; 													  (jdibug-make-method-node value method))
-;; 													(sort (remove-duplicates (jdi-class-all-methods (jdi-value-class value))
-;; 																			 :test (lambda (obj1 obj2)
-;; 																					 (and (equal (jdi-method-name obj1)
-;; 																								 (jdi-method-name obj2))
-;; 																						  (equal (jdi-method-signature obj1)
-;; 																								 (jdi-method-signature obj2))))
-;; 																			 :from-end t)
-;; 														  (lambda (obj1 obj2)
-;; 															(string< (jdi-method-name obj1)
-;; 																	 (jdi-method-name obj2))))))))))
-;;   (list 
-;;    `(item 
-;; 	 :value "loading...")))
+  (lexical-let ((tree tree)
+				(value (widget-get tree :jdi-value)))
+ 	(let ((cont-current-proc-id (jdibug-refresh-proc jdibug-this)))
+	  (cont-bind (class) (jdi-value-get-class value)
+		(cont-bind (methods) (jdi-class-get-all-methods class)
+		  (jdibug-tree-set-and-refresh (jdibug-locals-buffer jdibug-this)
+									   tree 
+									   (mapcar (lambda (method) 
+												 (jdibug-make-method-node value method))
+											   (sort (remove-duplicates methods
+																		:test (lambda (obj1 obj2)
+																				(and (equal (jdi-method-name obj1)
+																							(jdi-method-name obj2))
+																					 (equal (jdi-method-signature obj1)
+																							(jdi-method-signature obj2))))
+																		:from-end t)
+													 (lambda (obj1 obj2)
+													   (string< (jdi-method-name obj1)
+																(jdi-method-name obj2))))))))))
+  (list 
+   `(item 
+	 :value "loading...")))
 
 
 (defun jdibug-make-methods-node (value)
