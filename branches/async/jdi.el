@@ -157,13 +157,6 @@
 		 (jdi-variable-name field-or-variable))
 		(t (error "not a field nor variable"))))
 
-(defun jdi-field-or-variable-signature (field-or-variable)
-  (cond ((jdi-field-p field-or-variable)
-		 (jdi-field-signature field-or-variable))
-		((jdi-variable-p field-or-variable)
-		 (jdi-variable-signature field-or-variable))
-		(t (error "not a field nor variable"))))
-
 (defun jdi-mirror-jdwp (mirror)
   (jdi-virtual-machine-jdwp (jdi-mirror-virtual-machine mirror)))
 

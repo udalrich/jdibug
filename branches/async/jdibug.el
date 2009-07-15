@@ -1348,7 +1348,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 						  (t
 						   (cont-bind (signature) (jdi-class-get-signature class)
 							 (cont-values (format "%s (id=%s)" 
-												  (jdi-class-name (jdi-field-or-variable-signature field-or-variable))
+												  (jdi-class-name class)
 												  (jdwp-vec-to-int (jdi-value-value value)))))))))))))))))
 
 (defun jdibug-value-get-string-array (value)
@@ -1450,20 +1450,21 @@ to populate the jdi-value-values of the jdi-value.")
   (lexical-let ((field-or-variable field-or-variable)
 				(value value))
 	(cont-bind (class) (jdi-value-get-class value)
-	  (jdi-debug "jdibug-value-custom-set-string-with-size:%s got class" (jdi-field-or-variable-name field-or-variable))
-	  (cont-bind (methods) (jdi-class-get-methods class)
-		(jdi-debug "jdibug-value-custom-set-string-with-size:%s got methods" (jdi-field-or-variable-name field-or-variable))
-		(let ((size-method (find-if (lambda (obj)
-									  (equal (jdi-method-name obj)
-											 "size"))
-									methods)))
-		  (if (null size-method)
-			  (cont-values (format "%s[nosize]" (jdi-class-name (jdi-field-or-variable-signature field-or-variable))))
+	  (lexical-let ((class class))
+		(jdi-debug "jdibug-value-custom-set-string-with-size:%s got class" (jdi-field-or-variable-name field-or-variable))
+		(cont-bind (methods) (jdi-class-get-methods class)
+		  (jdi-debug "jdibug-value-custom-set-string-with-size:%s got methods" (jdi-field-or-variable-name field-or-variable))
+		  (let ((size-method (find-if (lambda (obj)
+										(equal (jdi-method-name obj)
+											   "size"))
+									  methods)))
+			(if (null size-method)
+				(cont-values (format "%s[nosize]" (jdi-class-name class)))
 
-			(cont-bind (result-value) (jdi-value-invoke-method value (jdibug-active-thread jdibug-this) size-method nil nil)
-			  (cont-values (format "%s[%s]" 
-								   (jdi-class-name (jdi-field-or-variable-signature field-or-variable))
-								   (bindat-get-field reply :return-value :u :value))))))))))
+			  (cont-bind (result-value) (jdi-value-invoke-method value (jdibug-active-thread jdibug-this) size-method nil nil)
+				(cont-values (format "%s[%s]" 
+									 (jdi-class-name class)
+									 (bindat-get-field reply :return-value :u :value)))))))))))
 
 (defun jdibug-value-custom-expand-collection (value)
   (jdi-debug "jdibug-value-custom-expand-collection")
