@@ -498,17 +498,13 @@ And position the point at the line number."
 				 (value (widget-get tree :jdi-value))
 				 (method (widget-get tree :jdi-method)))
 	(let ((cont-current-proc-id (jdibug-refresh-proc jdibug-this)))
-	  (cont-bind (reply error jdwp id)  (jdi-value-invoke-method value (jdibug-active-thread jdibug-this) method nil nil)
-		(jdibug-debug "type:%s,value:%s" 
-					  (bindat-get-field reply :return-value :type)
-					  (bindat-get-field reply :return-value :u :value))
-		(lexical-let ((value (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
-											 :type (bindat-get-field reply :return-value :type) 
-											 :value (bindat-get-field reply :return-value :u :value))))
-		  (cont-bind (result) (jdibug-value-get-string value)
-			(jdibug-debug "running method %s returned %s" (jdi-method-name method) (jdi-value-string value))
+	  (cont-bind (result-value)  (jdi-value-invoke-method value (jdibug-active-thread jdibug-this) method nil nil)
+		(lexical-let ((result-value result-value))
+		  (cont-bind (result-string) (jdibug-value-get-string result-value)
+			(jdibug-debug "running method %s returned %s" (jdi-method-name method) result-string)
 			(jdibug-tree-set-and-refresh (jdibug-locals-buffer jdibug-this)
-										 tree (list (jdibug-make-tree-from-value value))))))))
+										 tree 
+										 (list (jdibug-make-tree-from-value "result" result-value result-string))))))))
   (list 
    `(item 
 	 :value "loading...")))
@@ -583,15 +579,9 @@ And position the point at the line number."
   (jdibug-debug "jdibug-expand-locals")
   (lexical-let* ((tree tree)
 				 (values (widget-get tree :jdi-values))
-				 (variables (widget-get tree :jdi-variables))
-				 (alist (loop for variable in variables
-							  for value in values
-							  collect `(,variable . ,value))
-						(lambda (o1 o2))))
+				 (variables (widget-get tree :jdi-variables)))
 	(let ((cont-current-proc-id (jdibug-refresh-proc jdibug-this)))
-	  (cont-bind (strings) (cont-mapcar (lambda (item)
-										  (jdibug-value-get-string (car item) (cdr item)))
-										alist)
+	  (cont-bind (strings) (cont-mapcar 'jdibug-value-get-string values)
 		(jdibug-tree-set-and-refresh (jdibug-locals-buffer jdibug-this)
 									 tree 
 									 (loop for variable in variables
@@ -655,11 +645,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 				   (cont-bind (values) (jdi-value-get-values value fields)
 					 (lexical-let ((values values))
 					   (jdibug-debug "jdibug-value-expander:calling cont-mapcar jdibug-value-get-string")
-					   (cont-bind (strings) (cont-mapcar (lambda (item)
-														   (jdibug-value-get-string (car item) (cdr item)))
-														 (loop for field in fields
-															   for value in values
-															   collect `(,field . ,value)))
+					   (cont-bind (strings) (cont-mapcar 'jdibug-value-get-string values)
 						 (jdibug-debug "jdibug-value-expander got %s values" (length values))
 						 (jdibug-time-end "expanded")
 						 (jdibug-tree-set-and-refresh (jdibug-locals-buffer jdibug-this)
@@ -704,10 +690,13 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		,display))))
 
 (defun jdibug-make-tree-from-variable-value (variable value string)
+  (jdibug-make-tree-from-value (jdi-variable-name variable) value string))
+
+(defun jdibug-make-tree-from-value (name value string)
   (if (jdi-value-has-children-p value)
       `(tree-widget
 		:node (push-button
-			   :tag ,(format "%s: %s" (jdi-variable-name variable) string)
+			   :tag ,(format "%s: %s" name string)
 			   :format "%[%t%]\n")
 		:open nil
 		:args nil
@@ -716,7 +705,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		:dynargs jdibug-value-expander)
     `(item 
       :value 
-      ,(format "%s: %s" (jdi-variable-name variable) string))))
+      ,(format "%s: %s" name string))))
 
 (defun jdibug-variable-sorter (o1 o2)
   (string< (jdi-variable-name o1) (jdi-variable-name o2)))
@@ -1265,10 +1254,9 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (define-key jde-mode-map [?\C-c ?\C-c ?\C-o] 'jdibug-step-out)
   (define-key jde-mode-map [?\C-c ?\C-c ?\C-r] 'jdibug-resume))
 
-(defun jdibug-value-get-string (field-or-variable value)
+(defun jdibug-value-get-string (value)
   "[ASYNC] get a string to be displayed for a value"
-  (jdibug-debug "jdibug-value-get-string:variable-name=%s:type=%s" 
-				(jdi-field-or-variable-name field-or-variable)
+  (jdibug-debug "jdibug-value-get-string:type=%s" 
 				(jdi-value-type value))
 
   (cond ((or (equal (jdi-value-type value) jdwp-tag-int)
@@ -1309,7 +1297,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		 (cont-values "thread-group"))
 
  		((equal (jdi-value-type value) jdwp-tag-object)
- 		 (jdibug-value-get-string-object field-or-variable value))
+ 		 (jdibug-value-get-string-object value))
 
 		((equal (jdi-value-type value) jdwp-tag-string)
 		 (jdibug-value-get-string-string value))
@@ -1321,14 +1309,12 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		 (jdi-error "fixme: do not know how to print value of type:%s" (jdi-value-type value))
 		 (cont-values "..."))))
 
-(defun jdibug-value-get-string-object (field-or-variable value)
-  (jdibug-debug "jdibug-value-get-string-object:variable-name=%s:type=%s:value=%s" 
-				(jdi-field-or-variable-name field-or-variable)
+(defun jdibug-value-get-string-object (value)
+  (jdibug-debug "jdibug-value-get-string-object:type=%s:value=%s" 
 				(jdi-value-type value) (jdi-value-value value))
   (if (equal (jdi-value-value value) [0 0 0 0 0 0 0 0])
 	  (cont-values "null")
-	(lexical-let ((field-or-variable field-or-variable)
-				  (value value))
+	(lexical-let ((value value))
 	  (cont-bind (class) (jdi-value-get-class value)
 		(lexical-let ((class class))
 		  (cont-bind (supers) (jdi-class-get-all-super class)
@@ -1344,7 +1330,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 					(cond ((stringp setter2)
 						   (jdibug-value-custom-set-string-with-method value (jdibug-active-thread jdibug-this) setter2))
 						  ((functionp setter2)
-						   (funcall setter2 field-or-variable value))
+						   (funcall setter2 value))
 						  (t
 						   (cont-bind (signature) (jdi-class-get-signature class)
 							 (cont-values (format "%s (id=%s)" 
@@ -1445,15 +1431,12 @@ to populate the jdi-value-values of the jdi-value.")
 																	`((:object . ,(jdi-value-value result-value))))
 				  (cont-values (jdi-format-string (jdwp-get-string reply :value))))))))))))
 
-(defun jdibug-value-custom-set-string-with-size (field-or-variable value)
-  (jdi-debug "jdibug-value-custom-set-string-with-size:%s" (jdi-field-or-variable-name field-or-variable))
-  (lexical-let ((field-or-variable field-or-variable)
-				(value value))
+(defun jdibug-value-custom-set-string-with-size (value)
+  (jdi-debug "jdibug-value-custom-set-string-with-size")
+  (lexical-let ((value value))
 	(cont-bind (class) (jdi-value-get-class value)
 	  (lexical-let ((class class))
-		(jdi-debug "jdibug-value-custom-set-string-with-size:%s got class" (jdi-field-or-variable-name field-or-variable))
 		(cont-bind (methods) (jdi-class-get-methods class)
-		  (jdi-debug "jdibug-value-custom-set-string-with-size:%s got methods" (jdi-field-or-variable-name field-or-variable))
 		  (let ((size-method (find-if (lambda (obj)
 										(equal (jdi-method-name obj)
 											   "size"))

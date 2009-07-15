@@ -150,13 +150,6 @@
 (defconst jdi-access-native        #x0100)
 (defconst jdi-access-abstract      #x0400)
 
-(defun jdi-field-or-variable-name (field-or-variable)
-  (cond ((jdi-field-p field-or-variable)
-		 (jdi-field-name field-or-variable))
-		((jdi-variable-p field-or-variable)
-		 (jdi-variable-name field-or-variable))
-		(t (error "not a field nor variable"))))
-
 (defun jdi-mirror-jdwp (mirror)
   (jdi-virtual-machine-jdwp (jdi-mirror-virtual-machine mirror)))
 
