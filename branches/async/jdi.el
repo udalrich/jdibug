@@ -647,17 +647,21 @@
 
 (defun jdi-value-array-display-string (value size)
   "for array of three dimension, return i[2][][]."
-  (let ((sig (string-to-list (jdi-class-signature (jdi-value-class value))))
-		(suffix ""))
-	(pop sig)
-	(loop while (equal (car sig) jdwp-tag-array)
-		  do
-		  (setf suffix (concat suffix "[]"))
-		  (pop sig))
-	(format "%s[%s]%s" 
-			(jdi-class-name (concat sig))
-			size
-			suffix)))
+  (lexical-let ((value value)
+				(size size))
+	(cont-bind (class) (jdi-value-get-class value)
+	  (cont-bind (signature) (jdi-class-get-signature class)
+		(let ((sig (string-to-list signature))
+			  (suffix ""))
+		  (pop sig)
+		  (loop while (equal (car sig) jdwp-tag-array)
+				do
+				(setf suffix (concat suffix "[]"))
+				(pop sig))
+		  (cont-values (format "%s[%s]%s" 
+							   (jdi-class-name (concat sig))
+							   size
+							   suffix)))))))
 
 (defun jdi-format-string (str)
   "Truncate and escape the string to be displayed."

@@ -1345,18 +1345,11 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 (defun jdibug-value-get-string-array (value)
   (jdibug-debug "jdibug-value-get-string-array")
   (lexical-let ((value value))
-	(jdibug-debug "get array-length")
-	(cont-values "Array")))
-;; 	(cont-bind (reply error jdwp id) (jdwp-send-command 
-;; 									  (jdi-mirror-jdwp value) 
-;; 									  "array-length" 
-;; 									  `((:array-object . ,(jdi-value-value value))))
-;; 	  (let ((size (bindat-get-field reply :array-length)))
-;; 		(setf (jdi-value-array-length value) (bindat-get-field reply :array-length))
-;; 		;;			(setf (jdi-value-has-children-p value) (> size 0))
-;; 		(setf (jdi-value-string value) (jdi-value-array-display-string value size))
-;; 		(jdi-debug "set jdi-value-string to %s" (jdi-value-string value))
-;; 		(cont-values t))))))
+	(cont-bind (reply error jdwp id) (jdwp-send-command 
+									  (jdi-mirror-jdwp value) 
+									  "array-length" 
+									  `((:array-object . ,(jdi-value-value value))))
+	  (jdi-value-array-display-string value (bindat-get-field reply :array-length)))))
 
 (defun jdibug-value-get-string-string (value)
   (lexical-let ((value value))
