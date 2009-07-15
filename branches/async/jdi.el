@@ -208,18 +208,17 @@
 	  (cont-values t))))
 
 (defun jdi-virtual-machine-set-standard-events (vm)
-  (cont-wait (mapc (lambda (event)
-					 (cont-bind (reply error jdwp id) (jdwp-send-command (jdi-virtual-machine-jdwp vm) "set" 
-																		 `((:event-kind . ,event)
-																		   (:suspend-policy . ,jdwp-suspend-policy-none)
-																		   (:modifiers . 0)))
-					   (cont-values)))
-				   (list jdwp-event-class-prepare
-						 jdwp-event-class-unload
-						 jdwp-event-thread-start
-						 jdwp-event-thread-end
-						 jdwp-event-vm-death))
-	(cont-values)))
+  (cont-mapcar (lambda (event)
+				 (cont-bind (reply error jdwp id) (jdwp-send-command (jdi-virtual-machine-jdwp vm) "set" 
+																	 `((:event-kind . ,event)
+																	   (:suspend-policy . ,jdwp-suspend-policy-none)
+																	   (:modifiers . 0)))
+				   (cont-values t)))
+			   (list jdwp-event-class-prepare
+					 jdwp-event-class-unload
+					 jdwp-event-thread-start
+					 jdwp-event-thread-end
+					 jdwp-event-vm-death)))
 
 (defun jdi-virtual-machine-connect (vm)
   "[ASYNC] returns t if success, nil on failure"
@@ -240,7 +239,7 @@
 		  (jdi-trace "name       : %s"   (jdwp-get-string reply :vm-name))
 		  (cont-bind (reply error jdwp id) (jdwp-send-command jdwp "capabilities-new" nil)
 			(jdi-trace "capabilities-new:%s" reply)
-			(cont-bind () (jdi-virtual-machine-set-standard-events vm)
+			(cont-bind (result) (jdi-virtual-machine-set-standard-events vm)
 			  (cont-values t))))))))
 
 (defun jdi-virtual-machine-get-threads (vm)
@@ -288,21 +287,6 @@
 											  :status status)
 						 collect newclass)))))
 														
-(defun jdi-virtual-machine-get-all-frames (vm)
-  "We are actually only interested in suspended threads"
-  (lexical-let* ((vm vm)
-				 (suspended-threads (loop for frame in (jdi-virtual-machine-suspended-frames vm)
-										  collect (jdi-frame-thread frame))))
-	(jdi-time-start)
-	(cont-wait () (progn
-					(mapc 'jdi-thread-get-name suspended-threads)
-					(mapc 'jdi-thread-get-status suspended-threads))
-	  (jdi-time-end "jdi-virtual-machine-get-all-frames: mapc jdi-thread-get-name/status")
-	  (jdi-time-start)
-	  (cont-wait (mapc 'jdi-thread-get-frames suspended-threads)
-		(jdi-time-end "jdi-virtual-machine-get-all-frames: mapc jdi-thread-get-frames")
-		(cont-values)))))
-
 (defun jdi-virtual-machine-suspended-threads (vm)
   (jdi-debug "jdi-virtual-machine-suspended-threads")
   (loop for frame in (jdi-virtual-machine-suspended-frames vm)
@@ -432,17 +416,6 @@
 
 (defun jdi-time-end (message)
   (jdi-info "benchmark: %s took %s seconds" message (float-time (time-subtract (current-time) jdi-start-time))))
-
-(defun jdi-class-get-all-line-locations (class)
-  "[ASYNC] returns a list of jdi-location in the class"
-  (jdi-debug "jdi-class-get-all-line-locations")
-  (lexical-let ((class class))
-	(jdi-time-start)
-	(cont-bind (result) (jdi-class-get-methods class)
-	  (jdi-time-end "jdi-class-get-methods")
-	  (jdi-debug "calling jdi-method-get-locations for %s methods" (length (jdi-class-methods class)))
-	  (cont-wait (mapc 'jdi-method-get-locations (jdi-class-methods class))
-		(cont-values)))))
 
 (defun jdi-virtual-machine-set-breakpoint (vm signature line)
   "[ASYNC] returns a jdi-event-request if a breakpoint is installed, nil otherwise"
@@ -653,13 +626,6 @@
 (defun jdi-value-object-p (value)
   (equal (jdi-value-type value) jdwp-tag-object))
 
-(defun jdi-classes-get-locations (classes)
-  (jdi-debug "jdi-classes-get-locations")
-  (lexical-let ((classes classes))
-	(cont-bind () (jdi-classes-get-methods classes)
-	  (cont-bind () (jdi-methods-get-locations (apply 'append (mapcar 'jdi-class-methods classes)))
-		(cont-values)))))
-
 (defun jdi-class-name (class-or-signature)
   (jdi-debug "jdi-class-name")
   (if (null class-or-signature)
@@ -675,29 +641,6 @@
 (defun jdi-class-get-name (class)
   (cont-bind (signature) (jdi-class-get-signature class)
 	(cont-values (jdi-class-name signature))))
-
-(defmacro jdi-multiple-get-defun (name unique-id-func set-field-func accessor-func)
-  `(defun ,name (structures)
-	 (jdi-debug "%s:%s structures" (symbol-name ',name) (length structures))
-	 (lexical-let ((structures structures)
-				   (structures-hash (make-hash-table :test 'equal)))
-	   (dolist (structure structures)
-		 (puthash (,unique-id-func structure) structure structures-hash))
-	   (jdi-debug "unique structures = %s" (hash-table-count structures-hash))
-	   (cont-wait (maphash (lambda (key value)
-							 (,set-field-func value))
-						   structures-hash)
-		 (dolist (structure structures)
-		   (when (null (,accessor-func structure))
-			 (setf (,accessor-func structure)
-				   (,accessor-func (gethash (,unique-id-func structure) structures-hash)))))
-		 (cont-values)))))
-
-(jdi-multiple-get-defun jdi-values-get-class       jdi-value-value jdi-value-get-class      jdi-value-class)
-(jdi-multiple-get-defun jdi-classes-get-interfaces jdi-class-id    jdi-class-get-interfaces jdi-class-interfaces)
-
-(jdi-multiple-get-defun jdi-classes-get-methods   jdi-class-id  jdi-class-get-methods    jdi-class-methods)
-(jdi-multiple-get-defun jdi-methods-get-locations jdi-method-id jdi-method-get-locations jdi-method-locations)
 
 (defun jdi-value-get-class (value)
   "populate the jdi-value-class field"

@@ -223,13 +223,13 @@ jdibug-source-paths will be ignored if this is set to t."
 									 collect (jdibug-source-file-to-class-signature
 											  (jdibug-breakpoint-source-file bp)))))
 	  (setf (jdibug-breakpoints jdibug-this) nil)
-	  (cont-bind () (cont-mapc 'jdibug-set-breakpoint bps)
+	  (cont-bind (result) (cont-mapcar 'jdibug-set-breakpoint bps)
 
 		(run-hooks 'jdibug-connected-hook)
 		(setf (jdibug-refresh-timer jdibug-this)
 			  (jdibug-run-with-timer jdibug-refresh-delay nil 
 									 'jdibug-refresh-now))
-		(cont-values)))))
+		(cont-values t)))))
   
 (defun jdibug-disconnect ()
   (interactive)
@@ -417,29 +417,29 @@ And position the point at the line number."
 		(cont-values nil)))))
 
 (defun jdibug-handle-class-prepare (class)
-  (jdibug-debug "jdibug-handle-class-prepare")
-  (lexical-let ((class class)
-				(bps-matched-class (loop for bp in (jdibug-breakpoints jdibug-this)
-										 if (equal (jdibug-source-file-to-class-signature (jdibug-breakpoint-source-file bp))
-												   (jdi-class-signature class))
-										 collect bp)))
-	(jdibug-debug "bps-matched-class:%s" (length bps-matched-class))
-	(when bps-matched-class
-	  (cont-bind () (jdi-class-get-all-line-locations class)
-		(jdibug-debug "jdibug-handle-class-prepare:after jdi-class-get-all-line-locations")
-		(cont-wait 
-		  (mapc (lambda (bp)
-				  (lexical-let ((bp bp))
-					(cont-bind (result) (jdi-virtual-machine-set-breakpoint
-										 (jdi-mirror-virtual-machine class)
-										 (jdi-class-signature class)
-										 (jdibug-breakpoint-line-number bp))
-					  (when result
-						(push result (jdibug-breakpoint-event-requests bp))
-						(setf (jdibug-breakpoint-status bp) 'enabled)
-						(jdibug-breakpoint-update bp)))))
-				bps-matched-class)
-		  (cont-values))))))
+  (jdibug-debug "jdibug-handle-class-prepare"))
+;;   (lexical-let ((class class)
+;; 				(bps-matched-class (loop for bp in (jdibug-breakpoints jdibug-this)
+;; 										 if (equal (jdibug-source-file-to-class-signature (jdibug-breakpoint-source-file bp))
+;; 												   (jdi-class-signature class))
+;; 										 collect bp)))
+;; 	(jdibug-debug "bps-matched-class:%s" (length bps-matched-class))
+;; 	(when bps-matched-class
+;; 	  (cont-bind () (jdi-class-get-all-line-locations class)
+;; 		(jdibug-debug "jdibug-handle-class-prepare:after jdi-class-get-all-line-locations")
+;; 		(cont-wait 
+;; 		  (mapc (lambda (bp)
+;; 				  (lexical-let ((bp bp))
+;; 					(cont-bind (result) (jdi-virtual-machine-set-breakpoint
+;; 										 (jdi-mirror-virtual-machine class)
+;; 										 (jdi-class-signature class)
+;; 										 (jdibug-breakpoint-line-number bp))
+;; 					  (when result
+;; 						(push result (jdibug-breakpoint-event-requests bp))
+;; 						(setf (jdibug-breakpoint-status bp) 'enabled)
+;; 						(jdibug-breakpoint-update bp)))))
+;; 				bps-matched-class)
+;; 		  (cont-values))))))
 
 (defun jdibug-handle-detach (vm)
   (interactive)
@@ -547,27 +547,28 @@ And position the point at the line number."
 	  (jdibug-tree-mode-reflesh-tree tree))))
 
 (defun jdibug-expand-methods (tree)
-  (lexical-let ((tree tree)
-				(value (widget-get tree :jdi-value)))
-	(let ((cont-current-proc-id (jdibug-refresh-proc jdibug-this)))
-	  (cont-bind () (jdi-classes-get-super-r (list (jdi-value-class value)))
-		(cont-bind () (jdi-classes-get-methods (jdi-class-all-super (jdi-value-class value)))
-		  (jdibug-tree-set-and-refresh (jdibug-locals-buffer jdibug-this)
-									   tree (mapcar (lambda (method) 
-													  (jdibug-make-method-node value method))
-													(sort (remove-duplicates (jdi-class-all-methods (jdi-value-class value))
-																			 :test (lambda (obj1 obj2)
-																					 (and (equal (jdi-method-name obj1)
-																								 (jdi-method-name obj2))
-																						  (equal (jdi-method-signature obj1)
-																								 (jdi-method-signature obj2))))
-																			 :from-end t)
-														  (lambda (obj1 obj2)
-															(string< (jdi-method-name obj1)
-																	 (jdi-method-name obj2))))))))))
-  (list 
-   `(item 
-	 :value "loading...")))
+  ())
+;;   (lexical-let ((tree tree)
+;; 				(value (widget-get tree :jdi-value)))
+;; 	(let ((cont-current-proc-id (jdibug-refresh-proc jdibug-this)))
+;; 	  (cont-bind () (jdi-classes-get-super-r (list (jdi-value-class value)))
+;; 		(cont-bind () (jdi-classes-get-methods (jdi-class-all-super (jdi-value-class value)))
+;; 		  (jdibug-tree-set-and-refresh (jdibug-locals-buffer jdibug-this)
+;; 									   tree (mapcar (lambda (method) 
+;; 													  (jdibug-make-method-node value method))
+;; 													(sort (remove-duplicates (jdi-class-all-methods (jdi-value-class value))
+;; 																			 :test (lambda (obj1 obj2)
+;; 																					 (and (equal (jdi-method-name obj1)
+;; 																								 (jdi-method-name obj2))
+;; 																						  (equal (jdi-method-signature obj1)
+;; 																								 (jdi-method-signature obj2))))
+;; 																			 :from-end t)
+;; 														  (lambda (obj1 obj2)
+;; 															(string< (jdi-method-name obj1)
+;; 																	 (jdi-method-name obj2))))))))))
+;;   (list 
+;;    `(item 
+;; 	 :value "loading...")))
 
 
 (defun jdibug-make-methods-node (value)
@@ -985,25 +986,25 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	(jdibug-breakpoint-update bp)
 	(jdibug-message "JDIbug setting breakpoint...")
 	(jdibug-time-start)
-	(cont-mapc (lambda (vm)
-				 (if (not (jdibug-file-in-source-paths-p source-file))
-					 (progn
-					   (jdibug-message "file is not in source path" t)
-					   (cont-values t))
+	(cont-mapcar (lambda (vm)
+				   (if (not (jdibug-file-in-source-paths-p source-file))
+					   (progn
+						 (jdibug-message "file is not in source path" t)
+						 (cont-values t))
 
-				   (cont-bind (result) (jdi-virtual-machine-set-breakpoint 
-										vm 
-										(jdibug-source-file-to-class-signature source-file)
-										line-number)
-					 (unless (null result)
-					   (jdibug-message "done" t)
-					   (jdibug-time-end "set-breakpoint")
-					   (setf (jdibug-breakpoint-status bp) 'enabled)
-					   (setf (jdibug-breakpoint-event-requests bp)
-							 (append result (jdibug-breakpoint-event-requests bp)))
-					   (jdibug-breakpoint-update bp))
-					 (cont-values t))))
-			   (jdibug-virtual-machines jdibug-this))))
+					 (cont-bind (result) (jdi-virtual-machine-set-breakpoint 
+										  vm 
+										  (jdibug-source-file-to-class-signature source-file)
+										  line-number)
+					   (unless (null result)
+						 (jdibug-message "done" t)
+						 (jdibug-time-end "set-breakpoint")
+						 (setf (jdibug-breakpoint-status bp) 'enabled)
+						 (setf (jdibug-breakpoint-event-requests bp)
+							   (append result (jdibug-breakpoint-event-requests bp)))
+						 (jdibug-breakpoint-update bp))
+					   (cont-values t))))
+				 (jdibug-virtual-machines jdibug-this))))
 
 (defun jdibug-disable-breakpoint (bp)
   (mapc (lambda (er)
