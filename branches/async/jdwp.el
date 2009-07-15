@@ -72,7 +72,9 @@
   (frame-id-size          4)
 
   server
-  port)
+  port
+
+  sent-requests)
 
 (defstruct jdwp-request
   name
@@ -783,10 +785,11 @@
 						(conts (jdwp-request-conts request)))
 				   (jdwp-trace "received reply packet for id:%s" id)
 				   (jdwp-trace "requests-alist:%s" (elog-trim (jdwp-requests-alist jdwp) 100))
+				   (setf (jdwp-requests-alist jdwp) (assq-delete-all id (jdwp-requests-alist jdwp)))
 				   (mapc (lambda (cont)
 						   (apply 'cont-values-this (cons cont (jdwp-process-reply jdwp packet command-data))))
-						 conts)
-				   (setf (jdwp-requests-alist jdwp) (assq-delete-all id (jdwp-requests-alist jdwp))))
+						 conts))
+
 			   ;; command packet
 			   (jdwp-process-command jdwp packet)
 			   ;;			  (jdwp-process-command jdwp packet)
@@ -1064,6 +1067,18 @@
 			(progn
 			  (jdwp-info "ongoing command %s %s" name data)
 			  (setf (jdwp-request-conts (cdr ongoing)) (cons (cont-get-current-id) (jdwp-request-conts (cdr ongoing)))))
+
+		  ;; brute force mechanism to help me improve performance by caching in jdi.el 
+		  (if jdwp-debug-flag
+			  (if (find-if (lambda (obj)
+							 (and (equal (jdwp-request-name obj) name)
+								  (equal (jdwp-request-data obj) data)))
+						   (jdwp-sent-requests jdwp))
+				  (jdwp-debug "jdwp-send-command:sent before:%s %s" name data)
+				(push (make-jdwp-request :name name
+										 :data data)
+					  (jdwp-sent-requests jdwp))))
+
 		  (let* ((protocol     (jdwp-get-protocol name))
 				 (reply-spec   (getf protocol :reply-spec))
 				 (command-spec (getf protocol :command-spec))
