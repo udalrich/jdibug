@@ -656,10 +656,15 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 																   (list (jdibug-make-methods-node value))))))))))))
 		  ((= (jdi-value-type value) jdwp-tag-array)
 		   (let ((cont-current-proc-id (jdibug-refresh-proc jdibug-this)))
-			 (cont-bind (result) (jdi-value-array-get-values value)
-			   (jdibug-time-end "expanded")
-			   (jdibug-tree-set-and-refresh (jdibug-locals-buffer jdibug-this)
-											tree (mapcar 'jdibug-make-tree-from-value (jdi-value-values value)))))))
+			 (cont-bind (values) (jdi-value-array-get-values value)
+			   (lexical-let ((values values))
+				 (cont-bind (strings) (cont-mapcar 'jdibug-value-get-string values)
+				   (jdibug-tree-set-and-refresh (jdibug-locals-buffer jdibug-this)
+												tree 
+												(loop for v in values
+													  for s in strings
+													  for i from 0 by 1
+													  collect (jdibug-make-tree-from-value (format "[%s]" i) v s)))))))))
 	(jdibug-trace "setting into the tree"))
 
   (list 
@@ -1345,11 +1350,8 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 (defun jdibug-value-get-string-array (value)
   (jdibug-debug "jdibug-value-get-string-array")
   (lexical-let ((value value))
-	(cont-bind (reply error jdwp id) (jdwp-send-command 
-									  (jdi-mirror-jdwp value) 
-									  "array-length" 
-									  `((:array-object . ,(jdi-value-value value))))
-	  (jdi-value-array-display-string value (bindat-get-field reply :array-length)))))
+	(cont-bind (length) (jdi-value-get-array-length value)
+	  (jdi-value-array-display-string value length))))
 
 (defun jdibug-value-get-string-string (value)
   (lexical-let ((value value))

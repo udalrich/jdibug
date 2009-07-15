@@ -106,7 +106,9 @@
   type
   value
 
-  class)
+  ;; caching purpose only
+  class
+  array-length)
 ;;   name
 ;;   signature
 ;;   generic-signature
@@ -663,6 +665,18 @@
 							   size
 							   suffix)))))))
 
+(defun jdi-value-get-array-length (value)
+  (jdi-debug "jdi-value-get-array-length:%s" (jdi-value-value value))
+  (if (jdi-value-array-length value)
+	  (cont-values (jdi-value-array-length value))
+
+	(lexical-let ((value value))
+	  (cont-bind (reply error jdwp id) (jdwp-send-command 
+										(jdi-mirror-jdwp value) 
+										"array-length" 
+										`((:array-object . ,(jdi-value-value value))))
+		(cont-values (setf (jdi-value-array-length value) (bindat-get-field reply :array-length)))))))
+
 (defun jdi-format-string (str)
   "Truncate and escape the string to be displayed."
   (with-output-to-string
@@ -891,33 +905,31 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 		  (cont-values nil))))))
 
 (defun jdi-value-array-get-values (value)
-  (jdi-debug "jdi-value-get-array-values:value=%s" (jdi-value-value value)))
+  (jdi-debug "jdi-value-get-array-values:value=%s" (jdi-value-value value))
 
-;;   (if (equal (jdi-value-value value) [0 0 0 0 0 0 0 0])
-;; 	  (cont-values t)
-;; 	(lexical-let ((value value))
-;; 	  (cont-bind (reply error jdwp id)
-;; 		(jdwp-send-command (jdi-mirror-jdwp value) "array-get-values"
-;; 						   `((:array-object . ,(jdi-value-value value))
-;; 							 (:first-index . 0)
-;; 							 (:length . ,(jdi-value-array-length value))))
+  (if (equal (jdi-value-value value) [0 0 0 0 0 0 0 0])
+	  (cont-values nil)
 
-;; 		(let ((array (jdwp-unpack-arrayregion jdwp reply)))
-;; 		  (jdi-trace "got array-get-values:%s" array)
-;; 		  (setf (jdi-value-values value)
-;; 				(if (or (= (bindat-get-field array :type) jdwp-tag-object)
-;; 						(= (bindat-get-field array :type) jdwp-tag-array))
-;; 					(loop for value-reply in (bindat-get-field array :value)
-;; 						  for i from 0 to (- (jdi-value-array-length value) 1)
-;; 						  collect (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
-;; 												  :type (bindat-get-field value-reply :value :type)
-;; 												  :value (bindat-get-field value-reply :value :u :value)))
-;; 				  (loop for value-reply in (bindat-get-field array :value)
-;; 						for i from 0 to (- (jdi-value-array-length value) 1)
-;; 						collect (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
-;; 												:type (bindat-get-field array :type)
-;; 												:value (bindat-get-field value-reply :value)))))
-;; 		  (jdi-values-get-string (jdi-value-values value)))))))
+	(lexical-let ((value value))
+	  (cont-bind (length) (jdi-value-get-array-length value)
+		(cont-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp value) "array-get-values"
+															`((:array-object . ,(jdi-value-value value))
+															  (:first-index . 0)
+															  (:length . ,length)))
+		  (let ((array (jdwp-unpack-arrayregion jdwp reply)))
+			(jdi-trace "got array-get-values:%s" array)
+			(cont-values (if (or (= (bindat-get-field array :type) jdwp-tag-object)
+								 (= (bindat-get-field array :type) jdwp-tag-array))
+							 (loop for value-reply in (bindat-get-field array :value)
+								   for i from 0 to (- (jdi-value-array-length value) 1)
+								   collect (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
+														   :type (bindat-get-field value-reply :value :type)
+														   :value (bindat-get-field value-reply :value :u :value)))
+						   (loop for value-reply in (bindat-get-field array :value)
+								 for i from 0 to (- (jdi-value-array-length value) 1)
+								 collect (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
+														 :type (bindat-get-field array :type)
+														 :value (bindat-get-field value-reply :value)))))))))))
 
 (defun jdi-handle-breakpoint-event (jdwp event)
   (jdi-debug "jdi-handle-breakpoint-event")
