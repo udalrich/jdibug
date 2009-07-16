@@ -22,6 +22,8 @@
 
   ;; list of jdi-frame that is suspended (by breakpoint/step events)
   suspended-frames
+
+  (objects (make-hash-table :test 'equal)) ;; hash table where key=object-id value=jdi-object
   )
 
 ;; as java returns interfaces using all-classes command, this might represent an interface
@@ -80,13 +82,23 @@
   data
   )
 
-(defstruct (jdi-thread (:include jdi-mirror))
-  id
+(defstruct (jdi-object (:include jdi-mirror)) ;; com.sun.jdi.ObjectReference
+  id)
+
+(defstruct (jdi-thread (:include jdi-object))
   name
   status
   suspend-status
   frames
+
+  ; jdi-thread-group
+  thread-group
+  system-thread-p
   )
+
+(defstruct (jdi-thread-group (:include jdi-object))
+  name
+  parent)
 
 (defstruct (jdi-frame (:include jdi-mirror)) ;; this is actually StackFrame in JDI
   id
@@ -241,20 +253,10 @@
 		(jdi-debug "number of threads:%s" (bindat-get-field reply :threads))
 		(setf (jdi-virtual-machine-threads vm)
 			  (loop for thread in (bindat-get-field reply :thread)
-					collect (make-jdi-thread :virtual-machine vm
-											 :id (bindat-get-field thread :id))))
+					collect (jdi-virtual-machine-get-object-create 
+							 vm
+							 (make-jdi-thread :id (bindat-get-field thread :id)))))
 		(cont-values (jdi-virtual-machine-threads vm)))))
-
-(defun jdi-virtual-machine-get-suspended-threads (vm)
-  (jdi-debug "jdi-virtual-machine-get-suspended-threads")
-  (lexical-let ((vm vm))
-	(cont-bind (threads) (jdi-virtual-machine-get-threads vm)
-	  (lexical-let ((threads threads))
-		(cont-bind (suspendeds) (cont-mapcar 'jdi-thread-get-suspended-p threads)
-		  (cont-values (loop for thread in threads
-							 for suspended in suspendeds
-							 if suspended
-							 collect thread)))))))
 
 (defun jdi-virtual-machine-get-classes-by-signature (vm signature)
   (jdi-debug "jdi-virtual-machine-get-classes-by-signature:%s" signature)
@@ -296,6 +298,15 @@
 			   (jdi-virtual-machine-classes vm)))
 	found))
 
+(defun jdi-virtual-machine-get-object-create (vm newobj)
+  (jdi-debug "jdi-virtual-machine-get-object-create:%s" (jdi-object-id newobj))
+  (let ((found (gethash (jdi-object-id newobj) (jdi-virtual-machine-objects vm))))
+	(jdi-debug "jdi-virtual-machine-get-object-create:%s" (if found "found" "not found"))
+	(unless found
+	  (setf (jdi-mirror-virtual-machine newobj) vm)
+	  (puthash (jdi-object-id newobj) (setq found newobj) (jdi-virtual-machine-objects vm)))
+	found))
+
 (defun jdi-thread-get-name (thread)
   (jdi-debug "jdi-thread-get-name")
   (lexical-let ((thread thread))
@@ -307,14 +318,74 @@
 
 (defun jdi-thread-get-status (thread)
   (jdi-debug "jdi-thread-get-status")
+  (if (jdi-thread-status thread)
+	  (cont-values (jdi-thread-status thread) (jdi-thread-suspend-status thread))
+
+	(lexical-let ((thread thread))
+	  (cont-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread) "thread-status" `((:thread . ,(jdi-thread-id thread))))
+		(setf (jdi-thread-status thread)
+			  (bindat-get-field reply :thread-status)
+			  (jdi-thread-suspend-status thread)
+			  (bindat-get-field reply :suspend-status))
+		(jdi-debug "thread-status:%s suspend-status:%s" (jdi-thread-status thread) (jdi-thread-suspend-status thread))
+		(cont-values (jdi-thread-status thread) (jdi-thread-suspend-status thread))))))
+
+(defun jdi-thread-get-thread-group (thread)
+  (jdi-debug "jdi-thread-get-thread-group:%s" (jdi-thread-id thread))
+  (if (jdi-thread-thread-group thread)
+	  (cont-values (jdi-thread-thread-group thread))
+
+	(lexical-let ((thread thread))
+	  (cont-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread) "thread-group" `((:thread . ,(jdi-thread-id thread))))
+		(jdi-debug "jdi-thread-get-thread-group:group=%s" (bindat-get-field reply :group))
+		(cont-values (setf (jdi-thread-thread-group thread) (jdi-virtual-machine-get-object-create 
+															 (jdi-mirror-virtual-machine thread)
+															 (make-jdi-thread-group :id (bindat-get-field reply :group)))))))))
+
+(defun jdi-thread-get-system-thread-p (thread)
+  (jdi-debug "jdi-thread-get-system-thread-p:%s" (jdi-thread-id thread))
   (lexical-let ((thread thread))
-	(cont-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread) "thread-status" `((:thread . ,(jdi-thread-id thread))))
-	  (setf (jdi-thread-status thread)
-			(bindat-get-field reply :thread-status)
-			(jdi-thread-suspend-status thread)
-			(bindat-get-field reply :suspend-status))
-	  (jdi-debug "thread-status:%s suspend-status:%s" (jdi-thread-status thread) (jdi-thread-suspend-status thread))
-	  (cont-values (jdi-thread-status thread) (jdi-thread-suspend-status thread)))))
+	(cont-bind (group) (jdi-thread-get-thread-group thread)
+	  (jdi-thread-group-get-system-thread-p group))))
+
+(defun jdi-thread-group-get-system-thread-p (thread-group)
+  (jdi-debug "jdi-thread-group-get-system-thread-p:%s" (jdi-thread-group-id thread-group))
+  (lexical-let ((thread-group thread-group))
+	(cont-bind (name) (jdi-thread-group-get-name thread-group)
+	  (lexical-let ((name name))
+		(cont-bind (parent) (jdi-thread-group-get-parent thread-group)
+		  (if (string= name "main")
+			  (cont-values nil)
+			(if parent
+				(jdi-thread-group-get-system-thread-p parent)
+			  (cont-values t))))))))
+
+(defun jdi-thread-group-get-name (thread-group)
+  (jdi-debug "jdi-thread-group-get-name:%s" (jdi-thread-group-id thread-group))
+  (if (jdi-thread-group-name thread-group)
+	  (cont-values (jdi-thread-group-name thread-group))
+	
+	(lexical-let ((thread-group thread-group))
+	  (cont-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread-group) "thread-group-name" `((:group . ,(jdi-thread-group-id thread-group))))
+		(cont-values (setf (jdi-thread-group-name thread-group) (jdwp-get-string reply :group-name)))))))
+
+(defun jdi-thread-group-get-parent (thread-group)
+  (jdi-debug "jdi-thread-group-get-name:%s" (jdi-thread-group-id thread-group))
+  (if (jdi-thread-group-parent thread-group)
+	  (if (equal (jdi-thread-group-parent thread-group) t)
+		  (cont-values nil)
+		(cont-values (jdi-thread-group-parent thread-group)))
+
+	(lexical-let ((thread-group thread-group))
+	  (cont-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread-group) "thread-group-parent" `((:group . ,(jdi-thread-group-id thread-group))))
+		(let ((group-id (bindat-get-field reply :parent-group)))
+		  (if (equal group-id [0 0 0 0 0 0 0 0])
+			  (progn
+				(setf (jdi-thread-group-parent thread-group) t)
+				(cont-values nil))
+			(cont-values (setf (jdi-thread-group-parent thread-group) (jdi-virtual-machine-get-object-create 
+																	   (jdi-mirror-virtual-machine thread-group)
+																	   (make-jdi-thread-group :id (bindat-get-field reply :parent-group)))))))))))
 
 (defun jdi-thread-status-string (thread)
   (cond ((equal (jdi-thread-status thread) jdwp-thread-status-zombie) "Zombie")
@@ -524,7 +595,7 @@
 		  (cont-values (jdi-thread-frames thread)))))))
 
 (defun jdi-thread-get-suspended-p (thread)
-  (jdi-debug "jdi-thread-get-suspend-status")
+  (jdi-debug "jdi-thread-get-suspended-p")
   (cont-bind (status suspend-status) (jdi-thread-get-status thread)
 	(cont-values (= suspend-status jdwp-suspend-status-suspended))))
 
@@ -948,8 +1019,7 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 											  :class class
 											  :method method
 											  :line-code-index line-code-index))
-				 (thread (make-jdi-thread :virtual-machine vm
-										  :id thread-id))
+				 (thread (jdi-virtual-machine-get-object-create vm (make-jdi-thread :id thread-id)))
 				 (frame (make-jdi-frame :virtual-machine vm
 										:thread thread
 										:location location)))
@@ -977,8 +1047,7 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 											  :class class
 											  :method method
 											  :line-code-index line-code-index))
-				 (thread (make-jdi-thread :virtual-machine vm
-										  :id thread-id))
+				 (thread (jdi-virtual-machine-get-object-create vm (make-jdi-thread :id thread-id)))
 				 (frame (make-jdi-frame :virtual-machine vm
 										:thread thread
 										:location location)))

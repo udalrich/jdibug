@@ -853,14 +853,25 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 
 (defun jdibug-make-threads-tree (tree)
   (jdibug-debug "jdibug-make-threads-tree")
+  (jdibug-time-start)
   (lexical-let ((tree tree)
 				(vm (widget-get tree :jdi-virtual-machine)))
 	(cont-bind (threads) (jdi-virtual-machine-get-threads vm)
-	  (cont-bind (nodes) (cont-mapcar 'jdibug-make-thread-tree threads)
-		(jdibug-debug "jdibug-make-threads-tree: number of nodes = %s" (length nodes))
-		(jdibug-tree-set-and-refresh (jdibug-frames-buffer jdibug-this)
-									 tree
-									 nodes))))
+	  (jdibug-time-end "jdi-virtual-machine-get-threads")
+	  (jdibug-time-start)
+	  (lexical-let ((threads threads))
+		(cont-bind (system-threads-p) (cont-mapcar 'jdi-thread-get-system-thread-p threads)
+		  (jdibug-time-end "mapcar jdi-therad-get-system-thread-p")
+		  (jdibug-time-start)
+		  (jdibug-debug "jdibug-make-threads-tree:system-threads-p:%s" system-threads-p)
+		  (lexical-let ((system-threads-p system-threads-p))
+			(cont-bind (nodes) (cont-mapcar 'jdibug-make-thread-tree (loop for thread in threads
+																		   for system-thread-p in system-threads-p
+																		   unless system-thread-p collect thread))
+			  (jdibug-debug "jdibug-make-threads-tree: number of nodes = %s" (length nodes))
+			  (jdibug-tree-set-and-refresh (jdibug-frames-buffer jdibug-this)
+										   tree
+										   nodes)))))))
   (jdibug-debug "jdibug-make-threads-tree: return loading")
   (list `(item :value "loading...")))
 

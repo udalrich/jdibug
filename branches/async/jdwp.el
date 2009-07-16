@@ -583,6 +583,11 @@
 					   :command-spec ((:thread         vec (eval jdwp-object-id-size)))
 					   :reply-spec   ((:thread-status  u32)
 									  (:suspend-status u32)))
+		(:name         "thread-group"
+					   :commandset   11
+					   :command      5
+					   :command-spec ((:thread         vec (eval jdwp-object-id-size)))
+					   :reply-spec   ((:group          vec (eval jdwp-object-id-size))))
 		(:name         "frames"
 					   :commandset   11
 					   :command      6
@@ -603,6 +608,11 @@
 					   :command      1
 					   :command-spec ((:group         vec (eval jdwp-object-id-size)))
 					   :reply-spec   ((:group-name    struct jdwp-string-spec)))
+		(:name         "thread-group-parent"
+					   :commandset   12
+					   :command      2
+					   :command-spec ((:group         vec (eval jdwp-object-id-size)))
+					   :reply-spec   ((:parent-group  vec (eval jdwp-object-id-size))))
 		(:name         "thread-group-children"
 					   :commandset   12
 					   :command      3
