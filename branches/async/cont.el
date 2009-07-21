@@ -41,20 +41,11 @@
 
 (defun cont-generate-id ()
   "Generate a unique id, throw error if too many continuations are running."
-  (let ((num 0))
-	(catch 'done
-	  (while (< num cont-maximum)
-		(if (null (assoc num cont-alist))
-			(throw 'done num)
-		  (setq num (1+ num))))
-	  (error "too many continuations running"))))
-
-(defun cont-have-child-p (id)
-  "whether this id have any child continuations."
-  (and id
-	   (find-if (lambda (pair)
-				  (equal (cont-parent-id (cdr pair)) id))
-				cont-alist)))
+  (if cont-alist
+	  (if (> (length cont-alist) cont-maximum)
+		  (error "too many continuations running")
+		(1+ (caar cont-alist)))
+	0))
 
 ;; cont-get and cont-delete should be the only access to cont-alist
 ;; it makes sure that we have a cont that points back to identity without
@@ -67,16 +58,9 @@
   "Return a struct-cont from this id."
   (cont-debug "cont-get:%s" id)
   (if (null id)
-	  (make-cont :id nil :parent-id nil :func 'cont-identity)
+	  (make-cont :id nil :parent-id nil :func 'identity)
 	(or (cdr (assoc id cont-alist))
-		(make-cont :id nil :parent-id nil :func 'cont-identity))))
-
-		  
-(defun cont-identity (&rest args)
-  (if args
-	  (if (cdr args)
-		  (apply 'identity (list args))
-		(apply 'identity args))))
+		(make-cont :id nil :parent-id nil :func 'identity))))
 
 (defun cont-delete (id)
   (cont-debug "cont-delete:id=%s" id)
@@ -85,8 +69,8 @@
   (if id
 	  (setq cont-alist (assq-delete-all id cont-alist))))
 
-(defvar cont-proc-list nil
-  "A list of process ids that are currently running.")
+(defvar cont-proc-hash (make-hash-table :test 'equal)
+  "A hash table with key=proc-id value=number of conts are currently running.")
 
 (defvar cont-current-proc-id nil)
 
@@ -94,35 +78,36 @@
   (let ((num 0))
 	(catch 'done
 	  (while (< num cont-proc-maximum)
-		(if (not (member num cont-proc-list))
+		(if (not (gethash num cont-proc-hash))
 			(throw 'done num)
 		  (setq num (1+ num))))
 	  (error "too many process running"))))
 
 (defmacro cont-fork (&rest body)
   `(let ((cont-current-proc-id ,(cont-new-proc-id)))
-	 (setq cont-proc-list (cons cont-current-proc-id cont-proc-list))
+	 (puthash cont-current-proc-id 0 cont-proc-hash)
 	 ,@body
 	 cont-current-proc-id))
+
+(defun cont-apply (func retvals)
+  (apply func retvals))
 
 (defun cont-values (retval &rest retvals)
   (cont-debug "cont-values:current-id=%s" cont-current-id)
   (cont-trace "cont-values:retvals=%s" (elog-trim retvals 100))
   ;; we do the bottom so to force user to pass in something 
   (let ((retvals (cons retval retvals)))
-	(if (cont-have-child-p cont-current-id)
-		(cont-debug "have child, not deleting/applying")
-	  (let* ((cont-previous-id cont-current-id)
-			 (cont-current (cont-get cont-current-id))
-			 ;; current-id = next-id that we are looking at
-			 (cont-current-id (cont-id (cont-get (cont-parent-id cont-current))))
-			 (cont-current-proc-id (cont-proc-id cont-current)))
-		(cont-delete cont-previous-id)
-		(cont-debug "cont-values:deleted")
-		(let ((result (apply (cont-func cont-current) retvals)))
-		  (cont-gc)
-		  (cont-debug "applied")
-		  result)))))
+	(let* ((cont-previous-id cont-current-id)
+		   (cont-current (cont-get cont-current-id))
+		   ;; current-id = next-id that we are looking at
+		   (cont-current-id (cont-id (cont-get (cont-parent-id cont-current))))
+		   (cont-current-proc-id (cont-proc-id cont-current)))
+	  (cont-delete cont-previous-id)
+	  (cont-debug "cont-values:deleted")
+	  (let ((result (cont-apply (cont-func cont-current) retvals)))
+		(cont-gc)
+		(cont-debug "applied")
+		result))))
 
 (defun cont-values-this (id retval &rest retvals)
   (let ((retvals (cons retval retvals)))
@@ -145,13 +130,13 @@
 (defun cont-init ()
   (interactive)
   (setq cont-alist nil)
-  (setq cont-proc-list nil)
+  (setq cont-proc-hash (make-hash-table :test 'equal))
   (setq cont-waiting-id-list nil))
 
 (defun cont-clear-p ()
   (interactive)
   (and (null cont-alist)
-	   (null cont-proc-list)
+	   (equal 0 (hash-table-count cont-proc-hash))
 	   (null cont-waiting-id-list)))
 
 (defun cont-list ()
@@ -160,6 +145,12 @@
 		  (apply 'concat (loop for cont-pair in cont-alist
 							   for cont = (cdr cont-pair)
 							   collect (format "\n    id=%s:parent-id=%s" (cont-id cont) (cont-parent-id cont))))))
+
+(defun cont-proc-list ()
+  (interactive)
+  (maphash (lambda (k v)
+			 (message "%s: %s" k v))
+		   cont-proc-hash))
 
 (defun cont-kill (proc-id)
   "Stop all the continuations for the process id, and its child continuations."
@@ -177,13 +168,10 @@
 
 (defun cont-gc ()
   "Garbage Collect. :P"
-  (let ((all-proc-id (loop for pair in cont-alist
-						   for cont = (cdr pair)
-						   collect (cont-proc-id cont))))
-	(setq cont-proc-list
-		  (loop for proc-id in cont-proc-list
-				if (member proc-id all-proc-id)
-				collect proc-id))))
+  (maphash (lambda (k v)
+			 (if (equal v 0)
+				 (remhash k cont-proc-hash)))
+		   cont-proc-hash))
 
 (defun cont-mapcar (function sequence)
   (cont-debug "cont-mapcar: length of sequence = %s" (length sequence))
