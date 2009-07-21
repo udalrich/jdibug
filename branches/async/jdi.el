@@ -98,7 +98,9 @@
 
 (defstruct (jdi-thread-group (:include jdi-object))
   name
-  parent)
+  parent
+  child-threads
+  child-groups)
 
 (defstruct (jdi-frame (:include jdi-mirror)) ;; this is actually StackFrame in JDI
   id
@@ -244,19 +246,31 @@
 
 (defun jdi-virtual-machine-get-threads (vm)
   (jdi-debug "jdi-virtual-machine-get-threads")
-;;   (if (jdi-virtual-machine-threads vm)
-;; 	  (cont-values (jdi-virtual-machine-threads vm))
+  (if (jdi-virtual-machine-threads vm)
+ 	  (cont-values (jdi-virtual-machine-threads vm))
 	(lexical-let ((vm vm))
 	  (jdi-time-start)
 	  (cont-bind (reply error jdwp id) (jdwp-send-command (jdi-virtual-machine-jdwp vm) "all-threads" nil)
 		(jdi-time-end "jdi-virtual-machine-get-threads:all-threads")
 		(jdi-debug "number of threads:%s" (bindat-get-field reply :threads))
-		(setf (jdi-virtual-machine-threads vm)
-			  (loop for thread in (bindat-get-field reply :thread)
-					collect (jdi-virtual-machine-get-object-create 
-							 vm
-							 (make-jdi-thread :id (bindat-get-field thread :id)))))
-		(cont-values (jdi-virtual-machine-threads vm)))))
+		(cont-values (setf (jdi-virtual-machine-threads vm)
+						   (loop for thread in (bindat-get-field reply :thread)
+								 collect (jdi-virtual-machine-get-object-create 
+										  vm
+										  (make-jdi-thread :id (bindat-get-field thread :id))))))))))
+
+(defun jdi-virtual-machine-get-top-level-thread-groups (vm)
+  (jdi-debug "jdi-virtual-machine-get-top-level-thread-groups")
+  (lexical-let ((vm vm))
+	(cont-bind (reply error jdwp id) (jdwp-send-command (jdi-virtual-machine-jdwp vm) "top-level-thread-groups" nil)
+	  (jdi-debug "jdi-virtual-machine-get-top-level-thread-groups:number = %s" (bindat-get-field reply :groups))
+	  (cont-values (loop for group in (bindat-get-field reply :group)
+						 collect (jdi-virtual-machine-get-object-create vm (make-jdi-thread-group :id (bindat-get-field group :id))))))))
+
+(defun jdi-virtual-machine-get-all-thread-groups (vm)
+  (jdi-debug "jdi-virtual-machine-get-all-thread-groups")
+  (cont-bind (top-levels) (jdi-virtual-machine-get-top-level-thread-groups vm)
+	()))
 
 (defun jdi-virtual-machine-get-classes-by-signature (vm signature)
   (jdi-debug "jdi-virtual-machine-get-classes-by-signature:%s" signature)
@@ -277,10 +291,14 @@
 											  :status status)
 						 collect newclass)))))
 														
-(defun jdi-virtual-machine-suspended-threads (vm)
+(defun jdi-virtual-machine-get-suspended-threads (vm)
   (jdi-debug "jdi-virtual-machine-suspended-threads")
-  (loop for frame in (jdi-virtual-machine-suspended-frames vm)
-		collect (jdi-frame-thread frame)))
+  (cont-bind (threads) (jdi-virtual-machine-get-threads vm)
+	(lexical-let ((threads threads))
+	  (cont-bind (suspendeds) (cont-mapcar 'jdi-thread-get-suspended-p threads)
+		(cont-values (loop for suspended in suspendeds
+						   for thread in threads
+						   if suspended collect thread))))))
 
 (defun* jdi-virtual-machine-get-class-create (vm id &key signature ref-type-tag status)
   (let ((found (gethash id (jdi-virtual-machine-classes vm))))
@@ -370,7 +388,7 @@
 		(cont-values (setf (jdi-thread-group-name thread-group) (jdwp-get-string reply :group-name)))))))
 
 (defun jdi-thread-group-get-parent (thread-group)
-  (jdi-debug "jdi-thread-group-get-name:%s" (jdi-thread-group-id thread-group))
+  (jdi-debug "jdi-thread-group-get-parent:%s" (jdi-thread-group-id thread-group))
   (if (jdi-thread-group-parent thread-group)
 	  (if (equal (jdi-thread-group-parent thread-group) t)
 		  (cont-values nil)
@@ -386,6 +404,29 @@
 			(cont-values (setf (jdi-thread-group-parent thread-group) (jdi-virtual-machine-get-object-create 
 																	   (jdi-mirror-virtual-machine thread-group)
 																	   (make-jdi-thread-group :id (bindat-get-field reply :parent-group)))))))))))
+
+(defun jdi-thread-group-get-children (thread-group)
+  (jdi-debug "jdi-thread-group-get-children:%s" (jdi-thread-group-id thread-group))
+  (cont-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread-group) "thread-group-children" `((:group . ,(jdi-thread-group-id thread-group))))
+	(setf (jdi-thread-group-child-threads thread-group) 
+		  (loop for thread in (bindat-get-field reply :child-thread)
+				collect (jdi-virtual-machine-get-object-create (jdi-mirror-virtual-machine thread-group)
+															   (make-jdi-thread :id (bindat-get-field thread :child-thread)))))
+	(setf (jdi-thread-group-child-groups thread-group) 
+		  (loop for group in (bindat-get-field reply :child-group)
+				collect (jdi-virtual-machine-get-object-create (jdi-mirror-virtual-machine thread-group)
+															   (make-jdi-thread-group :id (bindat-get-field group :child-group)))))
+	(cont-values (list (jdi-thread-group-child-threads thread-group) (jdi-thread-group-child-groups thread-group)))))
+
+(defun jdi-thread-group-get-thread-groups (thread-group)
+  (jdi-debug "jdi-thread-group-get-thread-groups:%s" (jdi-thread-group-id thread-group))
+  (cont-bind (result) (jdi-thread-group-get-children thread-group)
+	(cont-values (cadr result))))
+
+(defun jdi-thread-group-get-threads (thread-group)
+  (jdi-debug "jdi-thread-group-get-threads:%s" (jdi-thread-group-id thread-group))
+  (cont-bind (result) (jdi-thread-group-get-children thread-group)
+	(cont-values (car result))))
 
 (defun jdi-thread-status-string (thread)
   (cond ((equal (jdi-thread-status thread) jdwp-thread-status-zombie) "Zombie")
@@ -1064,9 +1105,9 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 				 (signature (jdwp-get-string event :u :signature))
 				 (newclass (jdi-virtual-machine-get-class-create vm type-id :signature signature)))
 	(jdi-debug "class-loaded:%s" signature)
-	(puthash type-id newclass (jdi-virtual-machine-classes vm))
-	(puthash signature (cons newclass (gethash signature (jdi-virtual-machine-classes-by-signature vm)))
-			 (jdi-virtual-machine-classes-by-signature vm))
+;; 	(puthash type-id newclass (jdi-virtual-machine-classes vm))
+;; 	(puthash signature (cons newclass (gethash signature (jdi-virtual-machine-classes-by-signature vm)))
+;; 			 (jdi-virtual-machine-classes-by-signature vm))
 	(run-hook-with-args 'jdi-class-prepare-hooks newclass)))
 
 (defun jdi-handle-class-unload-event (jdwp event)

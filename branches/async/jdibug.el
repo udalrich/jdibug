@@ -380,8 +380,8 @@ And position the point at the line number."
 	(setf (jdibug-refresh-proc jdibug-this)
 		  (cont-fork
 		   (if location (jdibug-goto-location location))
-		   (jdibug-refresh-locals-buffer-now)
-		   (jdibug-refresh-frames-buffer-now)))))
+		   (cont-bind (result) (jdibug-refresh-locals-buffer-now)
+			 (jdibug-refresh-frames-buffer-now))))))
   ;; 			   (cont-bind (threads) (jdi-virtual-machine-get-threads vm)
   ;; 				 (if (and thread location)
   ;; 					 (progn
@@ -529,7 +529,7 @@ And position the point at the line number."
   ;; have this run later, so we can call this function in expander, and do not have to worry
   ;; about this executing before we return the "loading..." sign!
   (jdibug-debug "jdibug-tree-set-and-refresh")
-  (jdibug-run-with-timer 0 nil 'jdibug-tree-set-and-refresh-now buffer tree args))
+  (jdibug-run-with-timer 1 nil 'jdibug-tree-set-and-refresh-now buffer tree args))
 
 (defun jdibug-tree-set-and-refresh-now (buffer tree args)
   (jdibug-debug "jdibug-tree-set-and-refresh-now")
@@ -616,6 +616,7 @@ And position the point at the line number."
 If tree has attribute :dynargs, generate new :args from that function.
 Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (jdibug-debug "jdibug-tree-mode-reflesh-tree")
+  (jdibug-time-start)
   (unless tree
 	(jdibug-error "tree is null!"))
   (let ((path (or (jdibug-tree-mode-find-child-path tree (widget-get tree :jdibug-opened-path))
@@ -629,7 +630,8 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	(jdibug-debug "before widget-value-set")
     (widget-value-set tree (widget-value tree))
 	(jdibug-debug "before tree-mode-open-tree")
-    (tree-mode-open-tree tree path)))
+    (tree-mode-open-tree tree path)
+	(jdibug-time-end "jdibug-tree-mode-reflesh-tree")))
 
 (defun jdibug-value-expander (tree)
   (lexical-let* ((tree tree)

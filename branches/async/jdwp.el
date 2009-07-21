@@ -41,6 +41,11 @@
   :group 'jdibug
   :type 'integer)
 
+(defcustom jdwp-wait-for-seconds 0.1
+  "Number of seconds to wait for reply synchronously. Set to 0 for fully asynchronous, set to 99.0 for fully synchrounous."
+  :group 'jdibug
+  :type 'float)
+
 (elog-make-logger jdwp)
 
 (defstruct jdwp
@@ -59,8 +64,11 @@
   ;; jdwp-cont that will be executed after we are connected and ready
   ready-cont
 
-  ;; an alist with the key=request-id and value=struct jdwp-request
-  requests-alist
+  ;; a hash-table with the key=request-id and value=struct jdwp-request
+  (id-requests-hash (make-hash-table :test 'equal))
+
+  ;; a hash-table with key=(name . data) and value=struct jdwp-request
+  (namedata-requests-hash  (make-hash-table :test 'equal))
 
   current-reply
 
@@ -74,7 +82,14 @@
   server
   port
 
-  sent-requests)
+  sent-requests
+  last-processed-reply-id
+  
+  ;; these two are only used for synchronous operation
+  ;; where we want to execute the continuation straight in the thread of
+  ;; jdwp-send-command instead of in the process filter
+  execute-conts
+  execute-result)
 
 (defstruct jdwp-request
   name
@@ -696,7 +711,7 @@
 
 (defun jdwp-send-handshake (jdwp)
   (jdwp-trace "jdwp-send-handshake")
-  (process-send-string (jdwp-process jdwp) jdwp-handshake))
+  (jdwp-process-send-string jdwp jdwp-handshake))
 ;;   (catch 'done
 ;; 	(while t
 ;; 	  (accept-process-output (jdwp-process jdwp) 1 0 t)
@@ -709,10 +724,10 @@
 ;;   (jdwp-consume-output jdwp (length jdwp-handshake)))
 
 (defun jdwp-process-filter (process string)
-  (jdwp-trace "jdwp-process-filter:string=%s" string)
+  (jdwp-debug "jdwp-process-filter")
   (jdwp-ordinary-insertion-filter process string)
   (let ((jdwp (process-get process 'jdwp)))
-	(jdwp-run-with-timer 0 nil 'jdwp-monitor jdwp)))
+	(jdwp-monitor jdwp)))
 
 ;; (defun jdwp-process-filter (process string)
 ;;   (jdwp-debug "jdwp-process-filter")
@@ -771,39 +786,47 @@
 
   (cont-values-this (jdwp-ready-cont jdwp) t))
 
+(defun jdwp-monitor-handshake (jdwp)
+  (if (string= (jdwp-residual-output jdwp)
+			   jdwp-handshake)
+	  (progn
+		(setf (jdwp-handshaked-p jdwp) t)
+		(jdwp-consume-output jdwp (length jdwp-handshake))
+		(cont-bind (reply error jdwp id) (jdwp-send-command jdwp "id-sizes" nil)
+		  (jdwp-process-id-sizes jdwp reply)))))
+
+(defun jdwp-monitor-2 (jdwp)
+  (let ((packet))
+	(while (setq packet (jdwp-get-packet jdwp))
+	  (if (jdwp-reply-packet-p packet)
+		  ;; reply packet
+		  (let* ((id (bindat-get-field
+					  (bindat-unpack '((:id u32)) (substring packet 4 8))
+					  :id))
+				 (request (gethash id (jdwp-id-requests-hash jdwp)))
+				 (command-data (jdwp-request-command-data request))
+				 (conts (jdwp-request-conts request)))
+			(jdwp-trace "received reply packet for id:%s" id)
+			(remhash id (jdwp-id-requests-hash jdwp))
+			(remhash (cons (jdwp-request-name request) (jdwp-request-data request)) (jdwp-namedata-requests-hash jdwp))
+			(let ((result (jdwp-process-reply jdwp packet command-data)))
+			  (if (> jdwp-wait-for-seconds 0.0)
+				  (setf (jdwp-execute-conts jdwp) conts
+						(jdwp-execute-result jdwp) result)
+
+				(mapc (lambda (cont)
+						(jdwp-run-with-timer 0 nil 'apply 'cont-values-this (cons cont result)))
+					  conts))))
+
+		;; command packet
+		(jdwp-process-command jdwp packet)
+		;;			  (jdwp-process-command jdwp packet)
+		(jdwp-trace "received command packet")))))
+
 (defun jdwp-monitor (jdwp)
   (jdwp-trace "jdwp-monitor handshaked=%s" (jdwp-handshaked-p jdwp))
-  (cond ((null (jdwp-handshaked-p jdwp))
-		 (if (string= (jdwp-residual-output jdwp)
-					  jdwp-handshake)
-			 (progn
-			   (setf (jdwp-handshaked-p jdwp) t)
-			   (jdwp-consume-output jdwp (length jdwp-handshake))
-			   (cont-bind (reply error jdwp id) (jdwp-send-command jdwp "id-sizes" nil)
-				 (jdwp-process-id-sizes jdwp reply)))))
-
-		(t
-		 (let ((packet))
-		   (while (setq packet (jdwp-get-packet jdwp))
-			 (if (jdwp-reply-packet-p packet)
-				 ;; reply packet
-				 (let* ((id (bindat-get-field
-							 (bindat-unpack '((:id u32)) (substring packet 4 8))
-							 :id))
-						(request (aget (jdwp-requests-alist jdwp) id))
-						(command-data (jdwp-request-command-data request))
-						(conts (jdwp-request-conts request)))
-				   (jdwp-trace "received reply packet for id:%s" id)
-				   (jdwp-trace "requests-alist:%s" (elog-trim (jdwp-requests-alist jdwp) 100))
-				   (setf (jdwp-requests-alist jdwp) (assq-delete-all id (jdwp-requests-alist jdwp)))
-				   (mapc (lambda (cont)
-						   (apply 'cont-values-this (cons cont (jdwp-process-reply jdwp packet command-data))))
-						 conts))
-
-			   ;; command packet
-			   (jdwp-process-command jdwp packet)
-			   ;;			  (jdwp-process-command jdwp packet)
-			   (jdwp-trace "received command packet")))))))
+  (cond ((null (jdwp-handshaked-p jdwp)) (jdwp-monitor-handshake jdwp))
+		(t (jdwp-monitor-2 jdwp))))
 
 (defun jdwp-connect (jdwp server port)
   "[ASYNC] returns t if connected and an (ERROR-SYMBOL . SIGNAL-DATA) if there are problems connecting"
@@ -822,7 +845,7 @@
 			(set-buffer-multibyte nil))
 		  (set-process-coding-system (jdwp-process jdwp) 'no-conversion 'no-conversion)
 		  (setf (jdwp-ready-cont jdwp) (cont-get-current-id))
-		  (process-send-string (jdwp-process jdwp) jdwp-handshake))
+		  (jdwp-process-send-string jdwp jdwp-handshake))
 		jdwp)
 	(error (cont-values err))))
 
@@ -854,6 +877,7 @@
      ,@body))
 
 (defun jdwp-process-reply (jdwp str command-data)
+  (jdwp-debug "jdwp-process-reply")
   (jdwp-with-size 
     jdwp
     (let* ((packet       (bindat-unpack jdwp-reply-spec (substring str 0 11)))
@@ -861,14 +885,15 @@
 		   (error        (bindat-get-field packet :error))
 		   (protocol     (jdwp-get-protocol (cdr (assoc :name command-data))))
 		   (reply-spec   (getf protocol :reply-spec)))
-	  (jdwp-trace "process-reply packet-header:%s" packet)
+	  (jdwp-trace "jdwp-process-reply packet-header:%s" packet)
+	  (setf (jdwp-last-processed-reply-id jdwp) id)
       (if (not (= error 0))
 		  (progn
-			(jdwp-debug "received error:%d:%s for id:%d command:%s" error (jdwp-error-string error) id (getf protocol :name))
+			(jdwp-error "jdwp-process-reply: received error:%d:%s for id:%d command:%s" error (jdwp-error-string error) id (getf protocol :name))
 			(list nil error jdwp id))
 		(if reply-spec
 			(let ((reply-data   (bindat-unpack reply-spec str 11)))
-			  (jdwp-info "reply id:%5s command:[%20s] time:%-6s len:%5s error:%1d" 
+			  (jdwp-info "jdwp-process-reply:id:%5s command:[%20s] time:%-6s len:%5s error:%1d" 
 						 id 
 						 (getf protocol :name)
 						 (float-time (time-subtract (current-time) (cdr (assoc :sent-time command-data))))
@@ -904,17 +929,16 @@
 	(= flags #x80)))
 
 (defun jdwp-get-packet (jdwp)
-;;  (jdwp-trace "jdwp-get-packet")
-  (jdwp-with-size jdwp
-    (let ((packet nil)
-		  (total-length (jdwp-output-length jdwp))
-		  (first-packet-length (jdwp-output-first-packet-length jdwp)))
-;;	  (jdwp-debug "jdwp-get-packet total-length=%s first-packet-length=%s" total-length first-packet-length)
-	  (when (and (>= total-length 11)
-				 (>= total-length first-packet-length)
-		  (setq packet (substring (jdwp-residual-output jdwp) 0 first-packet-length))
-		  (jdwp-consume-output jdwp first-packet-length)))
-	  packet)))
+  (jdwp-debug "jdwp-get-packet")
+  (let ((packet nil)
+		(total-length (jdwp-output-length jdwp))
+		(first-packet-length (jdwp-output-first-packet-length jdwp)))
+	(jdwp-debug "jdwp-get-packet total-length=%s first-packet-length=%s" total-length first-packet-length)
+	(when (and (>= total-length 11)
+			   (>= total-length first-packet-length))
+	  (setq packet (substring (jdwp-residual-output jdwp) 0 first-packet-length))
+	  (jdwp-consume-output jdwp first-packet-length))
+	packet))
 
 (defvar jdwp-accepting-more-output nil
   "This will be true when we are 'in' jdwp-accept-more-output")
@@ -942,7 +966,7 @@
 ;;   (setf (jdwp-residual-output jdwp) (concat (jdwp-residual-output jdwp) (string-as-unibyte string))))
 
 (defun jdwp-consume-output (jdwp len)
-  (jdwp-trace "jdwp-consume-output:len=%s" len)
+  (jdwp-debug "jdwp-consume-output:len=%s" len)
   (when (jdwp-process jdwp)
     (with-current-buffer (process-buffer (jdwp-process jdwp))
       (goto-char (point-min))
@@ -1064,19 +1088,22 @@
     (bindat--pack-group struct spec)
     (if no-return nil bindat-raw)))
 
+(defun jdwp-get-ongoing (jdwp name data)
+  (gethash (cons name data) (jdwp-namedata-requests-hash jdwp)))
+
+(defun jdwp-process-send-string (jdwp string)
+  (process-send-string (jdwp-process jdwp) string))
+
 (defun jdwp-send-command (jdwp name data)
   (jdwp-with-size 
     jdwp
     (if (null (jdwp-process jdwp))
 		(jdwp-trace "jdwp is not connected")
-	  (let ((ongoing (find-if (lambda (pair)
-								(and (equal (jdwp-request-name (cdr pair)) name)
-									 (equal (jdwp-request-data (cdr pair)) data)))
-							  (jdwp-requests-alist jdwp))))
+	  (let ((ongoing (jdwp-get-ongoing jdwp name data)))
 		(if ongoing
 			(progn
 			  (jdwp-info "ongoing command %s %s" name data)
-			  (setf (jdwp-request-conts (cdr ongoing)) (cons (cont-get-current-id) (jdwp-request-conts (cdr ongoing)))))
+			  (setf (jdwp-request-conts ongoing) (cons (cont-get-current-id) (jdwp-request-conts ongoing))))
 
 		  ;; brute force mechanism to help me improve performance by caching in jdi.el 
 		  (if jdwp-debug-flag
@@ -1115,16 +1142,31 @@
 							 (substring outstr 0 100)
 						   outstr)))
 			(jdwp-debug "data:%s" data)
-			(let ((inhibit-eol-conversion t))
+			(let ((inhibit-eol-conversion t)
+				  (request (make-jdwp-request :name name
+											  :data data
+											  :command-data command-data
+											  :conts (list (cont-get-current-id)))))
 			  (setf (jdwp-current-reply jdwp) nil)
-			  (process-send-string (jdwp-process jdwp) command-packed)
-			  (push `(,id . ,(make-jdwp-request :name name
-												:data data
-												:command-data command-data
-												:conts (list (cont-get-current-id))))
-					(jdwp-requests-alist jdwp))
-			  )))))))
-;;;		  (accept-process-output (jdwp-process jdwp) 0 0 t))))))
+			  (jdwp-process-send-string jdwp command-packed)
+			  (puthash id request (jdwp-id-requests-hash jdwp))
+			  (puthash (cons name data) request (jdwp-namedata-requests-hash jdwp))
+;;			  )))))))
+			  (if (> jdwp-wait-for-seconds 0.0)
+				  (let ((done nil)
+						(start-time (current-time)))
+					(while (and (< (float-time (time-subtract (current-time) start-time)) jdwp-timeout)
+								(not done))
+					  (accept-process-output (jdwp-process jdwp) jdwp-timeout nil 1)
+					  (jdwp-debug "accept-process-output returned, last-processed-reply-id:%s" (jdwp-last-processed-reply-id jdwp))
+					  (setq done (equal (jdwp-last-processed-reply-id jdwp) id)))
+					(if (not done) 
+						(error "JDWP Timed out for id:%s" id)
+					  (mapc (lambda (cont)
+							  (apply 'cont-values-this (cons cont (jdwp-execute-result jdwp))))
+							(jdwp-execute-conts jdwp))
+					  (jdwp-debug "sent and received reply for id:%s" id)))))))))))
+;;						  (sit-for 0)))))))))))))
 
 ;; 		  (catch 'done
 ;; 			(with-timeout 
