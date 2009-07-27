@@ -34,7 +34,6 @@
 
 (require 'bindat)
 (require 'elog)
-(require 'cont)
 
 (defcustom jdwp-timeout 3
   "Number of seconds to timeout before replies arrive from the debuggee."
@@ -61,15 +60,6 @@
   ;; place where you can store anything
   plist				 
 
-  ;; jdwp-cont that will be executed after we are connected and ready
-  ready-cont
-
-  ;; a hash-table with the key=request-id and value=struct jdwp-request
-  (id-requests-hash (make-hash-table :test 'equal))
-
-  ;; a hash-table with key=(name . data) and value=struct jdwp-request
-  (namedata-requests-hash  (make-hash-table :test 'equal))
-
   current-reply
 
   ;; VM specific sizes that need to be set before any communication happens
@@ -80,16 +70,7 @@
   (frame-id-size          4)
 
   server
-  port
-
-  sent-requests
-  last-processed-reply-id
-  
-  ;; these two are only used for synchronous operation
-  ;; where we want to execute the continuation straight in the thread of
-  ;; jdwp-send-command instead of in the process filter
-  execute-conts
-  execute-result)
+  port)
 
 (defstruct jdwp-request
   name
@@ -782,9 +763,7 @@
   (jdwp-trace "reference-type-id-size:%d" (jdwp-reference-type-id-size jdwp))
 
   (setf (jdwp-frame-id-size jdwp) (bindat-get-field reply :frame-id-size))
-  (jdwp-trace "frame-id-size         :%d" (jdwp-frame-id-size jdwp))
-
-  (cont-values-this (jdwp-ready-cont jdwp) t))
+  (jdwp-trace "frame-id-size         :%d" (jdwp-frame-id-size jdwp)))
 
 (defun jdwp-monitor-handshake (jdwp)
   (if (string= (jdwp-residual-output jdwp)
@@ -792,7 +771,7 @@
 	  (progn
 		(setf (jdwp-handshaked-p jdwp) t)
 		(jdwp-consume-output jdwp (length jdwp-handshake))
-		(cont-bind (reply error jdwp id) (jdwp-send-command jdwp "id-sizes" nil)
+		(multiple-value-bind (reply error jdwp id) (jdwp-send-command jdwp "id-sizes" nil)
 		  (jdwp-process-id-sizes jdwp reply)))))
 
 (defun jdwp-monitor-2 (jdwp)
@@ -800,23 +779,7 @@
 	(while (setq packet (jdwp-get-packet jdwp))
 	  (if (jdwp-reply-packet-p packet)
 		  ;; reply packet
-		  (let* ((id (bindat-get-field
-					  (bindat-unpack '((:id u32)) (substring packet 4 8))
-					  :id))
-				 (request (gethash id (jdwp-id-requests-hash jdwp)))
-				 (command-data (jdwp-request-command-data request))
-				 (conts (jdwp-request-conts request)))
-			(jdwp-trace "received reply packet for id:%s" id)
-			(remhash id (jdwp-id-requests-hash jdwp))
-			(remhash (cons (jdwp-request-name request) (jdwp-request-data request)) (jdwp-namedata-requests-hash jdwp))
-			(let ((result (jdwp-process-reply jdwp packet command-data)))
-			  (if (> jdwp-wait-for-seconds 0.0)
-				  (setf (jdwp-execute-conts jdwp) conts
-						(jdwp-execute-result jdwp) result)
-
-				(mapc (lambda (cont)
-						(jdwp-run-with-timer 0 nil 'apply 'cont-values-this (cons cont result)))
-					  conts))))
+		  (setf (jdwp-current-reply jdwp) packet)
 
 		;; command packet
 		(jdwp-process-command jdwp packet)
@@ -831,23 +794,20 @@
 (defun jdwp-connect (jdwp server port)
   "[ASYNC] returns t if connected and an (ERROR-SYMBOL . SIGNAL-DATA) if there are problems connecting"
   (jdwp-trace "jdwp-connect:%s:%s" server port)
-  (condition-case err
-	  (let ((buffer-name (concat " jdwp-socket-buffer-" server "-" (number-to-string port))))
-		(if (get-buffer buffer-name) (kill-buffer buffer-name))
-		(setf (jdwp-server jdwp) server)
-		(setf (jdwp-port jdwp) port)
-		(setf (jdwp-process jdwp) (open-network-stream "jdwp" buffer-name server port))
-		(when (jdwp-process jdwp)
-		  (process-put               (jdwp-process jdwp) 'jdwp jdwp)
-		  (set-process-filter        (jdwp-process jdwp) 'jdwp-process-filter)
-		  (set-process-sentinel      (jdwp-process jdwp) 'jdwp-process-sentinel)
-		  (with-current-buffer (process-buffer (jdwp-process jdwp))
-			(set-buffer-multibyte nil))
-		  (set-process-coding-system (jdwp-process jdwp) 'no-conversion 'no-conversion)
-		  (setf (jdwp-ready-cont jdwp) (cont-get-current-id))
-		  (jdwp-process-send-string jdwp jdwp-handshake))
-		jdwp)
-	(error (cont-values err))))
+  (let ((buffer-name (concat " jdwp-socket-buffer-" server "-" (number-to-string port))))
+	(if (get-buffer buffer-name) (kill-buffer buffer-name))
+	(setf (jdwp-server jdwp) server)
+	(setf (jdwp-port jdwp) port)
+	(setf (jdwp-process jdwp) (open-network-stream "jdwp" buffer-name server port))
+	(when (jdwp-process jdwp)
+	  (process-put               (jdwp-process jdwp) 'jdwp jdwp)
+	  (set-process-filter        (jdwp-process jdwp) 'jdwp-process-filter)
+	  (set-process-sentinel      (jdwp-process jdwp) 'jdwp-process-sentinel)
+	  (with-current-buffer (process-buffer (jdwp-process jdwp))
+		(set-buffer-multibyte nil))
+	  (set-process-coding-system (jdwp-process jdwp) 'no-conversion 'no-conversion)
+	  (jdwp-process-send-string jdwp jdwp-handshake))
+	jdwp))
 
 (defun jdwp-disconnect (jdwp)
   (condition-case err
@@ -886,7 +846,6 @@
 		   (protocol     (jdwp-get-protocol (cdr (assoc :name command-data))))
 		   (reply-spec   (getf protocol :reply-spec)))
 	  (jdwp-trace "jdwp-process-reply packet-header:%s" packet)
-	  (setf (jdwp-last-processed-reply-id jdwp) id)
       (if (not (= error 0))
 		  (progn
 			(jdwp-error "jdwp-process-reply: received error:%d:%s for id:%d command:%s" error (jdwp-error-string error) id (getf protocol :name))
@@ -1099,87 +1058,44 @@
     jdwp
     (if (null (jdwp-process jdwp))
 		(jdwp-trace "jdwp is not connected")
-	  (let ((ongoing (jdwp-get-ongoing jdwp name data)))
-		(if ongoing
-			(progn
-			  (jdwp-info "ongoing command %s %s" name data)
-			  (setf (jdwp-request-conts ongoing) (cons (cont-get-current-id) (jdwp-request-conts ongoing))))
 
-		  ;; brute force mechanism to help me improve performance by caching in jdi.el 
-		  (if jdwp-debug-flag
-			  (if (find-if (lambda (obj)
-							 (and (equal (jdwp-request-name obj) name)
-								  (equal (jdwp-request-data obj) data)))
-						   (jdwp-sent-requests jdwp))
-				  (jdwp-debug "jdwp-send-command:sent before:%s %s" name data)
-				(push (make-jdwp-request :name name
-										 :data data)
-					  (jdwp-sent-requests jdwp))))
-
-		  (let* ((protocol     (jdwp-get-protocol name))
-				 (reply-spec   (getf protocol :reply-spec))
-				 (command-spec (getf protocol :command-spec))
-				 (commandset   (getf protocol :commandset))
-				 (command      (getf protocol :command))
-				 (outdata      (jdwp-bindat-pack command-spec data))
-				 (id           (jdwp-get-next-id jdwp))
-				 (command-data `((:name        . ,name)
-								 (:length      . ,(+ 11 (length outdata)))
-								 (:id          . ,id)
-								 (:flags       . 0)
-								 (:commandset  . ,commandset)
-								 (:command     . ,command)
-								 (:data        . ,data)
-								 (:outdata     . ,outdata)
-								 (:sent-time   . ,(if jdwp-info-flag (current-time) 0))))
-				 (command-packed (jdwp-bindat-pack jdwp-command-spec command-data)))
-			(jdwp-info "sending command [%-20s] id:%-4d len:%-4d data:%s" 
-					   name 
-					   id 
-					   (+ 11 (length outdata)) 
-					   (let ((outstr (jdwp-string-to-hex outdata)))
-						 (if (> (length outstr) 100)
-							 (substring outstr 0 100)
-						   outstr)))
-			(jdwp-debug "data:%s" data)
-			(let ((inhibit-eol-conversion t)
-				  (request (make-jdwp-request :name name
-											  :data data
-											  :command-data command-data
-											  :conts (list (cont-get-current-id)))))
-			  (setf (jdwp-current-reply jdwp) nil)
-			  (jdwp-process-send-string jdwp command-packed)
-			  (puthash id request (jdwp-id-requests-hash jdwp))
-			  (puthash (cons name data) request (jdwp-namedata-requests-hash jdwp))
-;;			  )))))))
-			  (if (> jdwp-wait-for-seconds 0.0)
-				  (let ((done nil)
-						(start-time (current-time)))
-					(while (and (< (float-time (time-subtract (current-time) start-time)) jdwp-timeout)
-								(not done))
-					  (accept-process-output (jdwp-process jdwp) jdwp-timeout nil 1)
-					  (jdwp-debug "accept-process-output returned, last-processed-reply-id:%s" (jdwp-last-processed-reply-id jdwp))
-					  (setq done (equal (jdwp-last-processed-reply-id jdwp) id)))
-					(if (not done) 
-						(error "JDWP Timed out for id:%s" id)
-					  (mapc (lambda (cont)
-							  (apply 'cont-values-this (cons cont (jdwp-execute-result jdwp))))
-							(jdwp-execute-conts jdwp))
-					  (jdwp-debug "sent and received reply for id:%s" id)))))))))))
-;;						  (sit-for 0)))))))))))))
-
-;; 		  (catch 'done
-;; 			(with-timeout 
-;; 				(jdwp-timeout
-;; 				 ;; the callers do not have ways to handle this, just error for the moment
-;; 				 (error "JDWP Timed Out"))
-;; 			  (while t
-;; 				(accept-process-output (jdwp-process jdwp) 1 0 t)
-;; 				(if (jdwp-current-reply jdwp)
-;; 					(progn
-;; 					  (jdwp-debug "got reply:%s" (jdwp-string-to-hex (jdwp-current-reply jdwp) 100))
-;; 					  (throw 'done (jdwp-process-reply jdwp (jdwp-current-reply jdwp) command-data))))))))))))
-;;				  (sit-for 0))))))))))
+	  (let* ((protocol     (jdwp-get-protocol name))
+			 (reply-spec   (getf protocol :reply-spec))
+			 (command-spec (getf protocol :command-spec))
+			 (commandset   (getf protocol :commandset))
+			 (command      (getf protocol :command))
+			 (outdata      (jdwp-bindat-pack command-spec data))
+			 (id           (jdwp-get-next-id jdwp))
+			 (command-data `((:name        . ,name)
+							 (:length      . ,(+ 11 (length outdata)))
+							 (:id          . ,id)
+							 (:flags       . 0)
+							 (:commandset  . ,commandset)
+							 (:command     . ,command)
+							 (:data        . ,data)
+							 (:outdata     . ,outdata)
+							 (:sent-time   . ,(if jdwp-info-flag (current-time) 0))))
+			 (command-packed (jdwp-bindat-pack jdwp-command-spec command-data)))
+		(jdwp-info "sending command [%-20s] id:%-4d len:%-4d data:%s" 
+				   name 
+				   id 
+				   (+ 11 (length outdata)) 
+				   (let ((outstr (jdwp-string-to-hex outdata)))
+					 (if (> (length outstr) 100)
+						 (substring outstr 0 100)
+					   outstr)))
+		(jdwp-debug "data:%s" data)
+		(let ((inhibit-eol-conversion t))
+		  (setf (jdwp-current-reply jdwp) nil)
+		  (jdwp-process-send-string jdwp command-packed)
+		  (catch 'done
+			(with-timeout (jdwp-timeout (error "Timed out"))
+			  (while t
+				(accept-process-output (jdwp-process jdwp) jdwp-timeout 0 t)
+				(if (jdwp-current-reply jdwp)
+					(progn
+					  (jdwp-debug "got reply:%s" (jdwp-string-to-hex (jdwp-current-reply jdwp) 100))
+					  (throw 'done (jdwp-process-reply jdwp (jdwp-current-reply jdwp) command-data))))))))))))
 
 (defun jdwp-class-status-string (status)
   (concat (if (zerop (logand status 1)) nil "[VERIFIED]")

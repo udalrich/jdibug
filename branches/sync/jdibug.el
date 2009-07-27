@@ -207,29 +207,27 @@ jdibug-source-paths will be ignored if this is set to t."
 	(use-local-map jdibug-breakpoints-mode-map)
 	(toggle-read-only 1))
 
-  (cont-bind (result) (cont-mapcar (lambda (connect-host-and-port)
-									 (lexical-let* ((host (nth 0 (split-string connect-host-and-port ":")))
-													(port (string-to-number (nth 1 (split-string connect-host-and-port ":"))))
-													(jdwp (make-jdwp))
-													(vm (make-jdi-virtual-machine :host host :port port :jdwp jdwp)))
-									   (cont-bind (result) (jdi-virtual-machine-connect vm)
-										 (jdibug-message (format "%s:%s(%s)" host port (if result "connected" "failed")) t)
-										 (push vm (jdibug-virtual-machines jdibug-this))
-										 (cont-values vm))))
-								   jdibug-connect-hosts)
+  (mapcar (lambda (connect-host-and-port)
+				 (lexical-let* ((host (nth 0 (split-string connect-host-and-port ":")))
+								(port (string-to-number (nth 1 (split-string connect-host-and-port ":"))))
+								(jdwp (make-jdwp))
+								(vm (make-jdi-virtual-machine :host host :port port :jdwp jdwp)))
+				   (let ((result (jdi-virtual-machine-connect vm)))
+					 (jdibug-message (format "%s:%s(%s)" host port (if result "connected" "failed")) t)
+					 (push vm (jdibug-virtual-machines jdibug-this)))))
+			   jdibug-connect-hosts)
 
-	(lexical-let* ((bps (jdibug-breakpoints jdibug-this))
-				   (signatures (loop for bp in bps
-									 collect (jdibug-source-file-to-class-signature
-											  (jdibug-breakpoint-source-file bp)))))
-	  (setf (jdibug-breakpoints jdibug-this) nil)
-	  (cont-bind (result) (cont-mapcar 'jdibug-set-breakpoint bps)
+  (lexical-let* ((bps (jdibug-breakpoints jdibug-this))
+				 (signatures (loop for bp in bps
+								   collect (jdibug-source-file-to-class-signature
+											(jdibug-breakpoint-source-file bp)))))
+	(setf (jdibug-breakpoints jdibug-this) nil)
+	(mapcar 'jdibug-set-breakpoint bps)
 
-		(run-hooks 'jdibug-connected-hook)
-		(setf (jdibug-refresh-timer jdibug-this)
-			  (jdibug-run-with-timer jdibug-refresh-delay nil 
-									 'jdibug-refresh-now))
-		(cont-values t)))))
+	(run-hooks 'jdibug-connected-hook)
+	(setf (jdibug-refresh-timer jdibug-this)
+		  (jdibug-run-with-timer jdibug-refresh-delay nil 
+								 'jdibug-refresh-now))))
   
 (defun jdibug-disconnect ()
   (interactive)
@@ -241,7 +239,6 @@ jdibug-source-paths will be ignored if this is set to t."
 			  (delete-overlay (jdibug-breakpoint-overlay bp))))
 		(jdibug-breakpoints jdibug-this))
 
-  (cont-kill (jdibug-refresh-proc jdibug-this))
   (and (timerp (jdibug-refresh-timer jdibug-this))
 	   (cancel-timer (jdibug-refresh-timer jdibug-this)))
 
@@ -267,8 +264,8 @@ jdibug-source-paths will be ignored if this is set to t."
 (defun jdibug-have-class-source-p (class)
   (jdibug-debug "jdibug-have-class-source-p")
   (lexical-let ((class class))
-	(cont-bind (signature) (jdi-class-get-signature class)
-	  (cont-values (file-exists-p (jdibug-class-signature-to-source-file signature))))))
+	(let ((signature (jdi-class-get-signature class)))
+	  (file-exists-p (jdibug-class-signature-to-source-file signature)))))
 
 (defun jdibug-find-buffer (file-name)
   "Return the buffer that is viewing this file."
@@ -321,9 +318,9 @@ And position the point at the line number."
 (defun jdibug-goto-location (location)
   (jdibug-debug "jdibug-goto-location")
   (lexical-let ((location location))
-	(cont-bind (signature) (jdi-class-get-signature (jdi-location-class location))
+	(let ((signature (jdi-class-get-signature (jdi-location-class location))))
 	  (lexical-let ((signature signature))
-		(cont-bind (line-number) (jdi-location-get-line-number location)
+		(let ((line-number (jdi-location-get-line-number location)))
 		  (jdibug-show-file-and-line-number jdibug-this
 											(jdibug-class-signature-to-source-file signature)
 											line-number
@@ -375,71 +372,27 @@ And position the point at the line number."
 (defun jdibug-refresh-now (&optional location)
   (jdibug-debug "jdibug-refresh-now")
   (lexical-let ((location location))
-	(cont-kill (jdibug-refresh-proc jdibug-this))
 	(jdibug-time-start)
-	(setf (jdibug-refresh-proc jdibug-this)
-		  (cont-fork
-		   (if location (jdibug-goto-location location))
-		   (cont-bind (result) (jdibug-refresh-locals-buffer-now)
-			 (jdibug-refresh-frames-buffer-now))))))
-  ;; 			   (cont-bind (threads) (jdi-virtual-machine-get-threads vm)
-  ;; 				 (if (and thread location)
-  ;; 					 (progn
-  ;; 					   (jdibug-time-start)
-  ;; 					   (cont-bind () (jdi-class-get-signature (jdi-location-class location))
-  ;; 						 (jdibug-time-end "jdibug-refresh-now:jdi-class-get-signature")
-  ;; 						 (jdibug-time-start)
-  ;; 						 (cont-bind () (jdi-location-get-line-number location)
-  ;; 						   (jdibug-time-end "jdibug-refresh-now:jdi-location-get-line-number")
-  ;; 						   (jdibug-goto-location location)
-  ;; 						   (jdibug-time-start)
-  ;; 						   (cont-bind () (jdi-thread-get-frames thread)
-  ;; 							 (jdibug-time-end "jdibug-refresh-now:jdi-thread-get-frames")
-  ;; 							 (when (null (jdi-frame-id (jdibug-active-frame jdibug-this)))
-  ;; 							   (setf (jdibug-active-frame jdibug-this) (car (jdi-thread-frames thread))))
-  ;; 							 (jdibug-refresh-locals-buffer-now (jdibug-active-frame jdibug-this) location)
-  ;; 							 (jdibug-refresh-frames-buffer-now)))))
-				   
-  ;;				   (jdibug-refresh-frames-buffer-now))))))
+	(if location (jdibug-goto-location location))
+	(jdibug-refresh-locals-buffer-now)
+	(jdibug-refresh-frames-buffer-now)))
 
 (defun jdibug-get-active-frame ()
   (jdibug-debug "jdibug-get-active-frame")
   (if (jdibug-active-frame jdibug-this)
-	  (cont-values (jdibug-active-frame jdibug-this))
+	  (jdibug-active-frame jdibug-this)
 
-	(cont-bind (suspended-threads) (cont-mappend 'jdi-virtual-machine-get-suspended-threads (jdibug-virtual-machines jdibug-this))
+	(let ((suspended-threads (apply 'append (apply 'mapcar 'jdi-virtual-machine-get-suspended-threads (jdibug-virtual-machines jdibug-this)))))
 	  (jdibug-debug "jdibug-get-active-frame:number of suspended-threads:%s" (length suspended-threads))
 	  (if suspended-threads
-		  (cont-bind (frames) (jdi-thread-get-frames (car suspended-threads))
+		  (let ((frames (jdi-thread-get-frames (car suspended-threads))))
 			(setf (jdibug-active-frame jdibug-this) (car frames))
-			(cont-values (jdibug-active-frame jdibug-this)))
+			(jdibug-active-frame jdibug-this))
 		(setf (jdibug-active-frame jdibug-this) nil)
-		(cont-values nil)))))
+		nil))))
 
 (defun jdibug-handle-class-prepare (class)
   (jdibug-debug "jdibug-handle-class-prepare"))
-;;   (lexical-let ((class class)
-;; 				(bps-matched-class (loop for bp in (jdibug-breakpoints jdibug-this)
-;; 										 if (equal (jdibug-source-file-to-class-signature (jdibug-breakpoint-source-file bp))
-;; 												   (jdi-class-signature class))
-;; 										 collect bp)))
-;; 	(jdibug-debug "bps-matched-class:%s" (length bps-matched-class))
-;; 	(when bps-matched-class
-;; 	  (cont-bind () (jdi-class-get-all-line-locations class)
-;; 		(jdibug-debug "jdibug-handle-class-prepare:after jdi-class-get-all-line-locations")
-;; 		(cont-wait 
-;; 		  (mapc (lambda (bp)
-;; 				  (lexical-let ((bp bp))
-;; 					(cont-bind (result) (jdi-virtual-machine-set-breakpoint
-;; 										 (jdi-mirror-virtual-machine class)
-;; 										 (jdi-class-signature class)
-;; 										 (jdibug-breakpoint-line-number bp))
-;; 					  (when result
-;; 						(push result (jdibug-breakpoint-event-requests bp))
-;; 						(setf (jdibug-breakpoint-status bp) 'enabled)
-;; 						(jdibug-breakpoint-update bp)))))
-;; 				bps-matched-class)
-;; 		  (cont-values))))))
 
 (defun jdibug-handle-detach (vm)
   (interactive)
@@ -497,17 +450,10 @@ And position the point at the line number."
   (lexical-let* ((tree tree)
 				 (value (widget-get tree :jdi-value))
 				 (method (widget-get tree :jdi-method)))
-	(let ((cont-current-proc-id (jdibug-refresh-proc jdibug-this)))
-	  (cont-bind (result-value)  (jdi-value-invoke-method value (jdibug-active-thread jdibug-this) method nil nil)
-		(lexical-let ((result-value result-value))
-		  (cont-bind (result-string) (jdibug-value-get-string result-value)
-			(jdibug-debug "running method %s returned %s" (jdi-method-name method) result-string)
-			(jdibug-tree-set-and-refresh (jdibug-locals-buffer jdibug-this)
-										 tree 
-										 (list (jdibug-make-tree-from-value "result" result-value result-string))))))))
-  (list 
-   `(item 
-	 :value "loading...")))
+	(let ((result-value (jdi-value-invoke-method value (jdibug-active-thread jdibug-this) method nil nil)))
+	  (let ((result-string (jdibug-value-get-string result-value)))
+		  (jdibug-debug "running method %s returned %s" (jdi-method-name method) result-string)
+		  (list (jdibug-make-tree-from-value "result" result-value result-string))))))
 
 (defun jdibug-make-method-node (value method)
   (let ((display (format "%s: %s" (jdi-method-name method) (jdi-method-signature method))))
@@ -543,27 +489,20 @@ And position the point at the line number."
 (defun jdibug-expand-methods (tree)
   (lexical-let ((tree tree)
 				(value (widget-get tree :jdi-value)))
- 	(let ((cont-current-proc-id (jdibug-refresh-proc jdibug-this)))
-	  (cont-bind (class) (jdi-value-get-class value)
-		(cont-bind (methods) (jdi-class-get-all-methods class)
-		  (jdibug-tree-set-and-refresh (jdibug-locals-buffer jdibug-this)
-									   tree 
-									   (mapcar (lambda (method) 
-												 (jdibug-make-method-node value method))
-											   (sort (remove-duplicates methods
-																		:test (lambda (obj1 obj2)
-																				(and (equal (jdi-method-name obj1)
-																							(jdi-method-name obj2))
-																					 (equal (jdi-method-signature obj1)
-																							(jdi-method-signature obj2))))
-																		:from-end t)
-													 (lambda (obj1 obj2)
-													   (string< (jdi-method-name obj1)
-																(jdi-method-name obj2))))))))))
-  (list 
-   `(item 
-	 :value "loading...")))
-
+	(let ((class (jdi-value-get-class value)))
+	  (let ((methods (jdi-class-get-all-methods class)))
+		(mapcar (lambda (method) 
+				  (jdibug-make-method-node value method))
+				(sort (remove-duplicates methods
+										 :test (lambda (obj1 obj2)
+												 (and (equal (jdi-method-name obj1)
+															 (jdi-method-name obj2))
+													  (equal (jdi-method-signature obj1)
+															 (jdi-method-signature obj2))))
+										 :from-end t)
+					  (lambda (obj1 obj2)
+						(string< (jdi-method-name obj1)
+								 (jdi-method-name obj2)))))))))
 
 (defun jdibug-make-methods-node (value)
   `(tree-widget
@@ -580,17 +519,11 @@ And position the point at the line number."
   (lexical-let* ((tree tree)
 				 (values (widget-get tree :jdi-values))
 				 (variables (widget-get tree :jdi-variables)))
-	(let ((cont-current-proc-id (jdibug-refresh-proc jdibug-this)))
-	  (cont-bind (strings) (cont-mapcar 'jdibug-value-get-string values)
-		(jdibug-tree-set-and-refresh (jdibug-locals-buffer jdibug-this)
-									 tree 
-									 (loop for variable in variables
-										   for value in values
-										   for string in strings
-										   collect (jdibug-make-tree-from-variable-value variable value string))))))
-  (list 
-   `(item 
-	 :value "loading...")))
+	(let ((strings (mapcar 'jdibug-value-get-string values)))
+	  (loop for variable in variables
+			for value in values
+			for string in strings
+			collect (jdibug-make-tree-from-variable-value variable value string)))))
 
 (defun jdibug-make-locals-tree (variables values)
   `(tree-widget
@@ -639,39 +572,28 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	(jdibug-debug "jdibug-value-expander:type=%s" (jdi-value-type value))
 	(jdibug-time-start)
 	(cond ((= (jdi-value-type value) jdwp-tag-object)
-		   (let ((cont-current-proc-id (jdibug-refresh-proc jdibug-this)))
-			 (cont-bind (class) (jdi-value-get-class value)
-			   (cont-bind (fields) (jdi-class-get-all-fields class)
-				 (jdibug-debug "jdibug-value-expander: got %s fields" (length fields))
-				 (lexical-let ((fields (sort (copy-sequence fields) 'jdibug-field-sorter)))
-				   (cont-bind (values) (jdi-value-get-values value fields)
-					 (lexical-let ((values values))
-					   (jdibug-debug "jdibug-value-expander:calling cont-mapcar jdibug-value-get-string")
-					   (cont-bind (strings) (cont-mapcar 'jdibug-value-get-string values)
-						 (jdibug-debug "jdibug-value-expander got %s values" (length values))
-						 (jdibug-time-end "expanded")
-						 (jdibug-tree-set-and-refresh (jdibug-locals-buffer jdibug-this)
-													  tree (append (loop for v in values
-																		 for f in fields
-																		 for s in strings
-																		 collect (jdibug-make-tree-from-field-value f v s))
-																   (list (jdibug-make-methods-node value))))))))))))
+		   (let ((class (jdi-value-get-class value)))
+			 (let ((fields (jdi-class-get-all-fields class)))
+			   (jdibug-debug "jdibug-value-expander: got %s fields" (length fields))
+			   (lexical-let ((fields (sort (copy-sequence fields) 'jdibug-field-sorter)))
+				 (let ((values (jdi-value-get-values value fields)))
+				   (lexical-let ((values values))
+					 (jdibug-debug "jdibug-value-expander:calling cont-mapcar jdibug-value-get-string")
+					 (let ((strings (mapcar 'jdibug-value-get-string values)))
+					   (jdibug-debug "jdibug-value-expander got %s values" (length values))
+					   (jdibug-time-end "expanded")
+					   (append (loop for v in values
+									 for f in fields
+									 for s in strings
+									 collect (jdibug-make-tree-from-field-value f v s))
+							   (list (jdibug-make-methods-node value))))))))))
 		  ((= (jdi-value-type value) jdwp-tag-array)
-		   (let ((cont-current-proc-id (jdibug-refresh-proc jdibug-this)))
-			 (cont-bind (values) (jdi-value-array-get-values value)
-			   (lexical-let ((values values))
-				 (cont-bind (strings) (cont-mapcar 'jdibug-value-get-string values)
-				   (jdibug-tree-set-and-refresh (jdibug-locals-buffer jdibug-this)
-												tree 
-												(loop for v in values
-													  for s in strings
-													  for i from 0 by 1
-													  collect (jdibug-make-tree-from-value (format "[%s]" i) v s)))))))))
-	(jdibug-trace "setting into the tree"))
-
-  (list 
-   `(item 
-	 :value "loading...")))
+		   (let ((values (jdi-value-array-get-values value)))
+			 (let ((strings (mapcar 'jdibug-value-get-string values)))
+			   (loop for v in values
+					 for s in strings
+					 for i from 0 by 1
+					 collect (jdibug-make-tree-from-value (format "[%s]" i) v s))))))))
 
 (defun jdibug-make-tree-from-field-value (field value string)
   (let ((display (format "%s%s: %s" 
@@ -724,13 +646,12 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 
 (defun jdibug-refresh-locals-buffer-now ()
   (condition-case err
-	  (cont-bind (frame) (jdibug-get-active-frame)
+	  (let ((frame (jdibug-get-active-frame)))
 		(jdibug-debug "jdibug-refresh-locals-buffer-now:active-frame=%s" (if frame (jdi-frame-id frame) "no"))
 		(if (null frame)
 			(with-current-buffer (jdibug-locals-buffer jdibug-this)
 			  (let ((inhibit-read-only t))
-				(erase-buffer))
-			  (cont-values t))
+				(erase-buffer)))
 
 		  (lexical-let ((frame frame)
 						(location (jdi-frame-location frame)))
@@ -741,10 +662,10 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 			  (insert "Loading..."))
 
 			(jdibug-time-start)
-			(cont-bind (variables) (jdi-frame-get-visible-variables frame)
+			(let ((variables (jdi-frame-get-visible-variables frame)))
 			  (lexical-let ((variables (sort variables 'jdibug-variable-sorter)))
 				(jdibug-debug "jdi-frame-get-visible-variables returned %s variables" (length variables))
-				(cont-bind (values) (jdi-frame-get-values frame variables)
+				(let ((values (jdi-frame-get-values frame variables)))
 				  (with-current-buffer (jdibug-locals-buffer jdibug-this)
 					(let ((inhibit-read-only t))
 					  (erase-buffer))
@@ -753,8 +674,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 					(widget-put (jdibug-locals-tree jdibug-this) :jdibug-opened-path (tree-mode-opened-tree (jdibug-locals-tree jdibug-this)))
 					(jdi-info "current opened tree path:%s" (tree-mode-opened-tree (jdibug-locals-tree jdibug-this)))
 					(local-set-key "s" 'jdibug-node-tostring)
-					(local-set-key "c" 'jdibug-node-classname))
-				  (cont-values t)))))))
+					(local-set-key "c" 'jdibug-node-classname))))))))
 	(error (jdibug-error "jdibug-refresh-locals-buffer-now:%s" (error-message-string err)))))
 
 (defun jdibug-frame-notify (button &rest ignore)
@@ -775,12 +695,12 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	  ;; when doing stack-get-values
 
 	  (setf (jdi-thread-frames thread) nil)
-	  (cont-bind () (jdi-thread-get-frames thread)
-		(let ((frame (nth frame-index (jdi-thread-frames thread))))
-		  (jdibug-debug "after reload frame-id:%s" (jdi-frame-id frame))
-		  (setf (jdibug-active-frame jdibug-this) frame)
+	  (jdi-thread-get-frames thread)
+	  (let ((frame (nth frame-index (jdi-thread-frames thread))))
+		(jdibug-debug "after reload frame-id:%s" (jdi-frame-id frame))
+		(setf (jdibug-active-frame jdibug-this) frame)
 
-		  (jdibug-handle-change-frame frame))))
+		(jdibug-handle-change-frame frame)))
 	(jdibug-goto-location (jdi-frame-location frame))))
 
 (defun jdibug-make-frame-value (frame)
@@ -789,93 +709,83 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 				  (jdi-frame-id frame)
 				  (jdi-class-id (jdi-location-class (jdi-frame-location frame)))
 				  (jdi-method-id (jdi-location-method (jdi-frame-location frame))))
-	(cont-bind (class-name) (jdi-class-get-name (jdi-location-class (jdi-frame-location frame)))
+	(let ((class-name (jdi-class-get-name (jdi-location-class (jdi-frame-location frame)))))
 	  (lexical-let ((class-name class-name))
-		(cont-bind (method-name) (jdi-method-get-name (jdi-location-method (jdi-frame-location frame)))
+		(let ((method-name (jdi-method-get-name (jdi-location-method (jdi-frame-location frame)))))
 		  (lexical-let ((method-name method-name))
-			(cont-bind (line-number) (jdi-location-get-line-number (jdi-frame-location frame))
-			  (cont-values (format "%s.%s:%s" class-name method-name line-number)))))))))
+			(let ((line-number (jdi-location-get-line-number (jdi-frame-location frame))))
+			  (format "%s.%s:%s" class-name method-name line-number))))))))
 
 (defun jdibug-make-frame-node (frame)
   (jdibug-debug "jdibug-make-frame-node:frame-id=%s" (jdi-frame-id frame))
   (lexical-let ((frame frame))
-	(cont-bind (has-class-source) (jdibug-have-class-source-p (jdi-location-class (jdi-frame-location frame)))
+	(let ((has-class-source (jdibug-have-class-source-p (jdi-location-class (jdi-frame-location frame)))))
 	  (lexical-let ((has-class-source has-class-source))
-		(cont-bind (value) (jdibug-make-frame-value frame)
+		(let ((value (jdibug-make-frame-value frame)))
 		  (lexical-let ((value value))
-			(cont-bind (active-frame) (jdibug-get-active-frame)
+			(let ((active-frame (jdibug-get-active-frame)))
 			  (jdibug-info "jdibug-make-frame-node:frame-id=%s:active-frame-id=%s" (jdi-frame-id frame) (jdi-frame-id active-frame))
 			  (if has-class-source
-				  (cont-values `(push-button
-								 :value ,value
-								 :jdi-frame ,frame
-								 :button-face ,(if (equal (jdi-frame-id frame) (jdi-frame-id active-frame)) 'jdibug-current-frame)
-								 :notify jdibug-frame-notify
-								 :format "%[%t%]\n"))
-				(cont-values `(item 
-							   :value ,value))))))))))
+				  `(push-button
+					:value ,value
+					:jdi-frame ,frame
+					:button-face ,(if (equal (jdi-frame-id frame) (jdi-frame-id active-frame)) 'jdibug-current-frame)
+					:notify jdibug-frame-notify
+					:format "%[%t%]\n")
+				`(item 
+				  :value ,value)))))))))
   
 (defun jdibug-make-thread-value (thread)
   (jdibug-debug "jdibug-make-thread-value")
   (lexical-let ((thread thread))
-	(cont-bind (name) (jdi-thread-get-name thread)
+	(let ((name (jdi-thread-get-name thread)))
 	  (lexical-let ((name name))
-		(cont-bind (status suspend-status) (jdi-thread-get-status thread)
-		  (cont-values (format "%s (%s)" name (if (equal suspend-status jdwp-suspend-status-suspended)
-												  "Suspended"
-												"Running"))))))))
+		(multiple-value-bind (status suspend-status) (jdi-thread-get-status thread)
+		  (format "%s (%s)" name (if (equal suspend-status jdwp-suspend-status-suspended)
+									 "Suspended"
+								   "Running")))))))
 
 (defun jdibug-make-frames-node (tree)
   (jdibug-debug "jdibug-make-frames-node")
   (lexical-let ((tree tree)
 				(thread (widget-get tree :jdi-thread)))
-	(cont-bind (suspended) (jdi-thread-get-suspended-p thread)
+	(let ((suspended (jdi-thread-get-suspended-p thread)))
 	  (jdibug-debug "jdibug-make-frames-node:suspended=%s" suspended)
 	  (if suspended
-		  (cont-bind (frames) (jdi-thread-get-frames thread)
+		  (let ((frames (jdi-thread-get-frames thread)))
 			(jdibug-debug "jdibug-make-frames-node: number of frames = %s" (length frames))
-			(cont-bind (nodes) (cont-mapcar 'jdibug-make-frame-node frames)
-			  (jdibug-tree-set-and-refresh (jdibug-frames-buffer jdibug-this)
-										   tree
-										   nodes))))))
-  nil)
+			(mapcar 'jdibug-make-frame-node frames))))))
 
 (defun jdibug-make-thread-tree (thread)
   (jdibug-debug "jdibug-make-thread-tree")
   (lexical-let ((thread thread))
-	(cont-bind (value) (jdibug-make-thread-value thread)
+	(let ((value (jdibug-make-thread-value thread)))
 	  (jdibug-debug "jdibug-make-thread-tree:value=%s" value)
-	  (cont-values `(tree-widget
-					 :value ,value
-					 :open t
-					 :jdi-thread ,thread
-					 :args nil
-					 :expander jdibug-make-frames-node
-					 :dynargs jdibug-make-frames-node)))))
+	  `(tree-widget
+		:value ,value
+		:open t
+		:jdi-thread ,thread
+		:args nil
+		:expander jdibug-make-frames-node
+		:dynargs jdibug-make-frames-node))))
 
 (defun jdibug-make-threads-tree (tree)
   (jdibug-debug "jdibug-make-threads-tree")
   (jdibug-time-start)
   (lexical-let ((tree tree)
 				(vm (widget-get tree :jdi-virtual-machine)))
-	(cont-bind (threads) (jdi-virtual-machine-get-threads vm)
+	(let ((threads (jdi-virtual-machine-get-threads vm)))
 	  (jdibug-time-end "jdi-virtual-machine-get-threads")
 	  (jdibug-time-start)
 	  (lexical-let ((threads threads))
-		(cont-bind (system-threads-p) (cont-mapcar 'jdi-thread-get-system-thread-p threads)
+		(let ((system-threads-p (mapcar 'jdi-thread-get-system-thread-p threads)))
 		  (jdibug-time-end "mapcar jdi-therad-get-system-thread-p")
 		  (jdibug-time-start)
 		  (jdibug-debug "jdibug-make-threads-tree:system-threads-p:%s" system-threads-p)
 		  (lexical-let ((system-threads-p system-threads-p))
-			(cont-bind (nodes) (cont-mapcar 'jdibug-make-thread-tree (loop for thread in threads
-																		   for system-thread-p in system-threads-p
-																		   unless system-thread-p collect thread))
-			  (jdibug-debug "jdibug-make-threads-tree: number of nodes = %s" (length nodes))
-			  (jdibug-tree-set-and-refresh (jdibug-frames-buffer jdibug-this)
-										   tree
-										   nodes)))))))
-  (jdibug-debug "jdibug-make-threads-tree: return loading")
-  (list `(item :value "loading...")))
+			(mapcar 'jdibug-make-thread-tree (loop for thread in threads
+												   for system-thread-p in system-threads-p
+												   unless system-thread-p collect thread))))))))
 
 (defun jdibug-make-virtual-machine-tree (vm)
   `(tree-widget
@@ -913,20 +823,19 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 				 (value (widget-get tree :jdi-value)))
     (if (null value)
 		(message "not an object")
-	  (let ((cont-current-proc-id (jdibug-refresh-proc jdibug-this)))
-		(cont-bind (class) (jdi-value-get-class value)
-		  (cont-bind (methods) (jdi-class-get-all-methods class)
-			(let ((tostringmethod (find-if (lambda (obj)
-											 (and (equal (jdi-method-name obj)
-														 "toString")
-												  (equal (jdi-method-signature obj)
-														 "()Ljava/lang/String;")))
-										   methods)))
-			  (if tostringmethod
-				  (cont-bind (result-value) (jdi-value-invoke-method value (jdibug-active-thread jdibug-this) tostringmethod nil nil)
-					(cont-bind (result-string) (jdibug-value-get-string-string result-value)
-					  (message "%s" result-string)))
-				(message "no toString method")))))))))
+	  (let ((class (jdi-value-get-class value)))
+		(let ((methods (jdi-class-get-all-methods class)))
+		  (let ((tostringmethod (find-if (lambda (obj)
+										   (and (equal (jdi-method-name obj)
+													   "toString")
+												(equal (jdi-method-signature obj)
+													   "()Ljava/lang/String;")))
+										 methods)))
+			(if tostringmethod
+				(let ((result-value (jdi-value-invoke-method value (jdibug-active-thread jdibug-this) tostringmethod nil nil)))
+				  (let ((result-string (jdibug-value-get-string-string result-value)))
+					(message "%s" result-string)))
+			  (message "no toString method"))))))))
 
 (defun jdibug-node-classname ()
   (interactive)
@@ -996,25 +905,25 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	(jdibug-breakpoint-update bp)
 	(jdibug-message "JDIbug setting breakpoint...")
 	(jdibug-time-start)
-	(cont-mapcar (lambda (vm)
-				   (if (not (jdibug-file-in-source-paths-p source-file))
-					   (progn
-						 (jdibug-message "file is not in source path" t)
-						 (cont-values t))
+	(mapcar (lambda (vm)
+			  (if (not (jdibug-file-in-source-paths-p source-file))
+				  (progn
+					(jdibug-message "file is not in source path" t)
+					t)
 
-					 (cont-bind (result) (jdi-virtual-machine-set-breakpoint 
-										  vm 
-										  (jdibug-source-file-to-class-signature source-file)
-										  line-number)
-					   (unless (null result)
-						 (jdibug-message "done" t)
-						 (jdibug-time-end "set-breakpoint")
-						 (setf (jdibug-breakpoint-status bp) 'enabled)
-						 (setf (jdibug-breakpoint-event-requests bp)
-							   (append result (jdibug-breakpoint-event-requests bp)))
-						 (jdibug-breakpoint-update bp))
-					   (cont-values t))))
-				 (jdibug-virtual-machines jdibug-this))))
+				(let ((result (jdi-virtual-machine-set-breakpoint 
+							   vm 
+							   (jdibug-source-file-to-class-signature source-file)
+							   line-number)))
+				  (unless (null result)
+					(jdibug-message "done" t)
+					(jdibug-time-end "set-breakpoint")
+					(setf (jdibug-breakpoint-status bp) 'enabled)
+					(setf (jdibug-breakpoint-event-requests bp)
+						  (append result (jdibug-breakpoint-event-requests bp)))
+					(jdibug-breakpoint-update bp))
+				  t)))
+			(jdibug-virtual-machines jdibug-this))))
 
 (defun jdibug-disable-breakpoint (bp)
   (mapc (lambda (er)
@@ -1286,38 +1195,38 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 			 (equal (jdi-value-type value) jdwp-tag-byte)
 			 (equal (jdi-value-type value) jdwp-tag-char)
 			 (equal (jdi-value-type value) jdwp-tag-short))
-		 (cont-values (format "%d" (jdi-value-value value))))
+		 (format "%d" (jdi-value-value value)))
 
 		((equal (jdi-value-type value) jdwp-tag-long)
-		 (cont-values (format "%d" (jdwp-vec-to-int (jdi-value-value value)))))
+		 (format "%d" (jdwp-vec-to-int (jdi-value-value value))))
 
 		((equal (jdi-value-type value) jdwp-tag-float)
-		 (cont-values (format "%f" (jdwp-vec-to-float (jdi-value-value value)))))
+		 (format "%f" (jdwp-vec-to-float (jdi-value-value value))))
 
 ;; 		((and parent
 ;; 			  (equal (jdi-value-type parent) jdwp-tag-object)
 ;; 			  (equal (jdi-value-type value) jdwp-tag-object)
 ;; 			  (equal (jdi-value-value parent) (jdi-value-value value)))
-;; 		 (cont-values "this"))
+;; 		 "this")
 
 		((equal (jdi-value-type value) jdwp-tag-boolean)
-		 (cont-values (if (= 0 (jdi-value-value value)) "false" "true")))
+		 (if (= 0 (jdi-value-value value)) "false" "true"))
 
 		((equal (jdi-value-type value) jdwp-tag-void)
-		 (cont-values "void"))
+		 "void")
 
 		((equal (jdi-value-type value) jdwp-tag-class-object)
 		 ;; TODO: put in the class name
-		 (cont-values "class"))
+		 "class")
 
 		((equal (jdi-value-type value) jdwp-tag-class-loader)
-		 (cont-values "class-loader"))
+		 "class-loader")
 
 		((equal (jdi-value-type value) jdwp-tag-thread)
-		 (cont-values "thread"))
+		 "thread")
 
 		((equal (jdi-value-type value) jdwp-tag-thread-group)
-		 (cont-values "thread-group"))
+		 "thread-group")
 
  		((equal (jdi-value-type value) jdwp-tag-object)
  		 (jdibug-value-get-string-object value))
@@ -1330,20 +1239,20 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 
 		(t 
 		 (jdi-error "fixme: do not know how to print value of type:%s" (jdi-value-type value))
-		 (cont-values "..."))))
+		 "...")))
 
 (defun jdibug-value-get-string-object (value)
   (jdibug-debug "jdibug-value-get-string-object:type=%s:value=%s" 
 				(jdi-value-type value) (jdi-value-value value))
   (if (equal (jdi-value-value value) [0 0 0 0 0 0 0 0])
-	  (cont-values "null")
+	  "null"
 	(lexical-let ((value value))
-	  (cont-bind (class) (jdi-value-get-class value)
+	  (let ((class (jdi-value-get-class value)))
 		(lexical-let ((class class))
-		  (cont-bind (supers) (jdi-class-get-all-super class)
+		  (let ((supers (jdi-class-get-all-super class)))
 			(lexical-let ((supers supers))
-			  (cont-bind (interfaces) (jdi-class-get-all-interfaces class)
-				(cont-bind (signatures) (cont-mapcar 'jdi-class-get-signature (cons class (append supers interfaces)))
+			  (let ((interfaces (jdi-class-get-all-interfaces class)))
+				(let ((signatures (mapcar 'jdi-class-get-signature (cons class (append supers interfaces)))))
 				  (jdibug-debug "jdibug-value-get-string-object: value=%s super-signatures=%s" (jdi-value-value value) signatures)
 				  (let* ((setter (find-if (lambda (custom)
 											(member (jdi-class-name-to-class-signature (car custom)) signatures))
@@ -1355,25 +1264,25 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 						  ((functionp setter2)
 						   (funcall setter2 value))
 						  (t
-						   (cont-bind (signature) (jdi-class-get-signature class)
-							 (cont-values (format "%s (id=%s)" 
-												  (jdi-class-name class)
-												  (jdwp-vec-to-int (jdi-value-value value)))))))))))))))))
+						   (let ((signature (jdi-class-get-signature class)))
+							 (format "%s (id=%s)" 
+									 (jdi-class-name class)
+									 (jdwp-vec-to-int (jdi-value-value value))))))))))))))))
 
 (defun jdibug-value-get-string-array (value)
   (jdibug-debug "jdibug-value-get-string-array")
   (lexical-let ((value value))
-	(cont-bind (length) (jdi-value-get-array-length value)
+	(let ((length (jdi-value-get-array-length value)))
 	  (jdi-value-array-display-string value length))))
 
 (defun jdibug-value-get-string-string (value)
   (lexical-let ((value value))
 	(jdibug-debug "jdibug-value-get-string-string")
-	(cont-bind (reply error jdwp id)
+	(multiple-value-bind (reply error jdwp id)
 	  (jdwp-send-command (jdi-mirror-jdwp value) "string-value" `((:object . ,(jdi-value-value value))))
 
 	  (jdibug-debug "jdibug-value-get-string-string:%s:%s" (jdwp-get-string reply :value) (jdi-format-string (jdwp-get-string reply :value)))
-	  (cont-values (jdi-format-string (jdwp-get-string reply :value))))))
+	  (jdi-format-string (jdwp-get-string reply :value)))))
 
 ;;; Customized display and expanders:
 (defvar jdibug-value-custom-set-strings nil
@@ -1427,101 +1336,62 @@ to populate the jdi-value-values of the jdi-value.")
   (lexical-let ((value value)
 				(thread thread)
 				(method-name method-name))
-	(cont-bind (class) (jdi-value-get-class value)
-	  (cont-bind (methods) (jdi-class-get-all-methods class)
+	(let ((class (jdi-value-get-class value)))
+	  (let ((methods (jdi-class-get-all-methods class)))
 		(let ((method (find-if (lambda (obj)
 								 (and (string= (jdi-method-name obj) method-name)
 									  (string= (jdi-method-signature obj) "()Ljava/lang/String;")))
 							   methods)))
 		  (if (null method)
-			  (cont-values "setter %s not found" method-name)
+			  (format "setter %s not found" method-name)
 
-			(cont-bind (result-value) (jdi-value-invoke-method value thread method nil nil)
+			(let ((result-value (jdi-value-invoke-method value thread method nil nil)))
 			  (if (equal (jdi-value-value result-value) [0 0 0 0 0 0 0 0])
-				  (cont-values "null")
+				  "null"
 
-				(cont-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp value) "string-value" 
+				(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp value) "string-value" 
 																	`((:object . ,(jdi-value-value result-value))))
-				  (cont-values (jdi-format-string (jdwp-get-string reply :value))))))))))))
+				  (jdi-format-string (jdwp-get-string reply :value)))))))))))
 
 (defun jdibug-value-custom-set-string-with-size (value)
   (jdi-debug "jdibug-value-custom-set-string-with-size")
   (lexical-let ((value value))
-	(cont-bind (class) (jdi-value-get-class value)
+	(let ((class (jdi-value-get-class value)))
 	  (lexical-let ((class class))
-		(cont-bind (methods) (jdi-class-get-methods class)
+		(let ((methods (jdi-class-get-methods class)))
 		  (let ((size-method (find-if (lambda (obj)
 										(equal (jdi-method-name obj)
 											   "size"))
 									  methods)))
 			(if (null size-method)
-				(cont-values (format "%s[nosize]" (jdi-class-name class)))
+				(format "%s[nosize]" (jdi-class-name class))
 
-			  (cont-bind (result-value) (jdi-value-invoke-method value (jdibug-active-thread jdibug-this) size-method nil nil)
-				(cont-values (format "%s[%s]" 
-									 (jdi-class-name class)
-									 (bindat-get-field reply :return-value :u :value)))))))))))
+			  (let ((result-value (jdi-value-invoke-method value (jdibug-active-thread jdibug-this) size-method nil nil)))
+				(format "%s[%s]" 
+						(jdi-class-name class)
+						(bindat-get-field reply :return-value :u :value))))))))))
 
 (defun jdibug-value-custom-expand-collection (value)
   (jdi-debug "jdibug-value-custom-expand-collection")
   (lexical-let ((value value))
-	(cont-bind (reply error jdwp id)
-	  (jdi-value-invoke-method value "toArray" nil)
+	(multiple-value-bind (reply error jdwp id)
+		(jdi-value-invoke-method value "toArray" nil)
 	  (let ((array-value (bindat-get-field reply :return-value :u :value)))
 		(setf (jdi-value-value value) array-value)
 		(jdi-value-array-get-values value)))))
 
 (defun jdibug-value-custom-expand-map (value)
   (jdi-debug "jdibug-value-custom-expand-collection"))
-;;   (lexical-let ((value value)
-;; 				(keyset-value (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)))
-;; 				(values-value (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value))))
-	
-;; 	(cont-bind (reply error jdwp id)
-;; 	  (jdi-value-invoke-method value "keySet" nil)
-	  
-;; 	  (setf (jdi-value-value keyset-value) (bindat-get-field reply :return-value :u :value))
-;; 	  (setf (jdi-value-class keyset-value) (car (gethash "Ljava/util/Set;" (jdi-virtual-machine-classes-by-signature (jdi-mirror-virtual-machine value)))))
-
-;; 	  (cont-bind (reply error jdwp id)
-;; 		(jdi-value-invoke-method keyset-value "toArray" nil)
-
-;; 		(let ((key-array (bindat-get-field reply :return-value :u :value)))
-;; 		  (setf (jdi-value-name keyset-value) "key  ")
-;; 		  (setf (jdi-value-array-length keyset-value) (jdi-value-array-length value))
-;; 		  (setf (jdi-value-value keyset-value) key-array)
-;; 		  (cont-bind (result) (jdi-value-array-get-values keyset-value)
-
-;; 			(cont-bind (reply error jdwp id) (jdi-value-invoke-method value "values" nil)
-
-;; 			  (setf (jdi-value-value values-value) (bindat-get-field reply :return-value :u :value))
-;; 			  (setf (jdi-value-class values-value) (car (gethash "Ljava/util/Collection;" (jdi-virtual-machine-classes-by-signature (jdi-mirror-virtual-machine value)))))
-
-;; 			  (cont-bind (reply error jdwp id) (jdi-value-invoke-method values-value "toArray" nil)
-;; 				(let ((values-array (bindat-get-field reply :return-value :u :value)))
-;; 				  (setf (jdi-value-name values-value) "value")
-;; 				  (setf (jdi-value-array-length values-value) (jdi-value-array-length value))
-;; 				  (setf (jdi-value-value values-value) values-array)
-;; 				  (cont-bind (result) (jdi-value-array-get-values values-value)
-
-;; 					(setf (jdi-value-values value)
-;; 						  (loop for key in (jdi-value-values keyset-value)
-;; 								for value in (jdi-value-values values-value)
-;; 								append (list key value)))
-;; 					(jdi-trace "keys=%s, values=%s" 
-;; 							   (length (jdi-value-values keyset-value))
-;; 							   (length (jdi-value-values values-value)))
-;; 					(cont-values t)))))))))))
 
 (defun jdibug-value-object-get-fields (value)
   (jdibug-debug "jdibug-value-object-get-values")
   (lexical-let ((value value))
-	(cont-bind (class) (jdi-value-get-class value)
+	(let ((class (jdi-value-get-class value)))
 	  (lexical-let ((class class))
-		(cont-bind (supers) (jdi-class-get-all-super class)
+		(let ((supers (jdi-class-get-all-super class)))
 		  (lexical-let ((supers supers))
-			(cont-bind (interfaces) (jdi-class-get-all-interfaces class)
-			  (cont-bind (signatures) (cont-mapcar 'jdi-class-get-signature (cons class (append supers interfaces)))
+			(let ((interfaces (jdi-class-get-all-interfaces class)))
+			  (let ((signatures (mapcar 'jdi-class-get-signature (cons class (append supers interfaces)))))
 				(let* ((setter (find-if (lambda (custom)
 										  (member (jdi-class-name-to-class-signature (car custom)) signatures))
 										jdibug-value-custom-expanders))
