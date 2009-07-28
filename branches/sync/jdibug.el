@@ -330,7 +330,9 @@ And position the point at the line number."
 
   (setf (jdibug-active-thread jdibug-this) thread)
 
-  (jdibug-refresh location)
+  (jdibug-goto-location location)
+
+  (jdibug-refresh)
   (run-hooks 'jdibug-breakpoint-hit-hook))
 
 (defun jdibug-handle-step (thread location)
@@ -341,7 +343,9 @@ And position the point at the line number."
 ;;   (let ((class (gethash class-id (jdi-virtual-machine-classes vm))))
 ;; 	(jdibug-goto-location (jdi-class-find-location class method-id line-code-index)))
 
-  (jdibug-refresh location))
+  (jdibug-goto-location location)
+
+  (jdibug-refresh))
 
 (defun jdibug-handle-change-frame (frame)
   (jdibug-debug "jdibug-handle-change-frame")
@@ -363,7 +367,7 @@ And position the point at the line number."
 ;; 							   (jdi-method-id (jdi-location-method (jdi-frame-location frame)))
 ;; 							   (jdi-location-line-code-index (jdi-frame-location frame)))))
   
-(defun jdibug-refresh (&optional location)
+(defun jdibug-refresh ()
   (dolist (buf (list (jdibug-frames-buffer jdibug-this) (jdibug-locals-buffer jdibug-this)))
 	(with-current-buffer buf
 	  (let ((inhibit-read-only t))
@@ -371,17 +375,16 @@ And position the point at the line number."
 		(insert "refreshing..."))))
   (if (jdibug-refresh-timer jdibug-this)
 	  (cancel-timer (jdibug-refresh-timer jdibug-this))
-	(jdibug-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-now location)))
+	(jdibug-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-now)))
 
-(defun jdibug-refresh-now (&optional location)
+(defun jdibug-refresh-now ()
   (jdibug-debug "jdibug-refresh-now")
-  (if location (jdibug-goto-location location))
   (when (null (catch 'jdwp-input-pending
 				(let ((jdwp-throw-on-input-pending t))
 				  (jdibug-refresh-locals-buffer-now)
 				  (jdibug-refresh-frames-buffer-now)
 				  t)))
-	(jdibug-refresh location)))
+	(jdibug-refresh)))
 
 (defun jdibug-get-active-frame ()
   (jdibug-debug "jdibug-get-active-frame")
