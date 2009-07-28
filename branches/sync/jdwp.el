@@ -758,8 +758,6 @@
   ;;(delete-process (jdwp-process jdwp))
   (setf (jdwp-process jdwp) nil))
 
-(defvar jdwp-disconnected-hooks nil)
-
 (defun jdwp-process-sentinel (proc string)
   (let ((jdwp (process-get proc 'jdwp)))
     (jdwp-trace "jdwp-process-sentinel:%s" string)
@@ -802,6 +800,12 @@
 		  (list (substring str 11) error jdwp id))))))
 
 (defvar jdwp-event-hooks nil)
+
+(defvar jdwp-throw-on-input-pending nil
+  "When set to non-nil, jdwp-send-command will throw an error on user input.")
+
+(defvar jdwp-input-pending nil
+  "The symbol that will be thrown when jdwp-throw-on-input-pending is non-nil and there's input pending")
 
 (defun jdwp-process-command (jdwp str)
   (jdwp-with-size 
@@ -999,14 +1003,15 @@
   (catch 'done
 	(let ((timeout (+ (float-time) jdwp-timeout)))
 	  (while t
-		(let ((result (accept-process-output proc jdwp-timeout 0 t)))
+		(let ((result (accept-process-output proc jdwp-block-seconds 0 t)))
 		  (jdwp-debug "jdwp-receive-message:accept-process-output returned %s" result))
 		(let ((result (funcall func)))
 		  (if result
 			  (throw 'done result)
-			(sit-for 0)))
-		(if (> (float-time) timeout)
-			(error "timed out"))))))
+			(if (and jdwp-throw-on-input-pending (input-pending-p))
+				(throw 'jdwp-input-pending nil))
+			(if (> (float-time) timeout)
+				(error "timed out"))))))))
 
 (defun jdwp-class-status-string (status)
   (concat (if (zerop (logand status 1)) nil "[VERIFIED]")

@@ -147,7 +147,6 @@ jdibug-source-paths will be ignored if this is set to t."
   frames-tree
 
   refresh-timer
-  refresh-proc
   )
 
 (defstruct jdibug-breakpoint
@@ -230,9 +229,7 @@ jdibug-source-paths will be ignored if this is set to t."
 	(mapcar 'jdibug-set-breakpoint bps)
 
 	(run-hooks 'jdibug-connected-hook)
-	(setf (jdibug-refresh-timer jdibug-this)
-		  (jdibug-run-with-timer jdibug-refresh-delay nil 
-								 'jdibug-refresh-now))))
+	(jdibug-refresh)))
   
 (defun jdibug-disconnect ()
   (interactive)
@@ -333,10 +330,7 @@ And position the point at the line number."
 
   (setf (jdibug-active-thread jdibug-this) thread)
 
-  (if (jdibug-refresh-timer jdibug-this)
-	  (cancel-timer (jdibug-refresh-timer jdibug-this)))
-  (setf (jdibug-refresh-timer jdibug-this)
-		(jdibug-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-now location))
+  (jdibug-refresh location)
   (run-hooks 'jdibug-breakpoint-hit-hook))
 
 (defun jdibug-handle-step (thread location)
@@ -347,10 +341,7 @@ And position the point at the line number."
 ;;   (let ((class (gethash class-id (jdi-virtual-machine-classes vm))))
 ;; 	(jdibug-goto-location (jdi-class-find-location class method-id line-code-index)))
 
-  (if (jdibug-refresh-timer jdibug-this)
-	  (cancel-timer (jdibug-refresh-timer jdibug-this)))
-  (setf (jdibug-refresh-timer jdibug-this)
-		(jdibug-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-now location)))
+  (jdibug-refresh location))
 
 (defun jdibug-handle-change-frame (frame)
   (jdibug-debug "jdibug-handle-change-frame")
@@ -360,23 +351,32 @@ And position the point at the line number."
 												 (jdi-location-method-id (jdi-frame-location frame))
 												 (jdi-location-line-code-index (jdi-frame-location frame))))
 
-  (if (jdibug-refresh-timer jdibug-this)
-	  (cancel-timer (jdibug-refresh-timer jdibug-this)))
-  (setf (jdibug-refresh-timer jdibug-this)
-		(jdibug-run-with-timer jdibug-refresh-delay nil 
-							   'jdibug-refresh-now 
-							   (jdi-mirror-virtual-machine frame)
-							   (jdi-thread-id (jdi-frame-thread frame))
-							   (jdi-class-id (jdi-location-class (jdi-frame-location frame)))
-							   (jdi-method-id (jdi-location-method (jdi-frame-location frame)))
-							   (jdi-location-line-code-index (jdi-frame-location frame)))))
+  (jdibug-refresh))
+;;   (if (jdibug-refresh-timer jdibug-this)
+;; 	  (cancel-timer (jdibug-refresh-timer jdibug-this)))
+;;   (setf (jdibug-refresh-timer jdibug-this)
+;; 		(jdibug-run-with-timer jdibug-refresh-delay nil 
+;; 							   'jdibug-refresh-now 
+;; 							   (jdi-mirror-virtual-machine frame)
+;; 							   (jdi-thread-id (jdi-frame-thread frame))
+;; 							   (jdi-class-id (jdi-location-class (jdi-frame-location frame)))
+;; 							   (jdi-method-id (jdi-location-method (jdi-frame-location frame)))
+;; 							   (jdi-location-line-code-index (jdi-frame-location frame)))))
   
+(defun jdibug-refresh (&optional location)
+  (if (jdibug-refresh-timer jdibug-this)
+	  (cancel-timer (jdibug-refresh-timer jdibug-this))
+	(jdibug-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-now location)))
+
 (defun jdibug-refresh-now (&optional location)
   (jdibug-debug "jdibug-refresh-now")
-  (jdibug-time-start)
   (if location (jdibug-goto-location location))
-  (jdibug-refresh-locals-buffer-now)
-  (jdibug-refresh-frames-buffer-now))
+  (when (null (catch 'jdwp-input-pending
+				(let ((jdwp-throw-on-input-pending t))
+				  (jdibug-refresh-locals-buffer-now)
+				  (jdibug-refresh-frames-buffer-now)
+				  t)))
+	(jdibug-refresh location)))
 
 (defun jdibug-get-active-frame ()
   (jdibug-debug "jdibug-get-active-frame")
@@ -1099,16 +1099,17 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (setf (jdibug-active-frame jdibug-this) (car (jdibug-suspended-frames jdibug-this)))
 
   (when (jdibug-active-frame jdibug-this)
-	(if (jdibug-refresh-timer jdibug-this)
-		(cancel-timer (jdibug-refresh-timer jdibug-this)))
-	(setf (jdibug-refresh-timer jdibug-this)
-		  (jdibug-run-with-timer jdibug-refresh-delay nil 
-								 'jdibug-refresh-now 
-								 (jdi-mirror-virtual-machine (jdibug-active-frame jdibug-this))
-								 (jdi-thread-id (jdi-frame-thread (jdibug-active-frame jdibug-this)))
-								 (jdi-location-class-id (jdi-frame-location (jdibug-active-frame jdibug-this)))
-								 (jdi-location-method-id (jdi-frame-location (jdibug-active-frame jdibug-this)))
-								 (jdi-location-line-code-index (jdi-frame-location (jdibug-active-frame jdibug-this))))))
+	(jdibug-refresh))
+;; 	(if (jdibug-refresh-timer jdibug-this)
+;; 		(cancel-timer (jdibug-refresh-timer jdibug-this)))
+;; 	(setf (jdibug-refresh-timer jdibug-this)
+;; 		  (jdibug-run-with-timer jdibug-refresh-delay nil 
+;; 								 'jdibug-refresh-now 
+;; 								 (jdi-mirror-virtual-machine (jdibug-active-frame jdibug-this))
+;; 								 (jdi-thread-id (jdi-frame-thread (jdibug-active-frame jdibug-this)))
+;; 								 (jdi-location-class-id (jdi-frame-location (jdibug-active-frame jdibug-this)))
+;; 								 (jdi-location-method-id (jdi-frame-location (jdibug-active-frame jdibug-this)))
+;; 								 (jdi-location-line-code-index (jdi-frame-location (jdibug-active-frame jdibug-this))))))
 
   (message "JDIbug resumed"))
 
