@@ -180,6 +180,10 @@
 								   (:location .  ,location-data))))))
 	(make-jdi-event-request :virtual-machine (jdi-mirror-virtual-machine location) :data data)))
 
+(unless (fboundp 'mappend)
+  (defun mappend (fn &rest lsts)
+	(apply 'append (apply 'mapcar fn lsts))))
+
 (defun jdi-event-request-manager-create-step (erm thread depth)
   (let ((data `((:event-kind     . ,jdwp-event-single-step)
 				(:suspend-policy . ,jdwp-suspend-policy-event-thread)
@@ -423,7 +427,7 @@
 (defun jdi-class-get-all-methods (class)
   (jdi-debug "jdi-class-get-all-methods")
   (let ((supers (jdi-class-get-all-super class)))
-	(apply 'append (apply 'mapcar 'jdi-class-get-methods (cons class supers)))))
+	(mappend 'jdi-class-get-methods (cons class supers))))
 
 (defun jdi-class-get-methods (class)
   "[ASYNC] returns a list of jdi-method in the class"
@@ -489,20 +493,17 @@
   (jdi-info "benchmark: %s took %s seconds" message (float-time (time-subtract (current-time) jdi-start-time))))
 
 (defun jdi-virtual-machine-set-breakpoint (vm signature line)
-  "[ASYNC] returns a jdi-event-request if a breakpoint is installed, nil otherwise"
+  "Set breakpoint and return a list of jdi-event-request"
 
   (jdi-debug "jdi-virtual-machine-set-breakpoint:signature=%s:line=%s" signature line)
   (jdi-time-start)
-  (let ((classes (jdi-virtual-machine-get-classes-by-signature vm signature)))
-	(let ((locations (apply 'append (apply 'mapcar (lambda (class)
-													 (jdi-class-get-locations-of-line class line))
-										   classes))))
-	  (jdi-time-end (format "jdi-class-get-locations-of-line for %s classes:matched = %s locations" (length classes) (length locations)))
-	  (let ((erm (jdi-virtual-machine-event-request-manager vm)))
-		(mapcar (lambda (location)
-				  (let ((er (jdi-event-request-manager-create-breakpoint erm location)))
-					(jdi-event-request-enable er)))
-				locations)))))
+  (let ((result))
+	(dolist (class (jdi-virtual-machine-get-classes-by-signature vm signature))
+	  (dolist (location (jdi-class-get-locations-of-line class line))
+		(let ((er (jdi-event-request-manager-create-breakpoint (jdi-virtual-machine-event-request-manager vm) location)))
+		  (jdi-event-request-enable er)
+		  (push er result))))
+	result))
 
 (defun jdi-method-location-by-line-code-index (method line-code-index)
   (jdi-trace "jdi-method-location-by-line-code-index:%s:%s:%s" (jdi-method-name method) line-code-index (length (jdi-method-locations method)))
@@ -523,13 +524,12 @@
 
 (defun jdi-class-get-locations-of-line (class line-number)
   (jdi-debug "jdi-class-get-locations-of-line")
-  (let ((methods (jdi-class-get-methods class)))
-	(jdi-debug "jdi-class-get-locations-of-line: number of methods = %s" (length methods))
-	(let ((locations (apply 'append (apply 'mapcar 'jdi-method-get-locations methods))))
-	  (jdi-debug "jdi-class-get-locations-of-line: number of locations = %s" (length locations))
-	  (loop for location in locations
-			if (equal line-number (jdi-location-line-number location))
-			collect location))))
+  (let ((result))
+	(dolist (method (jdi-class-get-methods class))
+	  (dolist (location (jdi-method-get-locations method))
+		(if (equal line-number (jdi-location-line-number location))
+			(push location result))))
+	result))
 
 (defun jdi-class-find-location (class method-id line-code-index)
   (jdi-debug "jdi-class-find-location:number of methods=%s" (length (jdi-class-methods class)))
@@ -776,13 +776,13 @@
   (let ((supers (jdi-class-get-all-super class)))
 	(jdi-debug "jdi-class-get-all-fields:%s:%s" (jdi-class-id class) (loop for super in supers
 																		   collect (jdi-class-id super)))
-	(apply 'append (apply 'mapcar 'jdi-class-get-fields (cons class supers)))))
+	(mappend 'jdi-class-get-fields (cons class supers))))
 
 (defun jdi-value-get-all-fields (value)
   (jdi-debug "jdi-value-get-all-fields:%s" (jdi-value-value value))
   (let ((class (jdi-value-get-class value)))
 	(let ((supers (jdi-class-get-all-super class)))
-	  (apply 'append (apply 'mapcar 'jdi-class-get-fields (cons class supers))))))
+	  (mappend 'jdi-class-get-fields (cons class supers)))))
 
 (defun jdi-value-get-values (value fields)
   "Gets the value of multiple instance and/or static fields in this object. 
@@ -895,7 +895,7 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
   (if (null classes)
 	  interfaces
 	
-	(let ((interfaces2 (apply 'append (mapcar 'apply 'jdi-class-get-interfaces classes))))
+	(let ((interfaces2 (mappend 'jdi-class-get-interfaces classes)))
 	  (jdi-class-get-all-interfaces-2 interfaces2 (append interfaces2 interfaces)))))
 
 (defun jdi-access-string (bits)
