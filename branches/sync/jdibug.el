@@ -878,25 +878,25 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	(jdibug-breakpoint-update bp)
 	(jdibug-message "JDIbug setting breakpoint...")
 	(jdibug-time-start)
-	(mapcar (lambda (vm)
-			  (if (not (jdibug-file-in-source-paths-p source-file))
-				  (progn
-					(jdibug-message "file is not in source path" t)
-					t)
+	(dolist (vm (jdibug-virtual-machines jdibug-this))
+	  (if (not (jdibug-file-in-source-paths-p source-file))
+		  (progn
+			(jdibug-message "file is not in source path" t)
+			t)
 
-				(let ((result (jdi-virtual-machine-set-breakpoint 
-							   vm 
-							   (jdibug-source-file-to-class-signature source-file)
-							   line-number)))
-				  (unless (null result)
-					(jdibug-message "done" t)
-					(jdibug-time-end "set-breakpoint")
-					(setf (jdibug-breakpoint-status bp) 'enabled)
-					(setf (jdibug-breakpoint-event-requests bp)
-						  (append result (jdibug-breakpoint-event-requests bp)))
-					(jdibug-breakpoint-update bp))
-				  t)))
-			(jdibug-virtual-machines jdibug-this))))
+		(let ((result (jdi-virtual-machine-set-breakpoint 
+					   vm 
+					   (jdibug-source-file-to-class-signature source-file)
+					   line-number)))
+		  (if (null result)
+			  (jdibug-message "pending" t)
+
+			(jdibug-message "done" t)
+			(setf (jdibug-breakpoint-status bp) 'enabled)
+			(setf (jdibug-breakpoint-event-requests bp)
+				  (append result (jdibug-breakpoint-event-requests bp))))
+		  (jdibug-breakpoint-update bp))
+		t))))
 
 (defun jdibug-disable-breakpoint (bp)
   (mapc (lambda (er)
