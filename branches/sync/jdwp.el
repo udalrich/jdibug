@@ -693,8 +693,17 @@
 (defun jdwp-process-filter (process string)
   (jdwp-debug "jdwp-process-filter")
   (jdwp-ordinary-insertion-filter process string)
-  (let ((jdwp (process-get process 'jdwp)))
-	(jdwp-monitor jdwp)))
+  (let ((jdwp (process-get process 'jdwp))
+		(packet))
+	(while (setq packet (jdwp-get-packet jdwp))
+	  (if (jdwp-reply-packet-p packet)
+		  ;; reply packet
+		  (setf (jdwp-current-reply jdwp) packet)
+
+		;; command packet
+		(jdwp-process-command jdwp packet)
+		;;			  (jdwp-process-command jdwp packet)
+		(jdwp-trace "received command packet")))))
 
 (defun jdwp-process-id-sizes (jdwp reply)
   (setf (jdwp-field-id-size jdwp) (bindat-get-field reply :field-id-size))
@@ -712,32 +721,6 @@
   (setf (jdwp-frame-id-size jdwp) (bindat-get-field reply :frame-id-size))
   (jdwp-trace "frame-id-size         :%d" (jdwp-frame-id-size jdwp)))
 
-(defun jdwp-monitor-handshake (jdwp)
-  (if (string= (jdwp-residual-output jdwp)
-			   jdwp-handshake)
-	  (progn
-		(setf (jdwp-handshaked-p jdwp) t)
-		(jdwp-consume-output jdwp (length jdwp-handshake))
-		(multiple-value-bind (reply error jdwp id) (jdwp-send-command jdwp "id-sizes" nil)
-		  (jdwp-process-id-sizes jdwp reply)))))
-
-(defun jdwp-monitor-2 (jdwp)
-  (let ((packet))
-	(while (setq packet (jdwp-get-packet jdwp))
-	  (if (jdwp-reply-packet-p packet)
-		  ;; reply packet
-		  (setf (jdwp-current-reply jdwp) packet)
-
-		;; command packet
-		(jdwp-process-command jdwp packet)
-		;;			  (jdwp-process-command jdwp packet)
-		(jdwp-trace "received command packet")))))
-
-(defun jdwp-monitor (jdwp)
-  (jdwp-trace "jdwp-monitor handshaked=%s" (jdwp-handshaked-p jdwp))
-  (cond ((null (jdwp-handshaked-p jdwp)) (jdwp-monitor-handshake jdwp))
-		(t (jdwp-monitor-2 jdwp))))
-
 (defun jdwp-connect (jdwp server port)
   "[ASYNC] returns t if connected and an (ERROR-SYMBOL . SIGNAL-DATA) if there are problems connecting"
   (jdwp-trace "jdwp-connect:%s:%s" server port)
@@ -748,13 +731,22 @@
 	(setf (jdwp-process jdwp) (open-network-stream "jdwp" buffer-name server port))
 	(when (jdwp-process jdwp)
 	  (process-put               (jdwp-process jdwp) 'jdwp jdwp)
-	  (set-process-filter        (jdwp-process jdwp) 'jdwp-process-filter)
 	  (set-process-sentinel      (jdwp-process jdwp) 'jdwp-process-sentinel)
 	  (with-current-buffer (process-buffer (jdwp-process jdwp))
 		(set-buffer-multibyte nil))
 	  (set-process-coding-system (jdwp-process jdwp) 'no-conversion 'no-conversion)
-	  (jdwp-process-send-string jdwp jdwp-handshake))
-	jdwp))
+	  (jdwp-process-send-string jdwp jdwp-handshake)
+	  (unless (string= jdwp-handshake (jdwp-receive-message (jdwp-process jdwp)
+															(lambda ()
+															  (if (>= (jdwp-output-length jdwp) (length jdwp-handshake))
+																  (jdwp-residual-output jdwp)))))
+		(error "Handshake error"))
+	  (jdwp-consume-output jdwp (length jdwp-handshake))
+	  ;; only after the handshake we use the process filter
+	  (set-process-filter        (jdwp-process jdwp) 'jdwp-process-filter)
+	  (multiple-value-bind (reply error jdwp id) (jdwp-send-command jdwp "id-sizes" nil)
+		(jdwp-process-id-sizes jdwp reply))
+	  jdwp)))
 
 (defun jdwp-disconnect (jdwp)
   (condition-case err
@@ -996,14 +988,21 @@
 		(let ((inhibit-eol-conversion t))
 		  (setf (jdwp-current-reply jdwp) nil)
 		  (jdwp-process-send-string jdwp command-packed)
-		  (catch 'done
-			(with-timeout (jdwp-timeout (error "Timed out"))
-			  (while t
-				(accept-process-output (jdwp-process jdwp) jdwp-timeout 0 t)
-				(if (jdwp-current-reply jdwp)
-					(progn
-					  (jdwp-debug "got reply:%s" (jdwp-string-to-hex (jdwp-current-reply jdwp) 100))
-					  (throw 'done (jdwp-process-reply jdwp (jdwp-current-reply jdwp) command-data))))))))))))
+		  (jdwp-process-reply jdwp 
+							  (jdwp-receive-message (jdwp-process jdwp)
+													(lambda ()
+													  (jdwp-current-reply jdwp)))
+							  command-data))))))
+
+(defun jdwp-receive-message (proc func)
+  "Wait for message from proc, returns when func returns non-nil or timed out"
+  (catch 'done
+	(with-timeout (jdwp-timeout (error "Timed out"))
+	  (while t
+		(accept-process-output proc jdwp-timeout 0 t)
+		(let ((result (funcall func)))
+		  (if result
+			  (throw 'done result)))))))
 
 (defun jdwp-class-status-string (status)
   (concat (if (zerop (logand status 1)) nil "[VERIFIED]")

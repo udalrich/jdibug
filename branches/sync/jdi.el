@@ -224,10 +224,7 @@
   "[ASYNC] returns t if success, nil on failure"
   (let ((result (jdwp-connect jdwp (jdi-virtual-machine-host vm) (jdi-virtual-machine-port vm))))
 	(jdwp-put jdwp 'jdi-virtual-machine vm)
-	(if (not (eq result t))
-		(progn
-		  (jdi-error "failed to connect:%s" result)
-		  nil)
+	(unless (null result)
 	  (multiple-value-bind (reply error jdwp id) (jdwp-send-command jdwp "version" nil)
 
 		(jdi-trace "description: \n%s" (jdwp-get-string reply :description))
@@ -237,7 +234,8 @@
 		(jdi-trace "name       : %s"   (jdwp-get-string reply :vm-name))
 		(multiple-value-bind (reply error jdwp id) (jdwp-send-command jdwp "capabilities-new" nil)
 		  (jdi-trace "capabilities-new:%s" reply)
-		  (jdi-virtual-machine-set-standard-events vm))))))
+		  (jdi-virtual-machine-set-standard-events vm)
+		  t)))))
 
 (defun jdi-virtual-machine-get-threads (vm)
   (jdi-debug "jdi-virtual-machine-get-threads")
