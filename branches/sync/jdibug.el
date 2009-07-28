@@ -393,7 +393,16 @@ And position the point at the line number."
 		nil))))
 
 (defun jdibug-handle-class-prepare (class)
-  (jdibug-debug "jdibug-handle-class-prepare"))
+  (jdibug-debug "jdibug-handle-class-prepare")
+  (dolist (bp (jdibug-breakpoints jdibug-this))
+	(when (equal (jdibug-breakpoint-source-file bp) (jdibug-class-signature-to-source-file (jdi-class-get-signature class)))
+	  (dolist (location (jdi-class-get-locations-of-line class (jdibug-breakpoint-line-number bp)))
+		(let ((er (jdi-event-request-manager-create-breakpoint (jdi-virtual-machine-event-request-manager (jdi-mirror-virtual-machine class)) location)))
+		  (jdi-event-request-enable er)
+		  (push er (jdibug-breakpoint-event-requests bp))))
+	  (setf (jdibug-breakpoint-status bp) 'enabled)
+	  (jdibug-breakpoint-update bp)
+	  (jdibug-refresh-breakpoints-buffer jdibug-this))))
 
 (defun jdibug-handle-detach (vm)
   (interactive)
