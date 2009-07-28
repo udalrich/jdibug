@@ -364,6 +364,10 @@ And position the point at the line number."
 ;; 							   (jdi-location-line-code-index (jdi-frame-location frame)))))
   
 (defun jdibug-refresh (&optional location)
+  (dolist (buf (list (jdibug-frames-buffer jdibug-this) (jdibug-locals-buffer jdibug-this)))
+	(with-current-buffer buf
+	  (erase-buffer)
+	  (insert "refreshing...")))
   (if (jdibug-refresh-timer jdibug-this)
 	  (cancel-timer (jdibug-refresh-timer jdibug-this))
 	(jdibug-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-now location)))
