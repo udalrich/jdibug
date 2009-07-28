@@ -244,6 +244,8 @@ jdibug-source-paths will be ignored if this is set to t."
   (and (timerp (jdibug-refresh-timer jdibug-this))
 	   (cancel-timer (jdibug-refresh-timer jdibug-this)))
 
+  (kill-buffer (jdibug-locals-buffer jdibug-this))
+  (kill-buffer (jdibug-frames-buffer jdibug-this))
   (setf (jdibug-locals-tree             jdibug-this) nil
 		(jdibug-locals-buffer           jdibug-this) nil
 
