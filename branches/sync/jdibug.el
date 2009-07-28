@@ -646,9 +646,12 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	  (erase-buffer))
 
   (jdibug-debug "jdibug-refresh-locals-buffer-now")
-  (if (null (jdibug-active-frame jdibug-this))
+  (if (null (jdibug-active-thread jdibug-this))
 	  (insert "Not suspended")
 
+	(if (null (jdibug-active-frame jdibug-this))
+		(setf (jdibug-active-frame jdibug-this) (car (jdi-thread-get-frames (jdibug-active-thread jdibug-this)))))
+													  
 	(jdibug-time-start)
 	(let* ((variables (sort (copy-sequence (jdi-frame-get-visible-variables (jdibug-active-frame jdibug-this))) 'jdibug-variable-sorter))
 		   (values (jdi-frame-get-values (jdibug-active-frame jdibug-this) variables)))
@@ -1317,19 +1320,15 @@ to populate the jdi-value-values of the jdi-value.")
 
 (defun jdibug-value-custom-set-string-with-size (value)
   (jdi-debug "jdibug-value-custom-set-string-with-size")
-  (let ((class (jdi-value-get-class value)))
-	(let ((methods (jdi-class-get-methods class)))
-	  (let ((size-method (find-if (lambda (obj)
-									(equal (jdi-method-name obj)
-										   "size"))
-								  methods)))
-		(if (null size-method)
-			(format "%s[nosize]" (jdi-class-name class))
+  (let ((size-method (find-if (lambda (obj)
+								(equal (jdi-method-name obj)
+									   "size"))
+							  (jdi-class-get-methods (jdi-value-get-class value)))))
+	(if (null size-method)
+		(format "%s[nosize]" (jdi-class-name class))
 
-		  (let ((result-value (jdi-value-invoke-method value (jdibug-active-thread jdibug-this) size-method nil nil)))
-			(format "%s[%s]" 
-					(jdi-class-name class)
-					(bindat-get-field reply :return-value :u :value))))))))
+	  (let ((result-value (jdi-value-invoke-method value (jdibug-active-thread jdibug-this) size-method nil nil)))
+		(format "%s[%s]" (jdi-class-name class) (jdi-value-value result-value))))))
 
 (defun jdibug-value-custom-expand-collection (value)
   (jdi-debug "jdibug-value-custom-expand-collection")

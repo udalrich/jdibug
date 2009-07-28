@@ -1002,6 +1002,7 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 								:thread thread
 								:location location)))
 
+	(setf (jdi-thread-frames thread) nil)
 	(setf (jdi-thread-suspend-status thread) jdwp-suspend-status-suspended)
 
 	(setf (jdi-virtual-machine-suspended-frames vm) (nreverse (cons frame (jdi-virtual-machine-suspended-frames vm))))
@@ -1029,6 +1030,8 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 		 (frame (make-jdi-frame :virtual-machine vm
 								:thread thread
 								:location location)))
+
+	(setf (jdi-thread-frames thread) nil)
 
 	(setf (jdi-virtual-machine-suspended-frames vm) (nreverse (cons frame (jdi-virtual-machine-suspended-frames vm))))
 
@@ -1089,17 +1092,16 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 (defun jdi-value-invoke-method (value thread method arguments options)
   "Returns another jdi-value of the result."
   (jdi-debug "jdi-value-invoke-method")
-  (let ((class (jdi-value-get-class value)))
-	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp value) "object-invoke-method"
-																  `((:object . ,(jdi-value-value value))
-																	(:thread . ,(jdi-thread-id thread))
-																	(:class . ,(jdi-class-id class))
-																	(:method-id . ,(jdi-method-id method))
-																	(:arguments . 0)
-																	(:options . ,jdwp-invoke-single-threaded)))
-	  (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
-					  :type (bindat-get-field reply :return-value :type)
-					  :value (bindat-get-field reply :return-value :u :value)))))
+  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp value) "object-invoke-method"
+																`((:object . ,(jdi-value-value value))
+																  (:thread . ,(jdi-thread-id thread))
+																  (:class . ,(jdi-class-id (jdi-value-get-class value)))
+																  (:method-id . ,(jdi-method-id method))
+																  (:arguments . 0)
+																  (:options . ,jdwp-invoke-single-threaded)))
+	(make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
+					:type (bindat-get-field reply :return-value :type)
+					:value (bindat-get-field reply :return-value :u :value))))
 
 (defvar jdi-breakpoint-hooks nil
   "callback to be called when breakpoint is hit, called with (jdi-thread jdi-location)")
