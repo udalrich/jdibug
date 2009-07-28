@@ -645,7 +645,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	(let ((inhibit-read-only t))
 	  (erase-buffer))
 
-  (jdibug-debug "jdibug-refresh-locals-buffer-now")
+  (jdibug-debug "jdibug-refresh-locals-buffer-now suspended=%s" (if (jdibug-active-thread jdibug-this) "yes" "no"))
   (if (null (jdibug-active-thread jdibug-this))
 	  (insert "Not suspended")
 
@@ -1041,9 +1041,14 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
       (delete-overlay (jdibug-current-line-overlay jdibug-this)))
   (if (null (jdibug-active-thread jdibug-this))
       (message "JDIbug Can not step. Not suspended.")
-    (jdi-thread-send-step (jdibug-active-thread jdibug-this) depth)
-	(setf (jdibug-active-thread jdibug-this) nil)
-	(setf (jdibug-active-frame jdibug-this) nil)))
+	(let ((active-thread (jdibug-active-thread jdibug-this)))
+	  ;; we can not clear the active-thread after calling send-step
+	  ;; because the send-step command is going to trigger the 
+	  ;; handle-step command first, and then return here
+	  ;; and we will be clearing it again
+	  (setf (jdibug-active-thread jdibug-this) nil)
+	  (setf (jdibug-active-frame jdibug-this) nil)
+	  (jdi-thread-send-step active-thread depth))))
 
 (defun jdibug-step-over ()
   (interactive)
