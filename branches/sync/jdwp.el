@@ -690,64 +690,11 @@
 (defun jdwp-get (jdwp key)
   (plist-get (jdwp-plist jdwp) key))
 
-(defun jdwp-send-handshake (jdwp)
-  (jdwp-trace "jdwp-send-handshake")
-  (jdwp-process-send-string jdwp jdwp-handshake))
-;;   (catch 'done
-;; 	(while t
-;; 	  (accept-process-output (jdwp-process jdwp) 1 0 t)
-;; 	  (jdwp-debug "jdwp-residual-output:%s" (jdwp-residual-output jdwp))
-;; 	  (if (and (>= (length (jdwp-residual-output jdwp)) (length jdwp-handshake))
-;; 			   (string= jdwp-handshake (substring (jdwp-residual-output jdwp) 0 (length jdwp-handshake))))
-;; 		  (throw 'done nil))))
-;;   (jdwp-debug "received handshake")
-;;   (setf (jdwp-handshaked-p jdwp) t)
-;;   (jdwp-consume-output jdwp (length jdwp-handshake)))
-
 (defun jdwp-process-filter (process string)
   (jdwp-debug "jdwp-process-filter")
   (jdwp-ordinary-insertion-filter process string)
   (let ((jdwp (process-get process 'jdwp)))
 	(jdwp-monitor jdwp)))
-
-;; (defun jdwp-process-filter (process string)
-;;   (jdwp-debug "jdwp-process-filter")
-;;   (jdwp-trace "string=%s" string)
-;;   (let* ((jdwp (process-get process 'jdwp)))
-;;     (jdwp-append-output jdwp process string)
-;; 	;;(jdi-trace "residual=%s" (jdwp-residual-output jdwp))
-;;     (if (not (jdwp-handshaked-p jdwp))
-;; 		;; handle handshaking
-;; 		(if (string= (jdwp-residual-output jdwp)
-;; 					 jdwp-handshake)
-;; 			(progn
-;; 			  (setf (jdwp-handshaked-p jdwp) t)
-;; 			  (jdwp-consume-output jdwp (length jdwp-handshake))
-;; 			  (apply (jdwp-handshaked-cont jdwp) (jdwp-handshaked-cont-args jdwp))))
-;; 	  ;; we have handshaked, find the cont in our alist and execute it
-;; 	  (let ((packet))
-;; 		(while (setq packet (jdwp-get-packet jdwp))
-;; 		  (if (jdwp-reply-packet-p packet)
-;; 			  ;; reply packet
-;; 			  (let* ((id (bindat-get-field
-;; 						 (bindat-unpack '((:id u32)) (substring packet 4 8))
-;; 						 :id))
-;; 					 (value (cdr (assoc id (jdwp-requests-alist jdwp))))
-;; 					 (command-data (nth 0 value))
-;; 					 (cont (nth 1 value))
-;; 					 (cont-args (nth 2 value)))
-;; 				(jdwp-debug "received reply packet for id:%s:cont:%s:cont-args:%s" id cont cont-args)
-;; 				(jdwp-debug "requests-alist:%s" (jdwp-requests-alist jdwp))
-;; 				(multiple-value-bind (jdwp-reply jdwp-error jdwp-jdwp jdwp-id)
-;; 					(jdwp-process-reply jdwp packet command-data)
-;; 				  (apply cont cont-args)))
-;; 			;; command packet
-;; 			(run-with-idle-timer 0 nil
-;; 								 (lambda (jdwp packet)
-;; 								   (jdwp-process-command jdwp packet))
-;; 								 jdwp packet)
-;; 			;;			  (jdwp-process-command jdwp packet)
-;; 			(jdwp-debug "received command packet")))))))
 
 (defun jdwp-process-id-sizes (jdwp reply)
   (setf (jdwp-field-id-size jdwp) (bindat-get-field reply :field-id-size))
@@ -899,15 +846,6 @@
 	  (jdwp-consume-output jdwp first-packet-length))
 	packet))
 
-(defvar jdwp-accepting-more-output nil
-  "This will be true when we are 'in' jdwp-accept-more-output")
-
-(defun jdwp-accept-more-output (jdwp)
-  (jdwp-debug "jdwp-accept-more-output")
-  (let ((jdwp-accepting-more-output t))
-	(while (accept-process-output (jdwp-process jdwp) 0.01)
-	  (jdwp-debug "accepted some output"))))
-
 (defun jdwp-ordinary-insertion-filter (proc string)
   (with-current-buffer (process-buffer proc)
 	(let ((moving (= (point) (process-mark proc))))
@@ -917,12 +855,6 @@
 		(insert string)
 		(set-marker (process-mark proc) (point)))
 	  (if moving (goto-char (process-mark proc))))))
-
-(defun jdwp-append-output (jdwp process string)
-  (jdwp-ordinary-insertion-filter process string))
-
-;; (defun jdwp-append-output (jdwp process string)
-;;   (setf (jdwp-residual-output jdwp) (concat (jdwp-residual-output jdwp) (string-as-unibyte string))))
 
 (defun jdwp-consume-output (jdwp len)
   (jdwp-debug "jdwp-consume-output:len=%s" len)
@@ -958,27 +890,6 @@
 		  (bindat-get-field
 		   (bindat-unpack '((:length u32)) (buffer-substring-no-properties 1 5))
 		   :length))))))
-
-(defun jdwp-output-first-packet-header (jdwp)
-  "Returns the size of the first packet from the debuggee."
-  (when (jdwp-process jdwp)
-    (let* ((proc (jdwp-process jdwp))
-		   (buf  (process-buffer proc)))
-      (with-current-buffer buf
-		(buffer-substring-no-properties 1 12)))))
-
-(defvar jdwp-reply nil
-  "Dynamic variable that will be populated with the value of the reply packet when cont functions are called.")
-
-(defvar jdwp-jdwp nil
-  "Dynamic variable that will be populated with the value of the current jdwp when cont functions are called.")
-
-(defvar jdwp-error nil
-  "Dynamic variable that will be populated with the value of the current error when cont functions are called.")
-
-(defvar jdwp-id nil
-  "Dynamic variable that will be populated with the value of the current id when cont functions are called.")
-
 
 (defun jdwp-get-string (s &rest fields)
   (concat (bindat-get-field (apply 'bindat-get-field s fields) :string)))
@@ -1046,9 +957,6 @@
       (setq bindat-raw (make-string (+ bindat-idx (bindat-length spec struct)) 0)))
     (bindat--pack-group struct spec)
     (if no-return nil bindat-raw)))
-
-(defun jdwp-get-ongoing (jdwp name data)
-  (gethash (cons name data) (jdwp-namedata-requests-hash jdwp)))
 
 (defun jdwp-process-send-string (jdwp string)
   (process-send-string (jdwp-process jdwp) string))
@@ -1130,17 +1038,6 @@
 				 ((:mod-kind . 1)
 				  (:count    . 1))))))
     (jdwp-send-command jdwp "set" data)))
-
-(defun jdwp-signal-hook (error-symbol data)
-  (jdwp-error "jdwp-signal-hook:%s:%s\n%s\n" error-symbol data
-			  (with-output-to-string (backtrace))))
-
-(defun jdwp-run-with-timer (secs repeat function &rest args)
-  (apply 'run-with-timer secs repeat (lambda (function &rest args)
-									   (setq signal-hook-function 'jdwp-signal-hook)
-									   (apply function args)
-									   (setq signal-hook-function nil)) 
-		 function args))
 
 (provide 'jdwp)
 
