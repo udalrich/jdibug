@@ -40,8 +40,8 @@
   :group 'jdibug
   :type 'integer)
 
-(defcustom jdwp-wait-for-seconds 0.1
-  "Number of seconds to wait for reply synchronously. Set to 0 for fully asynchronous, set to 99.0 for fully synchrounous."
+(defcustom jdwp-block-seconds 0.1
+  "The number of seconds we block before checking for user activity"
   :group 'jdibug
   :type 'float)
 
@@ -997,12 +997,16 @@
 (defun jdwp-receive-message (proc func)
   "Wait for message from proc, returns when func returns non-nil or timed out"
   (catch 'done
-	(with-timeout (jdwp-timeout (error "Timed out"))
+	(let ((timeout (+ (float-time) jdwp-timeout)))
 	  (while t
-		(accept-process-output proc jdwp-timeout 0 t)
+		(let ((result (accept-process-output proc jdwp-timeout 0 t)))
+		  (jdwp-debug "jdwp-receive-message:accept-process-output returned %s" result))
 		(let ((result (funcall func)))
 		  (if result
-			  (throw 'done result)))))))
+			  (throw 'done result)
+			(sit-for 0)))
+		(if (> (float-time) timeout)
+			(error "timed out"))))))
 
 (defun jdwp-class-status-string (status)
   (concat (if (zerop (logand status 1)) nil "[VERIFIED]")
