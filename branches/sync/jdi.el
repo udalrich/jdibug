@@ -194,17 +194,15 @@
 	(make-jdi-event-request :virtual-machine (jdi-mirror-virtual-machine thread) :data data)))
 
 (defun jdi-event-request-enable (er)
-  (lexical-let ((er er))
-	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp er) "set" (jdi-event-request-data er))
-	  (jdi-trace "received requestid:%s" (bindat-get-field reply :request-id))
-	  (setf (jdi-event-request-id er) (bindat-get-field reply :request-id)))))
+  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp er) "set" (jdi-event-request-data er))
+	(jdi-trace "received requestid:%s" (bindat-get-field reply :request-id))
+	(setf (jdi-event-request-id er) (bindat-get-field reply :request-id))))
 
 (defun jdi-event-request-disable (er)
-  (lexical-let ((er er))
-	(multiple-value-bind (reply error jdwp id) 
+  (multiple-value-bind (reply error jdwp id) 
 	  (jdwp-send-command (jdi-mirror-jdwp er) "clear" `((:event . ,jdwp-event-breakpoint) (:request-id . ,(jdi-event-request-id er))))
 
-	  (jdi-trace "cleared event request"))))
+	(jdi-trace "cleared event request")))
 
 (defun jdi-virtual-machine-set-standard-events (vm)
   (mapcar (lambda (event)
@@ -220,47 +218,43 @@
 
 (defun jdi-virtual-machine-connect (vm)
   "[ASYNC] returns t if success, nil on failure"
-  (lexical-let ((jdwp (jdi-virtual-machine-jdwp vm))
-				(vm vm))
-	(let ((result (jdwp-connect jdwp (jdi-virtual-machine-host vm) (jdi-virtual-machine-port vm))))
-	  (jdwp-put jdwp 'jdi-virtual-machine vm)
-	  (if (not (eq result t))
-		  (progn
-			(jdi-error "failed to connect:%s" result)
-			nil)
-		(multiple-value-bind (reply error jdwp id) (jdwp-send-command jdwp "version" nil)
+  (let ((result (jdwp-connect jdwp (jdi-virtual-machine-host vm) (jdi-virtual-machine-port vm))))
+	(jdwp-put jdwp 'jdi-virtual-machine vm)
+	(if (not (eq result t))
+		(progn
+		  (jdi-error "failed to connect:%s" result)
+		  nil)
+	  (multiple-value-bind (reply error jdwp id) (jdwp-send-command jdwp "version" nil)
 
-		  (jdi-trace "description: \n%s" (jdwp-get-string reply :description))
-		  (jdi-trace "major      : %s"   (bindat-get-field reply :jdwp-major))
-		  (jdi-trace "minor      : %s"   (bindat-get-field reply :jdwp-minor))
-		  (jdi-trace "version    : %s"   (jdwp-get-string reply :vm-version))
-		  (jdi-trace "name       : %s"   (jdwp-get-string reply :vm-name))
-		  (multiple-value-bind (reply error jdwp id) (jdwp-send-command jdwp "capabilities-new" nil)
-			(jdi-trace "capabilities-new:%s" reply)
-			(jdi-virtual-machine-set-standard-events vm)))))))
+		(jdi-trace "description: \n%s" (jdwp-get-string reply :description))
+		(jdi-trace "major      : %s"   (bindat-get-field reply :jdwp-major))
+		(jdi-trace "minor      : %s"   (bindat-get-field reply :jdwp-minor))
+		(jdi-trace "version    : %s"   (jdwp-get-string reply :vm-version))
+		(jdi-trace "name       : %s"   (jdwp-get-string reply :vm-name))
+		(multiple-value-bind (reply error jdwp id) (jdwp-send-command jdwp "capabilities-new" nil)
+		  (jdi-trace "capabilities-new:%s" reply)
+		  (jdi-virtual-machine-set-standard-events vm))))))
 
 (defun jdi-virtual-machine-get-threads (vm)
   (jdi-debug "jdi-virtual-machine-get-threads")
   (if (jdi-virtual-machine-threads vm)
  	  (jdi-virtual-machine-threads vm)
-	(lexical-let ((vm vm))
-	  (jdi-time-start)
-	  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-virtual-machine-jdwp vm) "all-threads" nil)
-		(jdi-time-end "jdi-virtual-machine-get-threads:all-threads")
-		(jdi-debug "number of threads:%s" (bindat-get-field reply :threads))
-		(setf (jdi-virtual-machine-threads vm)
-			  (loop for thread in (bindat-get-field reply :thread)
-					collect (jdi-virtual-machine-get-object-create 
-							 vm
-							 (make-jdi-thread :id (bindat-get-field thread :id)))))))))
+	(jdi-time-start)
+	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-virtual-machine-jdwp vm) "all-threads" nil)
+	  (jdi-time-end "jdi-virtual-machine-get-threads:all-threads")
+	  (jdi-debug "number of threads:%s" (bindat-get-field reply :threads))
+	  (setf (jdi-virtual-machine-threads vm)
+			(loop for thread in (bindat-get-field reply :thread)
+				  collect (jdi-virtual-machine-get-object-create 
+						   vm
+						   (make-jdi-thread :id (bindat-get-field thread :id))))))))
 
 (defun jdi-virtual-machine-get-top-level-thread-groups (vm)
   (jdi-debug "jdi-virtual-machine-get-top-level-thread-groups")
-  (lexical-let ((vm vm))
-	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-virtual-machine-jdwp vm) "top-level-thread-groups" nil)
-	  (jdi-debug "jdi-virtual-machine-get-top-level-thread-groups:number = %s" (bindat-get-field reply :groups))
-	  (loop for group in (bindat-get-field reply :group)
-			collect (jdi-virtual-machine-get-object-create vm (make-jdi-thread-group :id (bindat-get-field group :id)))))))
+  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-virtual-machine-jdwp vm) "top-level-thread-groups" nil)
+	(jdi-debug "jdi-virtual-machine-get-top-level-thread-groups:number = %s" (bindat-get-field reply :groups))
+	(loop for group in (bindat-get-field reply :group)
+		  collect (jdi-virtual-machine-get-object-create vm (make-jdi-thread-group :id (bindat-get-field group :id))))))
 
 (defun jdi-virtual-machine-get-all-thread-groups (vm)
   (jdi-debug "jdi-virtual-machine-get-all-thread-groups")
@@ -268,22 +262,20 @@
 
 (defun jdi-virtual-machine-get-classes-by-signature (vm signature)
   (jdi-debug "jdi-virtual-machine-get-classes-by-signature:%s" signature)
-  (lexical-let ((vm vm)
-				(signature signature))
-	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-virtual-machine-jdwp vm) 
-														"classes-by-signature"
-														`((:signature . ((:length . ,(length signature))
-																		 (:string . ,signature)))))
-	  (jdi-debug "number of classes matched:%s" (bindat-get-field reply :classes))
-	  (loop for class        in (bindat-get-field reply :class)
-			for type-id      =  (bindat-get-field class :type-id)
-			for ref-type-tag =  (bindat-get-field class :ref-type-tag)
-			for status       =  (bindat-get-field class :status)
-			for newclass     =  (jdi-virtual-machine-get-class-create vm type-id	
-																	  :signature signature
-																	  :ref-type-tag ref-type-tag
-																	  :status status)
-			collect newclass))))
+  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-virtual-machine-jdwp vm) 
+																"classes-by-signature"
+																`((:signature . ((:length . ,(length signature))
+																				 (:string . ,signature)))))
+	(jdi-debug "number of classes matched:%s" (bindat-get-field reply :classes))
+	(loop for class        in (bindat-get-field reply :class)
+		  for type-id      =  (bindat-get-field class :type-id)
+		  for ref-type-tag =  (bindat-get-field class :ref-type-tag)
+		  for status       =  (bindat-get-field class :status)
+		  for newclass     =  (jdi-virtual-machine-get-class-create vm type-id	
+																	:signature signature
+																	:ref-type-tag ref-type-tag
+																	:status status)
+		  collect newclass)))
 														
 (defun jdi-virtual-machine-get-suspended-threads (vm)
   (jdi-debug "jdi-virtual-machine-suspended-threads")
@@ -320,38 +312,35 @@
 
 (defun jdi-thread-get-name (thread)
   (jdi-debug "jdi-thread-get-name")
-  (lexical-let ((thread thread))
-	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread) "thread-name" `((:thread . ,(jdi-thread-id thread))))
-	  (setf (jdi-thread-name thread)
-			(jdwp-get-string reply :thread-name))
-	  (jdi-debug "thread-name=%s" (jdi-thread-name thread))
-	  (jdi-thread-name thread))))
+  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread) "thread-name" `((:thread . ,(jdi-thread-id thread))))
+	(setf (jdi-thread-name thread)
+		  (jdwp-get-string reply :thread-name))
+	(jdi-debug "thread-name=%s" (jdi-thread-name thread))
+	(jdi-thread-name thread)))
 
 (defun jdi-thread-get-status (thread)
   (jdi-debug "jdi-thread-get-status")
   (if (jdi-thread-status thread)
 	  (values (jdi-thread-status thread) (jdi-thread-suspend-status thread))
 
-	(lexical-let ((thread thread))
-	  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread) "thread-status" `((:thread . ,(jdi-thread-id thread))))
-		(setf (jdi-thread-status thread)
-			  (bindat-get-field reply :thread-status)
-			  (jdi-thread-suspend-status thread)
-			  (bindat-get-field reply :suspend-status))
-		(jdi-debug "thread-status:%s suspend-status:%s" (jdi-thread-status thread) (jdi-thread-suspend-status thread))
-		(values (jdi-thread-status thread) (jdi-thread-suspend-status thread))))))
+	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread) "thread-status" `((:thread . ,(jdi-thread-id thread))))
+	  (setf (jdi-thread-status thread)
+			(bindat-get-field reply :thread-status)
+			(jdi-thread-suspend-status thread)
+			(bindat-get-field reply :suspend-status))
+	  (jdi-debug "thread-status:%s suspend-status:%s" (jdi-thread-status thread) (jdi-thread-suspend-status thread))
+	  (values (jdi-thread-status thread) (jdi-thread-suspend-status thread)))))
 
 (defun jdi-thread-get-thread-group (thread)
   (jdi-debug "jdi-thread-get-thread-group:%s" (jdi-thread-id thread))
   (if (jdi-thread-thread-group thread)
 	  (jdi-thread-thread-group thread)
 
-	(lexical-let ((thread thread))
-	  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread) "thread-group" `((:thread . ,(jdi-thread-id thread))))
-		(jdi-debug "jdi-thread-get-thread-group:group=%s" (bindat-get-field reply :group))
-		(setf (jdi-thread-thread-group thread) (jdi-virtual-machine-get-object-create 
-												(jdi-mirror-virtual-machine thread)
-												(make-jdi-thread-group :id (bindat-get-field reply :group))))))))
+	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread) "thread-group" `((:thread . ,(jdi-thread-id thread))))
+	  (jdi-debug "jdi-thread-get-thread-group:group=%s" (bindat-get-field reply :group))
+	  (setf (jdi-thread-thread-group thread) (jdi-virtual-machine-get-object-create 
+											  (jdi-mirror-virtual-machine thread)
+											  (make-jdi-thread-group :id (bindat-get-field reply :group)))))))
 
 (defun jdi-thread-get-system-thread-p (thread)
   (jdi-debug "jdi-thread-get-system-thread-p:%s" (jdi-thread-id thread))
@@ -360,24 +349,21 @@
 
 (defun jdi-thread-group-get-system-thread-p (thread-group)
   (jdi-debug "jdi-thread-group-get-system-thread-p:%s" (jdi-thread-group-id thread-group))
-  (lexical-let ((thread-group thread-group))
-	(let ((name (jdi-thread-group-get-name thread-group)))
-	  (lexical-let ((name name))
-		(let ((parent (jdi-thread-group-get-parent thread-group)))
-		  (if (string= name "main")
-			  nil
-			(if parent
-				(jdi-thread-group-get-system-thread-p parent)
-			  t)))))))
+  (let ((name (jdi-thread-group-get-name thread-group)))
+	(let ((parent (jdi-thread-group-get-parent thread-group)))
+	  (if (string= name "main")
+		  nil
+		(if parent
+			(jdi-thread-group-get-system-thread-p parent)
+		  t)))))
 
 (defun jdi-thread-group-get-name (thread-group)
   (jdi-debug "jdi-thread-group-get-name:%s" (jdi-thread-group-id thread-group))
   (if (jdi-thread-group-name thread-group)
 	  (jdi-thread-group-name thread-group)
 	
-	(lexical-let ((thread-group thread-group))
-	  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread-group) "thread-group-name" `((:group . ,(jdi-thread-group-id thread-group))))
-		(setf (jdi-thread-group-name thread-group) (jdwp-get-string reply :group-name))))))
+	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread-group) "thread-group-name" `((:group . ,(jdi-thread-group-id thread-group))))
+	  (setf (jdi-thread-group-name thread-group) (jdwp-get-string reply :group-name)))))
 
 (defun jdi-thread-group-get-parent (thread-group)
   (jdi-debug "jdi-thread-group-get-parent:%s" (jdi-thread-group-id thread-group))
@@ -386,30 +372,28 @@
 		  nil
 		(jdi-thread-group-parent thread-group))
 
-	(lexical-let ((thread-group thread-group))
-	  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread-group) "thread-group-parent" `((:group . ,(jdi-thread-group-id thread-group))))
-		(let ((group-id (bindat-get-field reply :parent-group)))
-		  (if (equal group-id [0 0 0 0 0 0 0 0])
-			  (progn
-				(setf (jdi-thread-group-parent thread-group) t)
-				nil)
-			(setf (jdi-thread-group-parent thread-group) (jdi-virtual-machine-get-object-create 
-														  (jdi-mirror-virtual-machine thread-group)
-														  (make-jdi-thread-group :id (bindat-get-field reply :parent-group))))))))))
+	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread-group) "thread-group-parent" `((:group . ,(jdi-thread-group-id thread-group))))
+	  (let ((group-id (bindat-get-field reply :parent-group)))
+		(if (equal group-id [0 0 0 0 0 0 0 0])
+			(progn
+			  (setf (jdi-thread-group-parent thread-group) t)
+			  nil)
+		  (setf (jdi-thread-group-parent thread-group) (jdi-virtual-machine-get-object-create 
+														(jdi-mirror-virtual-machine thread-group)
+														(make-jdi-thread-group :id (bindat-get-field reply :parent-group)))))))))
 
 (defun jdi-thread-group-get-children (thread-group)
   (jdi-debug "jdi-thread-group-get-children:%s" (jdi-thread-group-id thread-group))
-  (lexical-let ((thread-group thread-group))
-	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread-group) "thread-group-children" `((:group . ,(jdi-thread-group-id thread-group))))
-	  (setf (jdi-thread-group-child-threads thread-group) 
-			(loop for thread in (bindat-get-field reply :child-thread)
-				  collect (jdi-virtual-machine-get-object-create (jdi-mirror-virtual-machine thread-group)
-																 (make-jdi-thread :id (bindat-get-field thread :child-thread)))))
-	  (setf (jdi-thread-group-child-groups thread-group) 
-			(loop for group in (bindat-get-field reply :child-group)
-				  collect (jdi-virtual-machine-get-object-create (jdi-mirror-virtual-machine thread-group)
-																 (make-jdi-thread-group :id (bindat-get-field group :child-group)))))
-	  (values (jdi-thread-group-child-threads thread-group) (jdi-thread-group-child-groups thread-group)))))
+  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread-group) "thread-group-children" `((:group . ,(jdi-thread-group-id thread-group))))
+	(setf (jdi-thread-group-child-threads thread-group) 
+		  (loop for thread in (bindat-get-field reply :child-thread)
+				collect (jdi-virtual-machine-get-object-create (jdi-mirror-virtual-machine thread-group)
+															   (make-jdi-thread :id (bindat-get-field thread :child-thread)))))
+	(setf (jdi-thread-group-child-groups thread-group) 
+		  (loop for group in (bindat-get-field reply :child-group)
+				collect (jdi-virtual-machine-get-object-create (jdi-mirror-virtual-machine thread-group)
+															   (make-jdi-thread-group :id (bindat-get-field group :child-group)))))
+	(values (jdi-thread-group-child-threads thread-group) (jdi-thread-group-child-groups thread-group))))
 
 (defun jdi-thread-group-get-thread-groups (thread-group)
   (jdi-debug "jdi-thread-group-get-thread-groups:%s" (jdi-thread-group-id thread-group))
@@ -438,68 +422,63 @@
 
 (defun jdi-class-get-all-methods (class)
   (jdi-debug "jdi-class-get-all-methods")
-  (lexical-let ((class class))
-	(let ((supers (jdi-class-get-all-super class)))
-	  (apply 'append (apply 'mapcar 'jdi-class-get-methods (cons class supers))))))
+  (let ((supers (jdi-class-get-all-super class)))
+	(apply 'append (apply 'mapcar 'jdi-class-get-methods (cons class supers)))))
 
 (defun jdi-class-get-methods (class)
   "[ASYNC] returns a list of jdi-method in the class"
   (jdi-debug "jdi-class-get-methods:%s" (jdi-class-signature class))
-  (lexical-let ((class class))
-	(if (jdi-class-methods class)
-		(jdi-class-methods class)
-	  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp class) "methods" `((:ref-type . ,(jdi-class-id class))))
-		(jdi-debug "number of methods:%s" (bindat-get-field reply :methods))
-		(setf (jdi-class-methods class)
-			  (loop for method in (bindat-get-field reply :method)
-					collect (make-jdi-method :virtual-machine (jdi-mirror-virtual-machine class)
-											 :class class
-											 :id (bindat-get-field method :method-id)
-											 :name (jdwp-get-string method :name)
-											 :signature (jdwp-get-string method :signature)
-											 :mod-bits (bindat-get-field method :mod-bits))))
-		(jdi-class-methods class)))))
+  (if (jdi-class-methods class)
+	  (jdi-class-methods class)
+	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp class) "methods" `((:ref-type . ,(jdi-class-id class))))
+	  (jdi-debug "number of methods:%s" (bindat-get-field reply :methods))
+	  (setf (jdi-class-methods class)
+			(loop for method in (bindat-get-field reply :method)
+				  collect (make-jdi-method :virtual-machine (jdi-mirror-virtual-machine class)
+										   :class class
+										   :id (bindat-get-field method :method-id)
+										   :name (jdwp-get-string method :name)
+										   :signature (jdwp-get-string method :signature)
+										   :mod-bits (bindat-get-field method :mod-bits))))
+	  (jdi-class-methods class))))
 
 (defun jdi-class-get-signature (class)
   (jdi-debug "jdi-class-get-signature")
   (if (jdi-class-signature class)
 	  (jdi-class-signature class)
-	(lexical-let ((class class))
-	  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp class) "signature" `((:ref-type . ,(jdi-class-id class))))
-		(setf (jdi-class-signature class) (jdwp-get-string reply :signature))))))
+	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp class) "signature" `((:ref-type . ,(jdi-class-id class))))
+	  (setf (jdi-class-signature class) (jdwp-get-string reply :signature)))))
 
 (defun jdi-method-get-locations (method)
   (jdi-debug "jdi-method-get-locations:class=%s method=%s" (jdi-class-signature (jdi-method-class method)) (jdi-method-name method))
   (if (or (jdi-method-locations method)
 		  (jdi-method-native-p method))
 	  (jdi-method-locations method)
-	(lexical-let ((method method))
-	  (multiple-value-bind (reply error jdwp id) (jdwp-send-command 
-										(jdi-mirror-jdwp method) "line-table" `((:ref-type . ,(jdi-class-id (jdi-method-class method)))
-																				(:method-id . ,(jdi-method-id method))))
-		(jdi-trace "start=%s:end=%s:lines=%s" 
-				   (jdwp-string-to-hex (bindat-get-field reply :start))
-				   (jdwp-string-to-hex (bindat-get-field reply :end))
-				   (bindat-get-field reply :lines))
-		(setf (jdi-method-locations method)
-			  (loop for line in (bindat-get-field reply :line)
-					collect (make-jdi-location :virtual-machine (jdi-mirror-virtual-machine method)
-											   :class (jdi-method-class method)
-											   :method method
-											   :line-code-index (bindat-get-field line :line-code-index)
-											   :line-number (bindat-get-field line :line-number))))
-		(dolist (location (jdi-method-locations method))
-		  (jdi-trace "line-number:%s line-code-index:%s" (jdi-location-line-number location) (jdi-location-line-code-index location)))
-		(jdi-method-locations method)))))
+	(multiple-value-bind (reply error jdwp id) (jdwp-send-command 
+												(jdi-mirror-jdwp method) "line-table" `((:ref-type . ,(jdi-class-id (jdi-method-class method)))
+																						(:method-id . ,(jdi-method-id method))))
+	  (jdi-trace "start=%s:end=%s:lines=%s" 
+				 (jdwp-string-to-hex (bindat-get-field reply :start))
+				 (jdwp-string-to-hex (bindat-get-field reply :end))
+				 (bindat-get-field reply :lines))
+	  (setf (jdi-method-locations method)
+			(loop for line in (bindat-get-field reply :line)
+				  collect (make-jdi-location :virtual-machine (jdi-mirror-virtual-machine method)
+											 :class (jdi-method-class method)
+											 :method method
+											 :line-code-index (bindat-get-field line :line-code-index)
+											 :line-number (bindat-get-field line :line-number))))
+	  (dolist (location (jdi-method-locations method))
+		(jdi-trace "line-number:%s line-code-index:%s" (jdi-location-line-number location) (jdi-location-line-code-index location)))
+	  (jdi-method-locations method))))
 
 (defun jdi-method-get-name (method)
   (jdi-debug "jdi-method-get-signature")
-  (lexical-let ((method method))
-	(let ((methods (jdi-class-get-methods (jdi-method-class method))))
-	  (jdi-method-name (find-if (lambda (obj)
-								  (equal (jdi-method-id obj)
-										 (jdi-method-id method)))
-								methods)))))
+  (let ((methods (jdi-class-get-methods (jdi-method-class method))))
+	(jdi-method-name (find-if (lambda (obj)
+								(equal (jdi-method-id obj)
+									   (jdi-method-id method)))
+							  methods))))
 
 (defvar jdi-start-time nil)
 
@@ -512,22 +491,18 @@
 (defun jdi-virtual-machine-set-breakpoint (vm signature line)
   "[ASYNC] returns a jdi-event-request if a breakpoint is installed, nil otherwise"
 
-  (lexical-let ((vm vm)
-				(signature signature)
-				(line line))
-	(jdi-debug "jdi-virtual-machine-set-breakpoint:signature=%s:line=%s" signature line)
-	(jdi-time-start)
-	(let ((classes (jdi-virtual-machine-get-classes-by-signature vm signature)))
-	  (lexical-let ((classes classes))
-		(let ((locations (apply 'append (apply 'mapcar (lambda (class)
-														 (jdi-class-get-locations-of-line class line))
-											   classes))))
-		  (jdi-time-end (format "jdi-class-get-locations-of-line for %s classes:matched = %s locations" (length classes) (length locations)))
-		  (lexical-let* ((erm (jdi-virtual-machine-event-request-manager vm)))
-			(mapcar (lambda (location)
-					  (lexical-let ((er (jdi-event-request-manager-create-breakpoint erm location)))
-						(jdi-event-request-enable er)))
-					locations)))))))
+  (jdi-debug "jdi-virtual-machine-set-breakpoint:signature=%s:line=%s" signature line)
+  (jdi-time-start)
+  (let ((classes (jdi-virtual-machine-get-classes-by-signature vm signature)))
+	(let ((locations (apply 'append (apply 'mapcar (lambda (class)
+													 (jdi-class-get-locations-of-line class line))
+										   classes))))
+	  (jdi-time-end (format "jdi-class-get-locations-of-line for %s classes:matched = %s locations" (length classes) (length locations)))
+	  (let ((erm (jdi-virtual-machine-event-request-manager vm)))
+		(mapcar (lambda (location)
+				  (let ((er (jdi-event-request-manager-create-breakpoint erm location)))
+					(jdi-event-request-enable er)))
+				locations)))))
 
 (defun jdi-method-location-by-line-code-index (method line-code-index)
   (jdi-trace "jdi-method-location-by-line-code-index:%s:%s:%s" (jdi-method-name method) line-code-index (length (jdi-method-locations method)))
@@ -548,15 +523,13 @@
 
 (defun jdi-class-get-locations-of-line (class line-number)
   (jdi-debug "jdi-class-get-locations-of-line")
-  (lexical-let ((class class)
-				(line-number line-number))
-	(let ((methods (jdi-class-get-methods class)))
-	  (jdi-debug "jdi-class-get-locations-of-line: number of methods = %s" (length methods))
-	  (let ((locations (apply 'append (apply 'mapcar 'jdi-method-get-locations methods))))
-		(jdi-debug "jdi-class-get-locations-of-line: number of locations = %s" (length locations))
-		(loop for location in locations
-			  if (equal line-number (jdi-location-line-number location))
-			  collect location)))))
+  (let ((methods (jdi-class-get-methods class)))
+	(jdi-debug "jdi-class-get-locations-of-line: number of methods = %s" (length methods))
+	(let ((locations (apply 'append (apply 'mapcar 'jdi-method-get-locations methods))))
+	  (jdi-debug "jdi-class-get-locations-of-line: number of locations = %s" (length locations))
+	  (loop for location in locations
+			if (equal line-number (jdi-location-line-number location))
+			collect location))))
 
 (defun jdi-class-find-location (class method-id line-code-index)
   (jdi-debug "jdi-class-find-location:number of methods=%s" (length (jdi-class-methods class)))
@@ -570,61 +543,59 @@
 
 (defun jdi-location-get-line-number (location)
   (jdi-debug "jdi-location-get-line-number:wanted-line-code-index=%s" (jdi-location-line-code-index location))
-  (lexical-let ((location location))
-	(let ((methods (jdi-class-get-methods (jdi-location-class location))))
-	  (jdi-debug "jdi-location-get-line-number: methods=%s" (length methods))
-	  (setf (jdi-location-method location)
-			(find-if (lambda (obj)
-					   (equal (jdi-method-id obj)
-							  (jdi-method-id (jdi-location-method location))))
-					 methods))
-	  (let ((locations (jdi-method-get-locations (jdi-location-method location))))
-		(jdi-debug "jdi-location-get-line-number: locations=%s" (length locations))
-		(let ((found))
-		  (loop for loc in locations
-				while (>= (jdwp-vec-to-int (jdi-location-line-code-index location))
-						  (jdwp-vec-to-int (jdi-location-line-code-index loc)))
-				do (setq found loc))
-		  (jdi-debug "jdi-location-get-line-number:found=%s" (if found "yes" "no"))
-		  (if found (setf (jdi-location-line-number location) (jdi-location-line-number found)))
-		  (jdi-location-line-number location))))))
+  (let ((methods (jdi-class-get-methods (jdi-location-class location))))
+	(jdi-debug "jdi-location-get-line-number: methods=%s" (length methods))
+	(setf (jdi-location-method location)
+		  (find-if (lambda (obj)
+					 (equal (jdi-method-id obj)
+							(jdi-method-id (jdi-location-method location))))
+				   methods))
+	(let ((locations (jdi-method-get-locations (jdi-location-method location))))
+	  (jdi-debug "jdi-location-get-line-number: locations=%s" (length locations))
+	  (let ((found))
+		(loop for loc in locations
+			  while (>= (jdwp-vec-to-int (jdi-location-line-code-index location))
+						(jdwp-vec-to-int (jdi-location-line-code-index loc)))
+			  do (setq found loc))
+		(jdi-debug "jdi-location-get-line-number:found=%s" (if found "yes" "no"))
+		(if found (setf (jdi-location-line-number location) (jdi-location-line-number found)))
+		(jdi-location-line-number location)))))
   
 (defun jdi-thread-get-frames (thread)
   (jdi-debug "jdi-thread-get-frames")
-  (lexical-let ((thread thread))
-	(if (jdi-thread-frames thread)
-		(jdi-thread-frames thread)
-	  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread) "frame-count" `((:thread . ,(jdi-thread-id thread))))
-		(jdi-debug "number of frames:%s" (bindat-get-field reply :frame-count))
-		(multiple-value-bind (reply error jdwp id) 
+  (if (jdi-thread-frames thread)
+	  (jdi-thread-frames thread)
+	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread) "frame-count" `((:thread . ,(jdi-thread-id thread))))
+	  (jdi-debug "number of frames:%s" (bindat-get-field reply :frame-count))
+	  (multiple-value-bind (reply error jdwp id) 
 		  (jdwp-send-command (jdi-mirror-jdwp thread) "frames" `((:thread . ,(jdi-thread-id thread))
 																 (:start-frame . 0)
 																 (:length . ,(bindat-get-field reply :frame-count))))
-		  (setf (jdi-thread-frames thread) 
-				(loop for frame           in (bindat-get-field reply :frame)
-					  for class-id        = (bindat-get-field frame :location :class-id)
-					  for method-id       = (bindat-get-field frame :location :method-id)
-					  for type            = (bindat-get-field frame :location :type)
-					  for line-code-index = (bindat-get-field frame :location :index)
+		(setf (jdi-thread-frames thread) 
+			  (loop for frame           in (bindat-get-field reply :frame)
+					for class-id        = (bindat-get-field frame :location :class-id)
+					for method-id       = (bindat-get-field frame :location :method-id)
+					for type            = (bindat-get-field frame :location :type)
+					for line-code-index = (bindat-get-field frame :location :index)
 
-					  for class           = (jdi-virtual-machine-get-class-create (jdi-mirror-virtual-machine thread) class-id)
-					  for method          = (make-jdi-method :virtual-machine (jdi-mirror-virtual-machine thread)
-															 :id method-id
-															 :class class)
+					for class           = (jdi-virtual-machine-get-class-create (jdi-mirror-virtual-machine thread) class-id)
+					for method          = (make-jdi-method :virtual-machine (jdi-mirror-virtual-machine thread)
+														   :id method-id
+														   :class class)
 
-					  for location        = (make-jdi-location :virtual-machine (jdi-mirror-virtual-machine thread)
-															   :class class
-															   :method method
-															   :type type
-															   :line-code-index line-code-index)
-					  collect (make-jdi-frame :virtual-machine (jdi-mirror-virtual-machine thread)
-											  :thread thread
-											  :location location
-											  :id (bindat-get-field frame :id))))
+					for location        = (make-jdi-location :virtual-machine (jdi-mirror-virtual-machine thread)
+															 :class class
+															 :method method
+															 :type type
+															 :line-code-index line-code-index)
+					collect (make-jdi-frame :virtual-machine (jdi-mirror-virtual-machine thread)
+											:thread thread
+											:location location
+											:id (bindat-get-field frame :id))))
 
-		  (loop for frame in (jdi-thread-frames thread)
-				do (jdi-debug "thread:%s frame:%s" (jdi-thread-id thread) (jdi-frame-id frame)))
-		  (jdi-thread-frames thread))))))
+		(loop for frame in (jdi-thread-frames thread)
+			  do (jdi-debug "thread:%s frame:%s" (jdi-thread-id thread) (jdi-frame-id frame)))
+		(jdi-thread-frames thread)))))
 
 (defun jdi-thread-get-suspended-p (thread)
   (jdi-debug "jdi-thread-get-suspended-p")
@@ -639,10 +610,9 @@
 
 (defun jdi-thread-send-step (thread depth)
   (jdi-debug "jdi-thread-send-step:depth=%s" depth)
-  (lexical-let* ((thread thread)
-				 (vm (jdi-mirror-virtual-machine thread))
-				 (erm (jdi-virtual-machine-event-request-manager vm))
-				 (er (jdi-event-request-manager-create-step erm thread depth)))
+  (let* ((vm (jdi-mirror-virtual-machine thread))
+		 (erm (jdi-virtual-machine-event-request-manager vm))
+		 (er (jdi-event-request-manager-create-step erm thread depth)))
 	(jdi-event-request-enable er)
 	(jdi-thread-resume thread)))
 
@@ -654,65 +624,60 @@
   (if (jdi-method-variables method)
 	  (jdi-method-variables method)
 
-	(lexical-let ((method method))
-	  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp method)
-														  "variable-table"
-														  `((:ref-type . ,(jdi-class-id (jdi-method-class method)))
-															(:method-id . ,(jdi-method-id method))))
-		(jdi-trace "variable-table arg-count:%s slots:%s" (bindat-get-field reply :arg-cnt) (bindat-get-field reply :slots))
+	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp method)
+																  "variable-table"
+																  `((:ref-type . ,(jdi-class-id (jdi-method-class method)))
+																	(:method-id . ,(jdi-method-id method))))
+	  (jdi-trace "variable-table arg-count:%s slots:%s" (bindat-get-field reply :arg-cnt) (bindat-get-field reply :slots))
 
-		(setf (jdi-method-variables method)
-			  (loop for slot in (bindat-get-field reply :slot)
+	  (setf (jdi-method-variables method)
+			(loop for slot in (bindat-get-field reply :slot)
 					
-					for code-index = (jdwp-get-int slot :code-index)
-					for name       = (jdwp-get-string slot :name)
-					for signature  = (jdwp-get-string slot :signature)
-					for length     = (bindat-get-field slot :length)
-					for slot2      = (bindat-get-field slot :slot)
-					do (jdi-trace "slot:%s code-index:%s length:%s name:%s signature:%s generic-signature:%s" 
-								  slot2 code-index length name signature nil)
-					collect (make-jdi-variable :virtual-machine (jdi-mirror-virtual-machine method)
-											   :code-index code-index
-											   :name name
-											   :signature signature
-											   :length length
-											   :slot slot2)))
-		(jdi-method-variables method)))))
+				  for code-index = (jdwp-get-int slot :code-index)
+				  for name       = (jdwp-get-string slot :name)
+				  for signature  = (jdwp-get-string slot :signature)
+				  for length     = (bindat-get-field slot :length)
+				  for slot2      = (bindat-get-field slot :slot)
+				  do (jdi-trace "slot:%s code-index:%s length:%s name:%s signature:%s generic-signature:%s" 
+								slot2 code-index length name signature nil)
+				  collect (make-jdi-variable :virtual-machine (jdi-mirror-virtual-machine method)
+											 :code-index code-index
+											 :name name
+											 :signature signature
+											 :length length
+											 :slot slot2)))
+	  (jdi-method-variables method))))
 
 (defun jdi-frame-get-visible-variables (frame)
   (jdi-debug "jdi-frame-get-visible-variables")
   ;; we don't cache the variables as the location within the same frame might change
-  (lexical-let ((frame frame))
-	(let ((variables (jdi-method-get-variables (jdi-location-method (jdi-frame-location frame)))))
-	  (loop for variable in variables
+  (let ((variables (jdi-method-get-variables (jdi-location-method (jdi-frame-location frame)))))
+	(loop for variable in variables
 
-			for line-code = (jdwp-vec-to-int (jdi-location-line-code-index (jdi-frame-location frame)))
-			if (and (>= line-code (jdi-variable-code-index variable))
-					(<  line-code (+ (jdi-variable-code-index variable) (jdi-variable-length variable))))
-			collect variable))))
+		  for line-code = (jdwp-vec-to-int (jdi-location-line-code-index (jdi-frame-location frame)))
+		  if (and (>= line-code (jdi-variable-code-index variable))
+				  (<  line-code (+ (jdi-variable-code-index variable) (jdi-variable-length variable))))
+		  collect variable)))
 
 (defun jdi-frame-get-values (frame variables)
   (jdi-debug "jdi-frame-get-values")
-  (lexical-let ((frame frame)
-				(variables variables))
-
-	(let ((data `((:thread . ,(jdi-thread-id (jdi-frame-thread frame)))
-				  (:frame  . ,(jdi-frame-id frame))
-				  (:slots  . ,(length variables))
-				  ,(nconc (list :slot)
-						  (mapcar (lambda (variable) 
-									`((:slot . ,(jdi-variable-slot variable))
-									  (:sigbyte . ,(jdi-variable-sigbyte variable))))
-								  variables)))))
-	  (multiple-value-bind (reply error jdwp id) (jdwp-send-command 
-										(jdi-mirror-jdwp frame) 
-										"stack-get-values" 
-										data)
-		(loop for variable in variables
-			  for value in (bindat-get-field reply :value)
-			  collect (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine frame)
-									  :type (bindat-get-field value :slot-value :type)
-									  :value (bindat-get-field value :slot-value :u :value)))))))
+  (let ((data `((:thread . ,(jdi-thread-id (jdi-frame-thread frame)))
+				(:frame  . ,(jdi-frame-id frame))
+				(:slots  . ,(length variables))
+				,(nconc (list :slot)
+						(mapcar (lambda (variable) 
+								  `((:slot . ,(jdi-variable-slot variable))
+									(:sigbyte . ,(jdi-variable-sigbyte variable))))
+								variables)))))
+	(multiple-value-bind (reply error jdwp id) (jdwp-send-command 
+												(jdi-mirror-jdwp frame) 
+												"stack-get-values" 
+												data)
+	  (loop for variable in variables
+			for value in (bindat-get-field reply :value)
+			collect (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine frame)
+									:type (bindat-get-field value :slot-value :type)
+									:value (bindat-get-field value :slot-value :u :value))))))
 
 (defun jdi-value-object-p (value)
   (equal (jdi-value-type value) jdwp-tag-object))
@@ -742,43 +707,39 @@
 	(if (jdi-value-class value)
 		(jdi-value-class value)
 
-	  (lexical-let ((value value))
-		(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp value) 
-															"reference-type" 
-															`((:object . ,(jdi-value-value value))))
-		  (jdi-debug "jdi-value-get-class:type-id=%s" (bindat-get-field reply :type-id))
-		  (setf (jdi-value-class value) (jdi-virtual-machine-get-class-create (jdi-mirror-virtual-machine value) (bindat-get-field reply :type-id)))
-		  (jdi-value-class value))))))
+	  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp value) 
+																	"reference-type" 
+																	`((:object . ,(jdi-value-value value))))
+		(jdi-debug "jdi-value-get-class:type-id=%s" (bindat-get-field reply :type-id))
+		(setf (jdi-value-class value) (jdi-virtual-machine-get-class-create (jdi-mirror-virtual-machine value) (bindat-get-field reply :type-id)))
+		(jdi-value-class value)))))
 
 (defun jdi-value-array-display-string (value size)
   "for array of three dimension, return i[2][][]."
-  (lexical-let ((value value)
-				(size size))
-	(let ((class (jdi-value-get-class value)))
-	  (let ((signature (jdi-class-get-signature class)))
-		(let ((sig (string-to-list signature))
-			  (suffix ""))
-		  (pop sig)
-		  (loop while (equal (car sig) jdwp-tag-array)
-				do
-				(setf suffix (concat suffix "[]"))
-				(pop sig))
-		  (format "%s[%s]%s" 
-				  (jdi-class-name (concat sig))
-				  size
-				  suffix))))))
+  (let ((class (jdi-value-get-class value)))
+	(let ((signature (jdi-class-get-signature class)))
+	  (let ((sig (string-to-list signature))
+			(suffix ""))
+		(pop sig)
+		(loop while (equal (car sig) jdwp-tag-array)
+			  do
+			  (setf suffix (concat suffix "[]"))
+			  (pop sig))
+		(format "%s[%s]%s" 
+				(jdi-class-name (concat sig))
+				size
+				suffix)))))
 
 (defun jdi-value-get-array-length (value)
   (jdi-debug "jdi-value-get-array-length:%s" (jdi-value-value value))
   (if (jdi-value-array-length value)
 	  (jdi-value-array-length value)
 
-	(lexical-let ((value value))
-	  (multiple-value-bind (reply error jdwp id) (jdwp-send-command 
-										(jdi-mirror-jdwp value) 
-										"array-length" 
-										`((:array-object . ,(jdi-value-value value))))
-		(setf (jdi-value-array-length value) (bindat-get-field reply :array-length))))))
+	(multiple-value-bind (reply error jdwp id) (jdwp-send-command 
+												(jdi-mirror-jdwp value) 
+												"array-length" 
+												`((:array-object . ,(jdi-value-value value))))
+	  (setf (jdi-value-array-length value) (bindat-get-field reply :array-length)))))
 
 (defun jdi-format-string (str)
   "Truncate and escape the string to be displayed."
@@ -812,31 +773,27 @@
 	
 (defun jdi-class-get-all-fields (class)
   (jdi-debug "jdi-class-get-all-fields:%s" (jdi-class-id class))
-  (lexical-let ((class class))
-	(let ((supers (jdi-class-get-all-super class)))
-	  (jdi-debug "jdi-class-get-all-fields:%s:%s" (jdi-class-id class) (loop for super in supers
-																			 collect (jdi-class-id super)))
-	  (apply 'append (apply 'mapcar 'jdi-class-get-fields (cons class supers))))))
+  (let ((supers (jdi-class-get-all-super class)))
+	(jdi-debug "jdi-class-get-all-fields:%s:%s" (jdi-class-id class) (loop for super in supers
+																		   collect (jdi-class-id super)))
+	(apply 'append (apply 'mapcar 'jdi-class-get-fields (cons class supers)))))
 
 (defun jdi-value-get-all-fields (value)
   (jdi-debug "jdi-value-get-all-fields:%s" (jdi-value-value value))
   (let ((class (jdi-value-get-class value)))
-	(lexical-let ((class class))
-	  (let ((supers (jdi-class-get-all-super class)))
-		(apply 'append (apply 'mapcar 'jdi-class-get-fields (cons class supers)))))))
+	(let ((supers (jdi-class-get-all-super class)))
+	  (apply 'append (apply 'mapcar 'jdi-class-get-fields (cons class supers))))))
 
 (defun jdi-value-get-values (value fields)
   "Gets the value of multiple instance and/or static fields in this object. 
 The Fields must be valid for this ObjectReference; that is, they must be from the mirrored object's class or a superclass of that class."
 
   (jdi-debug "jdi-value-get-values")
-  (lexical-let* ((value value)
-				 (fields fields)
-				 (static-fields (loop for field in fields
-									  if (jdi-field-static-p field) collect field))
-				 (nonstatic-fields (loop for field in fields
-										 unless (jdi-field-static-p field) collect field))
-				 (results (make-hash-table)))
+  (let ((static-fields (loop for field in fields
+							 if (jdi-field-static-p field) collect field))
+		(nonstatic-fields (loop for field in fields
+								unless (jdi-field-static-p field) collect field))
+		(results (make-hash-table)))
 	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp value) "object-get-values"
 														`((:object . ,(jdi-value-value value))
 														  (:fields . ,(length nonstatic-fields))
@@ -875,12 +832,10 @@ The Fields must be valid for this ObjectReference; that is, they must be from th
   (jdi-debug "jdi-class-get-all-super")
   (if (null class) 
 	  supers
-	(lexical-let ((class class)
-				  (supers supers))
-	  (let ((super (jdi-class-get-super class)))
-		(if super
-			(jdi-class-get-all-super super (cons super supers))
-		  supers)))))
+	(let ((super (jdi-class-get-super class)))
+	  (if super
+		  (jdi-class-get-all-super super (cons super supers))
+		supers))))
 
 (defun jdi-class-get-super (class)
   "populate the jdi-class-super of this class"
@@ -889,18 +844,17 @@ The Fields must be valid for this ObjectReference; that is, they must be from th
 	  (if (equal (jdi-class-super class) t)
 		  nil
 		(jdi-class-super class))
-	(lexical-let ((class class))
-	  (multiple-value-bind (reply error jdwp id) (jdwp-send-command 
-										(jdi-mirror-jdwp class) 
-										"superclass" 
-										`((:class . ,(jdi-class-id class))))
-		(if (equal (bindat-get-field reply :superclass)
-				   [0 0 0 0 0 0 0 0])
-			(progn 
-			  (setf (jdi-class-super class) t)
-			  nil)
-		  (setf (jdi-class-super class) (jdi-virtual-machine-get-class-create (jdi-mirror-virtual-machine class) (bindat-get-field reply :superclass)))
-		  (jdi-class-super class))))))
+	(multiple-value-bind (reply error jdwp id) (jdwp-send-command 
+												(jdi-mirror-jdwp class) 
+												"superclass" 
+												`((:class . ,(jdi-class-id class))))
+	  (if (equal (bindat-get-field reply :superclass)
+				 [0 0 0 0 0 0 0 0])
+		  (progn 
+			(setf (jdi-class-super class) t)
+			nil)
+		(setf (jdi-class-super class) (jdi-virtual-machine-get-class-create (jdi-mirror-virtual-machine class) (bindat-get-field reply :superclass)))
+		(jdi-class-super class)))))
 
 (defun jdi-method-invoke (method)
   "Invoke a simple method (do not require arguments) in the class."
@@ -920,33 +874,29 @@ Only the interfaces that are declared with the 'implements' keyword in this clas
 		  (string= (jdi-class-signature class) "Ljava/lang/Object;"))
 	  (jdi-class-interfaces class)
 
-	(lexical-let ((class class)) 
-	  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp class) 
-														  "interfaces" 
-														  `((:ref-type . ,(jdi-class-id class))))
-		(setf (jdi-class-interfaces class)
-			  (loop for interface in (bindat-get-field reply :interface)
-					collect (jdi-virtual-machine-get-class-create (jdi-mirror-virtual-machine class) (bindat-get-field interface :type))))
-		(setf (jdi-class-interfaces-count class) (bindat-get-field reply :interfaces))
-		(jdi-class-interfaces class)))))
+	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp class) 
+																  "interfaces" 
+																  `((:ref-type . ,(jdi-class-id class))))
+	  (setf (jdi-class-interfaces class)
+			(loop for interface in (bindat-get-field reply :interface)
+				  collect (jdi-virtual-machine-get-class-create (jdi-mirror-virtual-machine class) (bindat-get-field interface :type))))
+	  (setf (jdi-class-interfaces-count class) (bindat-get-field reply :interfaces))
+	  (jdi-class-interfaces class))))
 
 (defun jdi-class-get-all-interfaces (class)
   "Gets the interfaces directly and indirectly implemented by this class. 
 Interfaces returned by interfaces()  are returned as well all superinterfaces."
   (jdi-debug "jdi-class-get-all-interfaces")
-  (lexical-let ((class class))
-	(let ((interfaces (jdi-class-get-interfaces class)))
-	  (jdi-class-get-all-interfaces-2 interfaces nil))))
+  (let ((interfaces (jdi-class-get-interfaces class)))
+	(jdi-class-get-all-interfaces-2 interfaces nil)))
 
 (defun jdi-class-get-all-interfaces-2 (classes interfaces)
   (jdi-debug "jdi-class-get-all-interfaces-2")
   (if (null classes)
 	  interfaces
 	
-	(lexical-let ((classes classes)
-				  (interfaces interfaces))
-	  (let ((interfaces2 (apply 'append (mapcar 'apply 'jdi-class-get-interfaces classes))))
-		(jdi-class-get-all-interfaces-2 interfaces2 (append interfaces2 interfaces))))))
+	(let ((interfaces2 (apply 'append (mapcar 'apply 'jdi-class-get-interfaces classes))))
+	  (jdi-class-get-all-interfaces-2 interfaces2 (append interfaces2 interfaces)))))
 
 (defun jdi-access-string (bits)
   (let ((str)
@@ -974,38 +924,37 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
   (jdi-debug "jdi-class-get-fields:%s:%s" (jdi-class-id class) (if (listp (jdi-class-fields class))
 																   (length (jdi-class-fields class))
 																 "0"))
-  (lexical-let ((class class))
-	(if (jdi-class-fields class)
-		(if (equal (jdi-class-fields class) t)
-			nil
-		  (jdi-class-fields class))
+  (if (jdi-class-fields class)
+	  (if (equal (jdi-class-fields class) t)
+		  nil
+		(jdi-class-fields class))
 
-	  (multiple-value-bind (reply error jdwp id)
+	(multiple-value-bind (reply error jdwp id)
 		(jdwp-send-command (jdi-mirror-jdwp class) "fields" `((:ref-type . ,(jdi-class-id class))))
 
-		(jdi-debug "jdi-class-get-fields: %s's fields:%s" (jdi-class-id class) (bindat-get-field reply :declared))
-		(if (bindat-get-field reply :field)
-			(progn
-			  (setf (jdi-class-fields class)
-					(loop for field in (bindat-get-field reply :field)
-						  collect (make-jdi-field :virtual-machine (jdi-mirror-virtual-machine class)
-												  :id (bindat-get-field field :id)
-												  :name (jdwp-get-string field :name)
-												  :signature (jdwp-get-string field :signature)
-												  :generic-signature (jdwp-get-string field :generic-signature)
-												  :mod-bits (bindat-get-field field :mod-bits))
-						  do (jdi-debug "jdi-class-get-fields:%s id:%s name:%s signature:%s generic-signature:%s modbits:%s" 
-										(jdi-class-id class)
-										(bindat-get-field field :id) 
-										(jdwp-get-string field :name) 
-										(jdwp-get-string field :signature)
-										(jdwp-get-string field :generic-signature)
-										(bindat-get-field field :mod-bits))))
-			  (jdi-debug "jdi-class-get-fields:saved %s fields" (length (jdi-class-fields class)))
-			  (jdi-class-fields class))
+	  (jdi-debug "jdi-class-get-fields: %s's fields:%s" (jdi-class-id class) (bindat-get-field reply :declared))
+	  (if (bindat-get-field reply :field)
+		  (progn
+			(setf (jdi-class-fields class)
+				  (loop for field in (bindat-get-field reply :field)
+						collect (make-jdi-field :virtual-machine (jdi-mirror-virtual-machine class)
+												:id (bindat-get-field field :id)
+												:name (jdwp-get-string field :name)
+												:signature (jdwp-get-string field :signature)
+												:generic-signature (jdwp-get-string field :generic-signature)
+												:mod-bits (bindat-get-field field :mod-bits))
+						do (jdi-debug "jdi-class-get-fields:%s id:%s name:%s signature:%s generic-signature:%s modbits:%s" 
+									  (jdi-class-id class)
+									  (bindat-get-field field :id) 
+									  (jdwp-get-string field :name) 
+									  (jdwp-get-string field :signature)
+									  (jdwp-get-string field :generic-signature)
+									  (bindat-get-field field :mod-bits))))
+			(jdi-debug "jdi-class-get-fields:saved %s fields" (length (jdi-class-fields class)))
+			(jdi-class-fields class))
 
-		  (setf (jdi-class-fields class) t)
-		  nil)))))
+		(setf (jdi-class-fields class) t)
+		nil))))
 
 (defun jdi-value-array-get-values (value)
   (jdi-debug "jdi-value-get-array-values:value=%s" (jdi-value-value value))
@@ -1013,48 +962,47 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
   (if (equal (jdi-value-value value) [0 0 0 0 0 0 0 0])
 	  nil
 
-	(lexical-let ((value value))
-	  (let ((length (jdi-value-get-array-length value)))
-		(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp value) "array-get-values"
-															`((:array-object . ,(jdi-value-value value))
-															  (:first-index . 0)
-															  (:length . ,length)))
-		  (let ((array (jdwp-unpack-arrayregion jdwp reply)))
-			(jdi-trace "got array-get-values:%s" array)
-			(if (or (= (bindat-get-field array :type) jdwp-tag-object)
-					(= (bindat-get-field array :type) jdwp-tag-array))
-				(loop for value-reply in (bindat-get-field array :value)
-					  for i from 0 to (- (jdi-value-array-length value) 1)
-					  collect (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
-											  :type (bindat-get-field value-reply :value :type)
-											  :value (bindat-get-field value-reply :value :u :value)))
+	(let ((length (jdi-value-get-array-length value)))
+	  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp value) "array-get-values"
+																	`((:array-object . ,(jdi-value-value value))
+																	  (:first-index . 0)
+																	  (:length . ,length)))
+		(let ((array (jdwp-unpack-arrayregion jdwp reply)))
+		  (jdi-trace "got array-get-values:%s" array)
+		  (if (or (= (bindat-get-field array :type) jdwp-tag-object)
+				  (= (bindat-get-field array :type) jdwp-tag-array))
 			  (loop for value-reply in (bindat-get-field array :value)
 					for i from 0 to (- (jdi-value-array-length value) 1)
 					collect (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
-											:type (bindat-get-field array :type)
-											:value (bindat-get-field value-reply :value))))))))))
+											:type (bindat-get-field value-reply :value :type)
+											:value (bindat-get-field value-reply :value :u :value)))
+			(loop for value-reply in (bindat-get-field array :value)
+				  for i from 0 to (- (jdi-value-array-length value) 1)
+				  collect (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
+										  :type (bindat-get-field array :type)
+										  :value (bindat-get-field value-reply :value)))))))))
 
 (defun jdi-handle-breakpoint-event (jdwp event)
   (jdi-debug "jdi-handle-breakpoint-event")
-  (lexical-let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
-				 (thread-id (bindat-get-field event :u :thread))
-				 (class-id (bindat-get-field event :u :location :class-id))
-				 (method-id (bindat-get-field event :u :location :method-id))
-				 (line-code-index (bindat-get-field event :u :location :index))
+  (let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
+		 (thread-id (bindat-get-field event :u :thread))
+		 (class-id (bindat-get-field event :u :location :class-id))
+		 (method-id (bindat-get-field event :u :location :method-id))
+		 (line-code-index (bindat-get-field event :u :location :index))
 
-				 (class (jdi-virtual-machine-get-class-create vm class-id))
-				 (method (make-jdi-method :virtual-machine vm
-										  :id method-id
-										  :class class))
+		 (class (jdi-virtual-machine-get-class-create vm class-id))
+		 (method (make-jdi-method :virtual-machine vm
+								  :id method-id
+								  :class class))
 
-				 (location (make-jdi-location :virtual-machine vm
-											  :class class
-											  :method method
-											  :line-code-index line-code-index))
-				 (thread (jdi-virtual-machine-get-object-create vm (make-jdi-thread :id thread-id)))
-				 (frame (make-jdi-frame :virtual-machine vm
-										:thread thread
-										:location location)))
+		 (location (make-jdi-location :virtual-machine vm
+									  :class class
+									  :method method
+									  :line-code-index line-code-index))
+		 (thread (jdi-virtual-machine-get-object-create vm (make-jdi-thread :id thread-id)))
+		 (frame (make-jdi-frame :virtual-machine vm
+								:thread thread
+								:location location)))
 
 	(setf (jdi-thread-suspend-status thread) jdwp-suspend-status-suspended)
 
@@ -1065,24 +1013,24 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
   
 (defun jdi-handle-step-event (jdwp event)
   (jdi-debug "jdi-handle-step-event")
-  (lexical-let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
-				 (thread-id (bindat-get-field event :u :thread))
-				 (class-id (bindat-get-field event :u :location :class-id))
-				 (method-id (bindat-get-field event :u :location :method-id))
-				 (line-code-index (bindat-get-field event :u :location :index))
+  (let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
+		 (thread-id (bindat-get-field event :u :thread))
+		 (class-id (bindat-get-field event :u :location :class-id))
+		 (method-id (bindat-get-field event :u :location :method-id))
+		 (line-code-index (bindat-get-field event :u :location :index))
 
-				 (class (jdi-virtual-machine-get-class-create vm class-id))
-				 (method (make-jdi-method :virtual-machine vm
-										  :id method-id
-										  :class class))
-				 (location (make-jdi-location :virtual-machine vm
-											  :class class
-											  :method method
-											  :line-code-index line-code-index))
-				 (thread (jdi-virtual-machine-get-object-create vm (make-jdi-thread :id thread-id)))
-				 (frame (make-jdi-frame :virtual-machine vm
-										:thread thread
-										:location location)))
+		 (class (jdi-virtual-machine-get-class-create vm class-id))
+		 (method (make-jdi-method :virtual-machine vm
+								  :id method-id
+								  :class class))
+		 (location (make-jdi-location :virtual-machine vm
+									  :class class
+									  :method method
+									  :line-code-index line-code-index))
+		 (thread (jdi-virtual-machine-get-object-create vm (make-jdi-thread :id thread-id)))
+		 (frame (make-jdi-frame :virtual-machine vm
+								:thread thread
+								:location location)))
 
 	(setf (jdi-virtual-machine-suspended-frames vm) (nreverse (cons frame (jdi-virtual-machine-suspended-frames vm))))
 
@@ -1091,10 +1039,10 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 
 (defun jdi-handle-class-prepare-event (jdwp event)
   (jdi-debug "jdi-handle-class-prepare-event")
-  (lexical-let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
-				 (type-id (bindat-get-field event :u :type-id))
-				 (signature (jdwp-get-string event :u :signature))
-				 (newclass (jdi-virtual-machine-get-class-create vm type-id :signature signature)))
+  (let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
+		 (type-id (bindat-get-field event :u :type-id))
+		 (signature (jdwp-get-string event :u :signature))
+		 (newclass (jdi-virtual-machine-get-class-create vm type-id :signature signature)))
 	(jdi-debug "class-loaded:%s" signature)
 ;; 	(puthash type-id newclass (jdi-virtual-machine-classes vm))
 ;; 	(puthash signature (cons newclass (gethash signature (jdi-virtual-machine-classes-by-signature vm)))
@@ -1124,13 +1072,11 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 	(if (null class)
 		nil
 
-	  (lexical-let ((value value)
-					(signature signature))
-		(let ((supers (jdi-class-get-all-super class)))
-		  (let ((super-signatures (mapcar 'jdi-class-get-signature supers)))
-			(find-if (lambda (super-signature)
-					   (string= signature super-signature))
-					 super-signatures)))))))
+	  (let ((supers (jdi-class-get-all-super class)))
+		(let ((super-signatures (mapcar 'jdi-class-get-signature supers)))
+		  (find-if (lambda (super-signature)
+					 (string= signature super-signature))
+				   super-signatures))))))
 
 (defun jdi-value-extract-generic-class-name (generic-signature)
   (string-match "<L.*/\\(.*\\);>" generic-signature)
@@ -1145,22 +1091,17 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 (defun jdi-value-invoke-method (value thread method arguments options)
   "Returns another jdi-value of the result."
   (jdi-debug "jdi-value-invoke-method")
-  (lexical-let ((value value)
-				(thread thread)
-				(method method)
-				(arguments arguments)
-				(options options))
-	(let ((class (jdi-value-get-class value)))
-	  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp value) "object-invoke-method"
-														  `((:object . ,(jdi-value-value value))
-															(:thread . ,(jdi-thread-id thread))
-															(:class . ,(jdi-class-id class))
-															(:method-id . ,(jdi-method-id method))
-															(:arguments . 0)
-															(:options . ,jdwp-invoke-single-threaded)))
-		(make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
-						:type (bindat-get-field reply :return-value :type)
-						:value (bindat-get-field reply :return-value :u :value))))))
+  (let ((class (jdi-value-get-class value)))
+	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp value) "object-invoke-method"
+																  `((:object . ,(jdi-value-value value))
+																	(:thread . ,(jdi-thread-id thread))
+																	(:class . ,(jdi-class-id class))
+																	(:method-id . ,(jdi-method-id method))
+																	(:arguments . 0)
+																	(:options . ,jdwp-invoke-single-threaded)))
+	  (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
+					  :type (bindat-get-field reply :return-value :type)
+					  :value (bindat-get-field reply :return-value :u :value)))))
 
 (defvar jdi-breakpoint-hooks nil
   "callback to be called when breakpoint is hit, called with (jdi-thread jdi-location)")
