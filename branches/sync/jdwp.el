@@ -698,8 +698,11 @@
 	(while (setq packet (jdwp-get-packet jdwp))
 	  (if (jdwp-reply-packet-p packet)
 		  ;; reply packet
-		  (setf (jdwp-current-reply jdwp) packet)
+		  (progn
+			(jdwp-debug "jdwp-process-filter:reply packet")
+			(setf (jdwp-current-reply jdwp) packet))
 
+		(jdwp-debug "jdwp-process-filter:command-packet")
 		;; command packet
 		(jdwp-process-command jdwp packet)
 		;;			  (jdwp-process-command jdwp packet)
@@ -760,7 +763,7 @@
 
 (defun jdwp-process-sentinel (proc string)
   (let ((jdwp (process-get proc 'jdwp)))
-    (jdwp-trace "jdwp-process-sentinel:%s" string)
+    (jdwp-debug "jdwp-process-sentinel:%s" string)
 	(run-hook-with-args 'jdwp-event-hooks jdwp jdwp-event-vm-death)))
 
 ;; declare the dynamic variables for our unpacker
@@ -808,6 +811,7 @@
   "The symbol that will be thrown when jdwp-throw-on-input-pending is non-nil and there's input pending")
 
 (defun jdwp-process-command (jdwp str)
+  (jdwp-debug "jdwp-process-command")
   (jdwp-with-size 
     jdwp
     (let* ((packet        (bindat-unpack jdwp-command-spec str))
@@ -1009,7 +1013,10 @@
 		  (if result
 			  (throw 'done result)
 			(if (and jdwp-throw-on-input-pending (input-pending-p))
-				(throw 'jdwp-input-pending nil))
+				(progn
+				  (with-current-buffer (process-buffer proc)
+					(erase-buffer))
+				  (throw 'jdwp-input-pending nil)))
 			(if (> (float-time) timeout)
 				(error "timed out"))))))))
 
