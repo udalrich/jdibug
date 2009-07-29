@@ -200,10 +200,13 @@ jdibug-source-paths will be ignored if this is set to t."
 
   (jdibug-message "JDIbug connecting... ")
 
-  (setf jdibug-threads-buffer     (get-buffer-create jdibug-threads-buffer-name)
+  (setq jdibug-threads-buffer     (get-buffer-create jdibug-threads-buffer-name)
 		jdibug-locals-buffer      (get-buffer-create jdibug-locals-buffer-name)
 		jdibug-frames-buffer      (get-buffer-create jdibug-frames-buffer-name)
-		jdibug-breakpoints-buffer (get-buffer-create jdibug-breakpoints-buffer-name))
+		jdibug-breakpoints-buffer (get-buffer-create jdibug-breakpoints-buffer-name)
+
+		jdibug-active-frame       nil
+		jdibug-active-thread      nil)
 
   (with-current-buffer jdibug-breakpoints-buffer
 	(use-local-map jdibug-breakpoints-mode-map)
