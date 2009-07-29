@@ -878,16 +878,7 @@ Only the interfaces that are declared with the 'implements' keyword in this clas
   "Gets the interfaces directly and indirectly implemented by this class. 
 Interfaces returned by interfaces()  are returned as well all superinterfaces."
   (jdi-debug "jdi-class-get-all-interfaces")
-  (let ((interfaces (jdi-class-get-interfaces class)))
-	(jdi-class-get-all-interfaces-2 interfaces nil)))
-
-(defun jdi-class-get-all-interfaces-2 (classes interfaces)
-  (jdi-debug "jdi-class-get-all-interfaces-2")
-  (if (null classes)
-	  interfaces
-	
-	(let ((interfaces2 (mappend 'jdi-class-get-interfaces classes)))
-	  (jdi-class-get-all-interfaces-2 interfaces2 (append interfaces2 interfaces)))))
+  (mappend 'jdi-class-get-interfaces (cons class (jdi-class-get-all-super class))))
 
 (defun jdi-access-string (bits)
   (let ((str)
@@ -1057,11 +1048,12 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 	buf))
 
 (defun jdi-value-instance-of-p (value signature)
-  (jdi-debug "jdi-value-instance-of-p")
+  (jdi-debug "jdi-value-instance-of-p:signature=%s" signature)
   (let* ((class (jdi-value-get-class value))
 		 (supers (jdi-class-get-all-super class))
 		 (interfaces (jdi-class-get-all-interfaces class))
 		 (signatures (mapcar 'jdi-class-get-signature (cons class (append supers interfaces)))))
+	(jdi-debug "jdi-value-instance-of-p:all-signatures=%s" signatures)
 	(member signature signatures)))
 
 (defun jdi-value-extract-generic-class-name (generic-signature)
