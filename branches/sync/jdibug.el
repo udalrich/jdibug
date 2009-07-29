@@ -597,26 +597,31 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 								(jdi-value-instance-of-p value (jdi-class-name-to-class-signature (car custom))))
 							  jdibug-value-custom-expanders))
 		   (expander2 (if expander (cadr expander))))
-	  (if expander2
-		  (funcall expander2 value)))
+	  (cond (expander2
+			 (funcall expander2 value))
+			((= (jdi-value-type value) jdwp-tag-object)
+			 (jdibug-value-expander-object value))
+			((= (jdi-value-type value) jdwp-tag-array)
+			 (jdibug-value-expander-array value))))))
 
-	(cond ((= (jdi-value-type value) jdwp-tag-object)
-		   (let* ((class (jdi-value-get-class value))
-				  (fields (sort (copy-sequence (jdi-class-get-all-fields class)) 'jdibug-field-sorter))
-				  (values (jdi-value-get-values value fields)))
-			 (jdibug-debug "jdibug-value-expander got %s values" (length values))
-			 (jdibug-time-end "expanded")
-			 (append (loop for v in values
-						   for f in fields
-						   collect (jdibug-make-tree-from-field-value f v))
-					 (list (jdibug-make-methods-node value)))))
-		  ((= (jdi-value-type value) jdwp-tag-array)
-		   (let* ((values (jdi-value-array-get-values value))
-				  (strings (mapcar 'jdibug-value-get-string values)))
-			 (loop for v in values
-				   for s in strings
-				   for i from 0 by 1
-				   collect (jdibug-make-tree-from-value (format "[%s]" i) v s)))))))
+(defun jdibug-value-expander-object (value)
+  (let* ((class (jdi-value-get-class value))
+		 (fields (sort (copy-sequence (jdi-class-get-all-fields class)) 'jdibug-field-sorter))
+		 (values (jdi-value-get-values value fields)))
+	(jdibug-debug "jdibug-value-expander got %s values" (length values))
+	(jdibug-time-end "expanded")
+	(append (loop for v in values
+				  for f in fields
+				  collect (jdibug-make-tree-from-field-value f v))
+			(list (jdibug-make-methods-node value)))))
+
+(defun jdibug-value-expander-array (value)
+  (let* ((values (jdi-value-array-get-values value))
+		 (strings (mapcar 'jdibug-value-get-string values)))
+	(loop for v in values
+		  for s in strings
+		  for i from 0 by 1
+		  collect (jdibug-make-tree-from-value (format "[%s]" i) v s))))
 
 (defun jdibug-make-tree-from-field-value (field value)
   (let ((display (format "%s%s: %s" 
@@ -1323,31 +1328,34 @@ to populate the jdi-value-values of the jdi-value.")
 
 (defun jdibug-value-custom-set-string-with-size (value)
   (jdi-debug "jdibug-value-custom-set-string-with-size")
-  (let* ((class (jdi-value-get-class value))
-		 (size-method (find-if (lambda (obj)
-								 (equal (jdi-method-name obj)
-										"size"))
-							   (jdi-class-get-methods class))))
-	(if (null size-method)
-		(format "%s[nosize]" (jdi-class-name class))
-
-	  (let ((result-value (jdi-value-invoke-method value jdibug-active-thread size-method nil nil)))
-		(format "%s[%s]" (jdi-class-name class) (jdi-value-value result-value))))))
+  (let ((result-value (jdi-value-invoke-method value jdibug-active-thread "size" nil nil)))
+	(if result-value
+		(format "%s[%s]" (jdi-class-name (jdi-value-get-class value)) (jdi-value-value result-value))
+	  (format "%s[nosize]" (jdi-class-name (jdi-value-get-class value))))))
 
 (defun jdibug-value-custom-expand-collection (value)
   (jdi-debug "jdibug-value-custom-expand-collection")
-  (let* ((class (jdi-value-get-class value))
-		 (toarray-method (find-if (lambda (obj)
-									(equal (jdi-method-name obj)
-										   "toArray"))
-								  (jdi-class-get-methods class))))
-	(when toarray-method
-	  (let ((result-value (jdi-value-invoke-method value jdibug-active-thread toarray-method nil nil)))
-		(setf (jdi-value-type value) jdwp-tag-array
-			  (jdi-value-value value) (jdi-value-value result-value))))))
+  (let ((result-value (jdi-value-invoke-method value jdibug-active-thread "toArray" nil nil)))
+	(if result-value
+		(jdibug-value-expander-array result-value))))
 
 (defun jdibug-value-custom-expand-map (value)
-  (jdi-debug "jdibug-value-custom-expand-collection"))
+  (jdi-debug "jdibug-value-custom-expand-collection")
+  (let ((keyset-value (jdi-value-invoke-method value jdibug-active-thread "keySet" nil nil))
+		(values-value (jdi-value-invoke-method value jdibug-active-thread "values" nil nil)))
+	(when (and keyset-value values-value)
+	  (let ((keyset-array (jdi-value-invoke-method keyset-value jdibug-active-thread "toArray" nil nil))
+			(values-array (jdi-value-invoke-method values-value jdibug-active-thread "toArray" nil nil)))
+		(when (and keyset-array values-array)
+		  (loop for v in (loop for key in (jdi-value-array-get-values keyset-array)
+							   for value in (jdi-value-array-get-values values-array)
+							   append (list key value))
+				for s = (jdibug-value-get-string v)
+				for i from 0 by 1
+				collect (jdibug-make-tree-from-value (format "[%s%s]" 
+															 (if (= 0 (mod i 2)) "k" "v")
+															 (/ i 2))
+													 v s)))))))
 
 (defun jdibug-value-object-get-fields (value)
   (jdibug-debug "jdibug-value-object-get-values")

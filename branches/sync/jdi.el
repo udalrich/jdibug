@@ -424,8 +424,8 @@
 	(mappend 'jdi-class-get-methods (cons class supers))))
 
 (defun jdi-class-get-methods (class)
-  "[ASYNC] returns a list of jdi-method in the class"
-  (jdi-debug "jdi-class-get-methods:%s" (jdi-class-signature class))
+  "returns a list of jdi-method in the class"
+  (jdi-debug "jdi-class-get-methods:%s" (jdi-class-id class))
   (if (jdi-class-methods class)
 	  (jdi-class-methods class)
 	(let ((reply (jdwp-send-command (jdi-mirror-jdwp class) "methods" `((:ref-type . ,(jdi-class-id class))))))
@@ -437,7 +437,8 @@
 										   :id (bindat-get-field method :method-id)
 										   :name (jdwp-get-string method :name)
 										   :signature (jdwp-get-string method :signature)
-										   :mod-bits (bindat-get-field method :mod-bits))))
+										   :mod-bits (bindat-get-field method :mod-bits))
+				  do (jdi-debug "jdi-class-get-methods:name=%s:signature=%s" (jdwp-get-string method :name) (jdwp-get-string method :signature))))
 	  (jdi-class-methods class))))
 
 (defun jdi-class-get-signature (class)
@@ -1067,18 +1068,23 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
   (not (equal (logand (jdi-method-mod-bits method) jdi-access-static) 0)))
 
 (defun jdi-value-invoke-method (value thread method arguments options)
-  "Returns another jdi-value of the result."
+  "Invoke the method on the value on the thread, if method is a string, it will pick the first method that matches the method-name."
   (jdi-debug "jdi-value-invoke-method")
-  (let ((reply (jdwp-send-command (jdi-mirror-jdwp value) "object-invoke-method"
-								  `((:object . ,(jdi-value-value value))
-									(:thread . ,(jdi-thread-id thread))
-									(:class . ,(jdi-class-id (jdi-value-get-class value)))
-									(:method-id . ,(jdi-method-id method))
-									(:arguments . 0)
-									(:options . ,jdwp-invoke-single-threaded)))))
-	(make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
-					:type (bindat-get-field reply :return-value :type)
-					:value (bindat-get-field reply :return-value :u :value))))
+  (when (stringp method)
+	(setq method (find-if (lambda (obj)
+							(equal (jdi-method-name obj) method))
+						  (jdi-class-get-all-methods (jdi-value-get-class value)))))
+  (when method
+	(let ((reply (jdwp-send-command (jdi-mirror-jdwp value) "object-invoke-method"
+									`((:object . ,(jdi-value-value value))
+									  (:thread . ,(jdi-thread-id thread))
+									  (:class . ,(jdi-class-id (jdi-value-get-class value)))
+									  (:method-id . ,(jdi-method-id method))
+									  (:arguments . 0)
+									  (:options . ,jdwp-invoke-single-threaded)))))
+	  (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
+					  :type (bindat-get-field reply :return-value :type)
+					  :value (bindat-get-field reply :return-value :u :value)))))
 
 (defvar jdi-breakpoint-hooks nil
   "callback to be called when breakpoint is hit, called with (jdi-thread jdi-location)")
