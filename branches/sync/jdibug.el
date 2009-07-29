@@ -493,21 +493,6 @@ And position the point at the line number."
 		:value 
 		,display))))
 
-(defun jdibug-tree-set-and-refresh (buffer tree args)
-  ;; have this run later, so we can call this function in expander, and do not have to worry
-  ;; about this executing before we return the "loading..." sign!
-  (jdibug-debug "jdibug-tree-set-and-refresh")
-  (jdibug-run-with-timer 1 nil 'jdibug-tree-set-and-refresh-now buffer tree args))
-
-(defun jdibug-tree-set-and-refresh-now (buffer tree args)
-  (jdibug-debug "jdibug-tree-set-and-refresh-now")
-  (progn
-	(widget-put tree :args args)
-	(widget-put tree :dynargs nil)
-	(widget-put tree :expander nil)
-	(with-current-buffer buffer
-	  (jdibug-tree-mode-reflesh-tree tree))))
-
 (defun jdibug-expand-methods (tree)
   (let ((value (widget-get tree :jdi-value)))
 	(let ((class (jdi-value-get-class value)))
