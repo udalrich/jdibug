@@ -198,15 +198,13 @@
 	(make-jdi-event-request :virtual-machine (jdi-mirror-virtual-machine thread) :data data)))
 
 (defun jdi-event-request-enable (er)
-  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp er) "set" (jdi-event-request-data er))
+  (let ((reply (jdwp-send-command (jdi-mirror-jdwp er) "set" (jdi-event-request-data er))))
 	(jdi-trace "received requestid:%s" (bindat-get-field reply :request-id))
 	(setf (jdi-event-request-id er) (bindat-get-field reply :request-id))))
 
 (defun jdi-event-request-disable (er)
-  (multiple-value-bind (reply error jdwp id) 
-	  (jdwp-send-command (jdi-mirror-jdwp er) "clear" `((:event . ,jdwp-event-breakpoint) (:request-id . ,(jdi-event-request-id er))))
-
-	(jdi-trace "cleared event request")))
+  (jdwp-send-command (jdi-mirror-jdwp er) "clear" `((:event . ,jdwp-event-breakpoint) (:request-id . ,(jdi-event-request-id er))))
+  (jdi-trace "cleared event request"))
 
 (defun jdi-virtual-machine-set-standard-events (vm)
   (mapcar (lambda (event)
@@ -224,14 +222,13 @@
   "[ASYNC] returns t if success, nil on failure"
   (when (jdwp-connect (jdi-virtual-machine-jdwp vm) (jdi-virtual-machine-host vm) (jdi-virtual-machine-port vm))
 	(jdwp-put (jdi-virtual-machine-jdwp vm) 'jdi-virtual-machine vm)
-	(multiple-value-bind (reply error jdwp id) (jdwp-send-command jdwp "version" nil)
-
+	(let ((reply (jdwp-send-command (jdi-virtual-machine-jdwp vm) "version" nil)))
 	  (jdi-trace "description: \n%s" (jdwp-get-string reply :description))
 	  (jdi-trace "major      : %s"   (bindat-get-field reply :jdwp-major))
 	  (jdi-trace "minor      : %s"   (bindat-get-field reply :jdwp-minor))
 	  (jdi-trace "version    : %s"   (jdwp-get-string reply :vm-version))
 	  (jdi-trace "name       : %s"   (jdwp-get-string reply :vm-name))
-	  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-virtual-machine-jdwp vm) "capabilities-new" nil)
+	  (let ((reply (jdwp-send-command (jdi-virtual-machine-jdwp vm) "capabilities-new" nil)))
 		(jdi-trace "capabilities-new:%s" reply)
 		(jdi-virtual-machine-set-standard-events vm)
 		t))))
@@ -241,7 +238,7 @@
   (if (jdi-virtual-machine-threads vm)
  	  (jdi-virtual-machine-threads vm)
 	(jdi-time-start)
-	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-virtual-machine-jdwp vm) "all-threads" nil)
+	(let ((reply (jdwp-send-command (jdi-virtual-machine-jdwp vm) "all-threads" nil)))
 	  (jdi-time-end "jdi-virtual-machine-get-threads:all-threads")
 	  (jdi-debug "number of threads:%s" (bindat-get-field reply :threads))
 	  (setf (jdi-virtual-machine-threads vm)
@@ -252,7 +249,7 @@
 
 (defun jdi-virtual-machine-get-top-level-thread-groups (vm)
   (jdi-debug "jdi-virtual-machine-get-top-level-thread-groups")
-  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-virtual-machine-jdwp vm) "top-level-thread-groups" nil)
+  (let ((reply (jdwp-send-command (jdi-virtual-machine-jdwp vm) "top-level-thread-groups" nil)))
 	(jdi-debug "jdi-virtual-machine-get-top-level-thread-groups:number = %s" (bindat-get-field reply :groups))
 	(loop for group in (bindat-get-field reply :group)
 		  collect (jdi-virtual-machine-get-object-create vm (make-jdi-thread-group :id (bindat-get-field group :id))))))
@@ -263,10 +260,10 @@
 
 (defun jdi-virtual-machine-get-classes-by-signature (vm signature)
   (jdi-debug "jdi-virtual-machine-get-classes-by-signature:%s" signature)
-  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-virtual-machine-jdwp vm) 
-																"classes-by-signature"
-																`((:signature . ((:length . ,(length signature))
-																				 (:string . ,signature)))))
+  (let ((reply (jdwp-send-command (jdi-virtual-machine-jdwp vm) 
+								  "classes-by-signature"
+								  `((:signature . ((:length . ,(length signature))
+												   (:string . ,signature)))))))
 	(jdi-debug "number of classes matched:%s" (bindat-get-field reply :classes))
 	(loop for class        in (bindat-get-field reply :class)
 		  for type-id      =  (bindat-get-field class :type-id)
@@ -313,7 +310,7 @@
 
 (defun jdi-thread-get-name (thread)
   (jdi-debug "jdi-thread-get-name")
-  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread) "thread-name" `((:thread . ,(jdi-thread-id thread))))
+  (let ((reply (jdwp-send-command (jdi-mirror-jdwp thread) "thread-name" `((:thread . ,(jdi-thread-id thread))))))
 	(setf (jdi-thread-name thread)
 		  (jdwp-get-string reply :thread-name))
 	(jdi-debug "thread-name=%s" (jdi-thread-name thread))
@@ -324,7 +321,7 @@
   (if (jdi-thread-status thread)
 	  (values (jdi-thread-status thread) (jdi-thread-suspend-status thread))
 
-	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread) "thread-status" `((:thread . ,(jdi-thread-id thread))))
+	(let ((reply (jdwp-send-command (jdi-mirror-jdwp thread) "thread-status" `((:thread . ,(jdi-thread-id thread))))))
 	  (setf (jdi-thread-status thread)
 			(bindat-get-field reply :thread-status)
 			(jdi-thread-suspend-status thread)
@@ -337,7 +334,7 @@
   (if (jdi-thread-thread-group thread)
 	  (jdi-thread-thread-group thread)
 
-	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread) "thread-group" `((:thread . ,(jdi-thread-id thread))))
+	(let ((reply (jdwp-send-command (jdi-mirror-jdwp thread) "thread-group" `((:thread . ,(jdi-thread-id thread))))))
 	  (jdi-debug "jdi-thread-get-thread-group:group=%s" (bindat-get-field reply :group))
 	  (setf (jdi-thread-thread-group thread) (jdi-virtual-machine-get-object-create 
 											  (jdi-mirror-virtual-machine thread)
@@ -363,7 +360,7 @@
   (if (jdi-thread-group-name thread-group)
 	  (jdi-thread-group-name thread-group)
 	
-	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread-group) "thread-group-name" `((:group . ,(jdi-thread-group-id thread-group))))
+	(let ((reply (jdwp-send-command (jdi-mirror-jdwp thread-group) "thread-group-name" `((:group . ,(jdi-thread-group-id thread-group))))))
 	  (setf (jdi-thread-group-name thread-group) (jdwp-get-string reply :group-name)))))
 
 (defun jdi-thread-group-get-parent (thread-group)
@@ -373,7 +370,7 @@
 		  nil
 		(jdi-thread-group-parent thread-group))
 
-	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread-group) "thread-group-parent" `((:group . ,(jdi-thread-group-id thread-group))))
+	(let ((reply (jdwp-send-command (jdi-mirror-jdwp thread-group) "thread-group-parent" `((:group . ,(jdi-thread-group-id thread-group))))))
 	  (let ((group-id (bindat-get-field reply :parent-group)))
 		(if (equal group-id [0 0 0 0 0 0 0 0])
 			(progn
@@ -385,7 +382,7 @@
 
 (defun jdi-thread-group-get-children (thread-group)
   (jdi-debug "jdi-thread-group-get-children:%s" (jdi-thread-group-id thread-group))
-  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread-group) "thread-group-children" `((:group . ,(jdi-thread-group-id thread-group))))
+  (let ((reply (jdwp-send-command (jdi-mirror-jdwp thread-group) "thread-group-children" `((:group . ,(jdi-thread-group-id thread-group))))))
 	(setf (jdi-thread-group-child-threads thread-group) 
 		  (loop for thread in (bindat-get-field reply :child-thread)
 				collect (jdi-virtual-machine-get-object-create (jdi-mirror-virtual-machine thread-group)
@@ -431,7 +428,7 @@
   (jdi-debug "jdi-class-get-methods:%s" (jdi-class-signature class))
   (if (jdi-class-methods class)
 	  (jdi-class-methods class)
-	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp class) "methods" `((:ref-type . ,(jdi-class-id class))))
+	(let ((reply (jdwp-send-command (jdi-mirror-jdwp class) "methods" `((:ref-type . ,(jdi-class-id class))))))
 	  (jdi-debug "number of methods:%s" (bindat-get-field reply :methods))
 	  (setf (jdi-class-methods class)
 			(loop for method in (bindat-get-field reply :method)
@@ -447,7 +444,7 @@
   (jdi-debug "jdi-class-get-signature")
   (if (jdi-class-signature class)
 	  (jdi-class-signature class)
-	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp class) "signature" `((:ref-type . ,(jdi-class-id class))))
+	(let ((reply (jdwp-send-command (jdi-mirror-jdwp class) "signature" `((:ref-type . ,(jdi-class-id class))))))
 	  (setf (jdi-class-signature class) (jdwp-get-string reply :signature)))))
 
 (defun jdi-method-get-locations (method)
@@ -455,9 +452,9 @@
   (if (or (jdi-method-locations method)
 		  (jdi-method-native-p method))
 	  (jdi-method-locations method)
-	(multiple-value-bind (reply error jdwp id) (jdwp-send-command 
-												(jdi-mirror-jdwp method) "line-table" `((:ref-type . ,(jdi-class-id (jdi-method-class method)))
-																						(:method-id . ,(jdi-method-id method))))
+	(let ((reply (jdwp-send-command 
+				  (jdi-mirror-jdwp method) "line-table" `((:ref-type . ,(jdi-class-id (jdi-method-class method)))
+														  (:method-id . ,(jdi-method-id method))))))
 	  (jdi-trace "start=%s:end=%s:lines=%s" 
 				 (jdwp-string-to-hex (bindat-get-field reply :start))
 				 (jdwp-string-to-hex (bindat-get-field reply :end))
@@ -562,12 +559,11 @@
   (jdi-debug "jdi-thread-get-frames")
   (if (jdi-thread-frames thread)
 	  (jdi-thread-frames thread)
-	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp thread) "frame-count" `((:thread . ,(jdi-thread-id thread))))
+	(let ((reply (jdwp-send-command (jdi-mirror-jdwp thread) "frame-count" `((:thread . ,(jdi-thread-id thread))))))
 	  (jdi-debug "number of frames:%s" (bindat-get-field reply :frame-count))
-	  (multiple-value-bind (reply error jdwp id) 
-		  (jdwp-send-command (jdi-mirror-jdwp thread) "frames" `((:thread . ,(jdi-thread-id thread))
-																 (:start-frame . 0)
-																 (:length . ,(bindat-get-field reply :frame-count))))
+	  (let ((reply (jdwp-send-command (jdi-mirror-jdwp thread) "frames" `((:thread . ,(jdi-thread-id thread))
+																		  (:start-frame . 0)
+																		  (:length . ,(bindat-get-field reply :frame-count))))))
 		(setf (jdi-thread-frames thread) 
 			  (loop for frame           in (bindat-get-field reply :frame)
 					for class-id        = (bindat-get-field frame :location :class-id)
@@ -601,9 +597,7 @@
 
 (defun jdi-thread-resume (thread)
   (jdi-debug "jdi-thread-resume")
-  (multiple-value-bind (reply error jdwp id)
-	(jdwp-send-command (jdi-mirror-jdwp thread) "thread-resume" `((:thread . ,(jdi-thread-id thread))))
-	t))
+  (jdwp-send-command (jdi-mirror-jdwp thread) "thread-resume" `((:thread . ,(jdi-thread-id thread)))))
 
 (defun jdi-thread-send-step (thread depth)
   (jdi-debug "jdi-thread-send-step:depth=%s" depth)
@@ -621,10 +615,10 @@
   (if (jdi-method-variables method)
 	  (jdi-method-variables method)
 
-	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp method)
-																  "variable-table"
-																  `((:ref-type . ,(jdi-class-id (jdi-method-class method)))
-																	(:method-id . ,(jdi-method-id method))))
+	(let ((reply (jdwp-send-command (jdi-mirror-jdwp method)
+									"variable-table"
+									`((:ref-type . ,(jdi-class-id (jdi-method-class method)))
+									  (:method-id . ,(jdi-method-id method))))))
 	  (jdi-trace "variable-table arg-count:%s slots:%s" (bindat-get-field reply :arg-cnt) (bindat-get-field reply :slots))
 
 	  (setf (jdi-method-variables method)
@@ -666,10 +660,10 @@
 								  `((:slot . ,(jdi-variable-slot variable))
 									(:sigbyte . ,(jdi-variable-sigbyte variable))))
 								variables)))))
-	(multiple-value-bind (reply error jdwp id) (jdwp-send-command 
-												(jdi-mirror-jdwp frame) 
-												"stack-get-values" 
-												data)
+	(let ((reply (jdwp-send-command 
+				  (jdi-mirror-jdwp frame) 
+				  "stack-get-values" 
+				  data)))
 	  (loop for variable in variables
 			for value in (bindat-get-field reply :value)
 			collect (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine frame)
@@ -704,9 +698,9 @@
 	(if (jdi-value-class value)
 		(jdi-value-class value)
 
-	  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp value) 
-																	"reference-type" 
-																	`((:object . ,(jdi-value-value value))))
+	  (let ((reply (jdwp-send-command (jdi-mirror-jdwp value) 
+									  "reference-type" 
+									  `((:object . ,(jdi-value-value value))))))
 		(jdi-debug "jdi-value-get-class:type-id=%s" (bindat-get-field reply :type-id))
 		(setf (jdi-value-class value) (jdi-virtual-machine-get-class-create (jdi-mirror-virtual-machine value) (bindat-get-field reply :type-id)))
 		(jdi-value-class value)))))
@@ -732,10 +726,10 @@
   (if (jdi-value-array-length value)
 	  (jdi-value-array-length value)
 
-	(multiple-value-bind (reply error jdwp id) (jdwp-send-command 
-												(jdi-mirror-jdwp value) 
-												"array-length" 
-												`((:array-object . ,(jdi-value-value value))))
+	(let ((reply (jdwp-send-command 
+				  (jdi-mirror-jdwp value) 
+				  "array-length" 
+				  `((:array-object . ,(jdi-value-value value))))))
 	  (setf (jdi-value-array-length value) (bindat-get-field reply :array-length)))))
 
 (defun jdi-format-string (str)
@@ -791,13 +785,13 @@ The Fields must be valid for this ObjectReference; that is, they must be from th
 		(nonstatic-fields (loop for field in fields
 								unless (jdi-field-static-p field) collect field))
 		(results (make-hash-table)))
-	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp value) "object-get-values"
-														`((:object . ,(jdi-value-value value))
-														  (:fields . ,(length nonstatic-fields))
-														  ,(nconc (list :field)
-																  (mapcar (lambda (field)
-																			`((:id . ,(jdi-field-id field))))
-																		  nonstatic-fields))))
+	(let ((reply (jdwp-send-command (jdi-mirror-jdwp value) "object-get-values"
+									`((:object . ,(jdi-value-value value))
+									  (:fields . ,(length nonstatic-fields))
+									  ,(nconc (list :field)
+											  (mapcar (lambda (field)
+														`((:id . ,(jdi-field-id field))))
+													  nonstatic-fields))))))
 	  (loop for field in nonstatic-fields
 			for value2 in (bindat-get-field reply :value)
 			do (puthash field (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
@@ -807,13 +801,13 @@ The Fields must be valid for this ObjectReference; that is, they must be from th
 			do (jdi-debug "jdi-value-get-values: nonstatic type=%s value=%s" (bindat-get-field value2 :value :type)
 						  (bindat-get-field value2 :value :u :type)))
 	  (let ((class (jdi-value-get-class value)))
-		(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp value) "reference-get-values"
-															`((:ref-type . ,(jdi-class-id class))
-															  (:fields . ,(length static-fields))
-															  ,(nconc (list :field)
-																	  (mapcar (lambda (field)
-																				`((:id . ,(jdi-field-id field))))
-																			  static-fields))))
+		(let ((reply (jdwp-send-command (jdi-mirror-jdwp value) "reference-get-values"
+										`((:ref-type . ,(jdi-class-id class))
+										  (:fields . ,(length static-fields))
+										  ,(nconc (list :field)
+												  (mapcar (lambda (field)
+															`((:id . ,(jdi-field-id field))))
+														  static-fields))))))
 		  (loop for field in static-fields
 				for value2 in (bindat-get-field reply :value)
 				do (puthash field (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
@@ -841,10 +835,10 @@ The Fields must be valid for this ObjectReference; that is, they must be from th
 	  (if (equal (jdi-class-super class) t)
 		  nil
 		(jdi-class-super class))
-	(multiple-value-bind (reply error jdwp id) (jdwp-send-command 
-												(jdi-mirror-jdwp class) 
-												"superclass" 
-												`((:class . ,(jdi-class-id class))))
+	(let ((reply (jdwp-send-command 
+				  (jdi-mirror-jdwp class) 
+				  "superclass" 
+				  `((:class . ,(jdi-class-id class))))))
 	  (if (equal (bindat-get-field reply :superclass)
 				 [0 0 0 0 0 0 0 0])
 		  (progn 
@@ -871,9 +865,9 @@ Only the interfaces that are declared with the 'implements' keyword in this clas
 		  (string= (jdi-class-signature class) "Ljava/lang/Object;"))
 	  (jdi-class-interfaces class)
 
-	(multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp class) 
-																  "interfaces" 
-																  `((:ref-type . ,(jdi-class-id class))))
+	(let ((reply (jdwp-send-command (jdi-mirror-jdwp class) 
+									"interfaces" 
+									`((:ref-type . ,(jdi-class-id class))))))
 	  (setf (jdi-class-interfaces class)
 			(loop for interface in (bindat-get-field reply :interface)
 				  collect (jdi-virtual-machine-get-class-create (jdi-mirror-virtual-machine class) (bindat-get-field interface :type))))
@@ -926,9 +920,7 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 		  nil
 		(jdi-class-fields class))
 
-	(multiple-value-bind (reply error jdwp id)
-		(jdwp-send-command (jdi-mirror-jdwp class) "fields" `((:ref-type . ,(jdi-class-id class))))
-
+	(let ((reply (jdwp-send-command (jdi-mirror-jdwp class) "fields" `((:ref-type . ,(jdi-class-id class))))))
 	  (jdi-debug "jdi-class-get-fields: %s's fields:%s" (jdi-class-id class) (bindat-get-field reply :declared))
 	  (if (bindat-get-field reply :field)
 		  (progn
@@ -960,11 +952,11 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 	  nil
 
 	(let ((length (jdi-value-get-array-length value)))
-	  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp value) "array-get-values"
-																	`((:array-object . ,(jdi-value-value value))
-																	  (:first-index . 0)
-																	  (:length . ,length)))
-		(let ((array (jdwp-unpack-arrayregion jdwp reply)))
+	  (let ((reply (jdwp-send-command (jdi-mirror-jdwp value) "array-get-values"
+									  `((:array-object . ,(jdi-value-value value))
+										(:first-index . 0)
+										(:length . ,length)))))
+		(let ((array (jdwp-unpack-arrayregion (jdi-mirror-jdwp value) reply)))
 		  (jdi-trace "got array-get-values:%s" array)
 		  (if (or (= (bindat-get-field array :type) jdwp-tag-object)
 				  (= (bindat-get-field array :type) jdwp-tag-array))
@@ -1091,13 +1083,13 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 (defun jdi-value-invoke-method (value thread method arguments options)
   "Returns another jdi-value of the result."
   (jdi-debug "jdi-value-invoke-method")
-  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp value) "object-invoke-method"
-																`((:object . ,(jdi-value-value value))
-																  (:thread . ,(jdi-thread-id thread))
-																  (:class . ,(jdi-class-id (jdi-value-get-class value)))
-																  (:method-id . ,(jdi-method-id method))
-																  (:arguments . 0)
-																  (:options . ,jdwp-invoke-single-threaded)))
+  (let ((reply (jdwp-send-command (jdi-mirror-jdwp value) "object-invoke-method"
+								  `((:object . ,(jdi-value-value value))
+									(:thread . ,(jdi-thread-id thread))
+									(:class . ,(jdi-class-id (jdi-value-get-class value)))
+									(:method-id . ,(jdi-method-id method))
+									(:arguments . 0)
+									(:options . ,jdwp-invoke-single-threaded)))))
 	(make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
 					:type (bindat-get-field reply :return-value :type)
 					:value (bindat-get-field reply :return-value :u :value))))

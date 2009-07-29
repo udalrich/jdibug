@@ -747,8 +747,7 @@
 	  (jdwp-consume-output jdwp (length jdwp-handshake))
 	  ;; only after the handshake we use the process filter
 	  (set-process-filter        (jdwp-process jdwp) 'jdwp-process-filter)
-	  (multiple-value-bind (reply error jdwp id) (jdwp-send-command jdwp "id-sizes" nil)
-		(jdwp-process-id-sizes jdwp reply))
+	  (jdwp-process-id-sizes jdwp (jdwp-send-command jdwp "id-sizes" nil))
 	  jdwp)))
 
 (defun jdwp-disconnect (jdwp)
@@ -789,7 +788,7 @@
       (if (not (= error 0))
 		  (progn
 			(jdwp-error "jdwp-process-reply: received error:%d:%s for id:%d command:%s" error (jdwp-error-string error) id (getf protocol :name))
-			(list nil error jdwp id))
+			(error error))
 		(if reply-spec
 			(let ((reply-data   (bindat-unpack reply-spec str 11)))
 			  (jdwp-info "jdwp-process-reply:id:%5s command:[%20s] time:%-6s len:%5s error:%1d" 
@@ -799,8 +798,7 @@
 						 (bindat-get-field packet :length) 
 						 (bindat-get-field packet :error))
 			  (jdwp-trace "reply-data:%s" (elog-trim reply-data 100))
-			  (list reply-data error jdwp id))
-		  (list (substring str 11) error jdwp id))))))
+			  reply-data))))))
 
 (defvar jdwp-event-hooks nil)
 

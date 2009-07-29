@@ -1271,8 +1271,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 
 (defun jdibug-value-get-string-string (value)
   (jdibug-debug "jdibug-value-get-string-string")
-  (multiple-value-bind (reply error jdwp id)
-	  (jdwp-send-command (jdi-mirror-jdwp value) "string-value" `((:object . ,(jdi-value-value value))))
+  (let ((reply (jdwp-send-command (jdi-mirror-jdwp value) "string-value" `((:object . ,(jdi-value-value value))))))
 
 	(jdibug-debug "jdibug-value-get-string-string:%s:%s" (jdwp-get-string reply :value) (jdi-format-string (jdwp-get-string reply :value)))
 	(jdi-format-string (jdwp-get-string reply :value))))
@@ -1339,8 +1338,8 @@ to populate the jdi-value-values of the jdi-value.")
 			(if (equal (jdi-value-value result-value) [0 0 0 0 0 0 0 0])
 				"null"
 
-			  (multiple-value-bind (reply error jdwp id) (jdwp-send-command (jdi-mirror-jdwp value) "string-value" 
-																			`((:object . ,(jdi-value-value result-value))))
+			  (let ((reply (jdwp-send-command (jdi-mirror-jdwp value) "string-value" 
+											  `((:object . ,(jdi-value-value result-value))))))
 				(jdi-format-string (jdwp-get-string reply :value))))))))))
 
 (defun jdibug-value-custom-set-string-with-size (value)
