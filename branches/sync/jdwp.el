@@ -280,12 +280,12 @@
 				(,jdwp-tag-class-loader (:value vec (eval jdwp-object-id-size)))
 				(,jdwp-tag-class-object (:value vec (eval jdwp-object-id-size))))))
 
-(setq jdwp-arrayregion-header-spec
+(setq jdwp-arrayregion-spec
       '((:type    u8)
 		(:length  u32)))
 
 (defun jdwp-unpack-arrayregion (jdwp packet)
-  (jdwp-trace "unpacking array-region:%s" (jdwp-string-to-hex packet))
+  (jdwp-trace "jdwp-unpack-arrayregion:%s" (jdwp-string-to-hex packet))
   (jdwp-with-size 
     jdwp
 	(let* ((header (bindat-unpack jdwp-arrayregion-header-spec packet))
@@ -798,7 +798,8 @@
 						 (bindat-get-field packet :length) 
 						 (bindat-get-field packet :error))
 			  (jdwp-trace "reply-data:%s" (elog-trim reply-data 100))
-			  reply-data))))))
+			  reply-data)
+		  (substring str 11))))))
 
 (defvar jdwp-event-hooks nil)
 
