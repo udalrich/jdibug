@@ -376,8 +376,9 @@ And position the point at the line number."
 		(erase-buffer)
 		(insert "refreshing..."))))
   (if (jdibug-refresh-timer jdibug-this)
-	  (cancel-timer (jdibug-refresh-timer jdibug-this))
-	(jdibug-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-now)))
+	  (cancel-timer (jdibug-refresh-timer jdibug-this)))
+  (setf (jdibug-refresh-timer jdibug-this)
+		(jdibug-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-now)))
 
 (defun jdibug-refresh-now ()
   (jdibug-debug "jdibug-refresh-now")
@@ -386,6 +387,7 @@ And position the point at the line number."
 				  (jdibug-refresh-locals-buffer-now)
 				  (jdibug-refresh-frames-buffer-now)
 				  t)))
+	(jdibug-debug "jdibug-refresh-now:jdwp-input-pending")
 	(jdibug-refresh)))
 
 (defun jdibug-get-active-frame ()
@@ -664,7 +666,9 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	(let ((inhibit-read-only t))
 	  (erase-buffer))
 
-  (jdibug-debug "jdibug-refresh-locals-buffer-now suspended=%s" (if (jdibug-active-thread jdibug-this) "yes" "no"))
+  (jdibug-debug "jdibug-refresh-locals-buffer-now:active-thread=%s active-frame=%s" 
+				(if (jdibug-active-thread jdibug-this) "yes" "no")
+				(if (jdibug-active-frame jdibug-this) "yes" "no"))
   (if (null (jdibug-active-thread jdibug-this))
 	  (insert "Not suspended")
 
@@ -1067,7 +1071,8 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	  ;; and we will be clearing it again
 	  (setf (jdibug-active-thread jdibug-this) nil)
 	  (setf (jdibug-active-frame jdibug-this) nil)
-	  (jdi-thread-send-step active-thread depth))))
+	  (jdi-thread-send-step active-thread depth)
+	  (jdibug-debug "jdibug-send-step:end"))))
 
 (defun jdibug-step-over ()
   (interactive)
