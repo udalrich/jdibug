@@ -1111,19 +1111,20 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 
 (defun jdi-handle-event (jdwp event)
   (jdi-debug "jdi-handle-event")
-  (let ((handlers (list 
-				   `(,jdwp-event-breakpoint    . jdi-handle-breakpoint-event)
-				   `(,jdwp-event-single-step   . jdi-handle-step-event)
-				   `(,jdwp-event-class-prepare . jdi-handle-class-prepare-event)
-				   `(,jdwp-event-class-unload  . jdi-handle-class-unload-event)
-				   `(,jdwp-event-vm-death      . jdi-handle-vm-death)
-				   )))
-	(mapc (lambda (handler)
-			(let ((event-kind (if (integerp event) event (bindat-get-field event :event-kind))))
-			  (jdi-trace "compare %s with %s" (car handler) event-kind)
-			  (if (equal event-kind	(car handler))
-				  (funcall (cdr handler) jdwp event))))
-		  handlers)))
+  (let* ((handlers (list 
+					`(,jdwp-event-breakpoint    . jdi-handle-breakpoint-event)
+					`(,jdwp-event-single-step   . jdi-handle-step-event)
+					`(,jdwp-event-class-prepare . jdi-handle-class-prepare-event)
+					`(,jdwp-event-class-unload  . jdi-handle-class-unload-event)
+					`(,jdwp-event-vm-death      . jdi-handle-vm-death)
+					))
+		 (event-kind (if (integerp event) event (bindat-get-field event :event-kind)))
+		 (handler (find-if (lambda (pair)
+							 (equal event-kind (car pair)))
+						   handlers)))
+	(if handler
+		(funcall (cdr handler) jdwp event)
+	  (jdi-error "do not know how to handle event:%s" event))))
 
 (add-hook 'jdwp-event-hooks 'jdi-handle-event)
 
