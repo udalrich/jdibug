@@ -799,6 +799,7 @@
 						 (bindat-get-field packet :error))
 			  (jdwp-trace "reply-data:%s" (elog-trim reply-data 100))
 			  reply-data)
+		  ;; special case for array, we return the string so the caller can call unpack-arrayregion
 		  (substring str 11))))))
 
 (defvar jdwp-event-hooks nil)
