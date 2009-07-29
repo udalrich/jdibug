@@ -591,29 +591,24 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	(jdibug-debug "jdibug-value-expander:type=%s" (jdi-value-type value))
 	(jdibug-time-start)
 	(cond ((= (jdi-value-type value) jdwp-tag-object)
-		   (let ((class (jdi-value-get-class value)))
-			 (let ((fields (jdi-class-get-all-fields class)))
-			   (jdibug-debug "jdibug-value-expander: got %s fields" (length fields))
-			   (let ((fields (sort (copy-sequence fields) 'jdibug-field-sorter)))
-				 (let ((values (jdi-value-get-values value fields)))
-				   (jdibug-debug "jdibug-value-expander:calling cont-mapcar jdibug-value-get-string")
-				   (let ((strings (mapcar 'jdibug-value-get-string values)))
-					 (jdibug-debug "jdibug-value-expander got %s values" (length values))
-					 (jdibug-time-end "expanded")
-					 (append (loop for v in values
-								   for f in fields
-								   for s in strings
-								   collect (jdibug-make-tree-from-field-value f v s))
-							 (list (jdibug-make-methods-node value)))))))))
+		   (let* ((class (jdi-value-get-class value))
+				  (fields (sort (copy-sequence (jdi-class-get-all-fields class)) 'jdibug-field-sorter))
+				  (values (jdi-value-get-values value fields)))
+			 (jdibug-debug "jdibug-value-expander got %s values" (length values))
+			 (jdibug-time-end "expanded")
+			 (append (loop for v in values
+						   for f in fields
+						   collect (jdibug-make-tree-from-field-value f v))
+					 (list (jdibug-make-methods-node value)))))
 		  ((= (jdi-value-type value) jdwp-tag-array)
-		   (let ((values (jdi-value-array-get-values value)))
-			 (let ((strings (mapcar 'jdibug-value-get-string values)))
-			   (loop for v in values
-					 for s in strings
-					 for i from 0 by 1
-					 collect (jdibug-make-tree-from-value (format "[%s]" i) v s))))))))
+		   (let* ((values (jdi-value-array-get-values value))
+				  (strings (mapcar 'jdibug-value-get-string values)))
+			 (loop for v in values
+				   for s in strings
+				   for i from 0 by 1
+				   collect (jdibug-make-tree-from-value (format "[%s]" i) v s)))))))
 
-(defun jdibug-make-tree-from-field-value (field value string)
+(defun jdibug-make-tree-from-field-value (field value)
   (let ((display (format "%s%s: %s" 
 						 (if (or (jdi-field-static-p field) (jdi-field-final-p field))
 							 (format "(%s%s) " 
@@ -621,7 +616,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 									 (if (jdi-field-final-p field) "F" ""))
 						   "")
 						 (jdi-field-name field)
-						 string)))
+						 (jdibug-value-get-string value))))
 	(if (jdi-value-has-children-p value)
 		`(tree-widget
 		  :node (push-button
