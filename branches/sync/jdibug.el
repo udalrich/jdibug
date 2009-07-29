@@ -115,39 +115,42 @@ jdibug-source-paths will be ignored if this is set to t."
 (require 'elog)
 (require 'jdi)
 (require 'tree-mode)
-(require 'cont)
 
 (elog-make-logger jdibug)
 
-(defstruct jdibug
-  virtual-machines ;; list of jdi-virtual-machine
+(defvar jdibug-virtual-machines nil
+  "list of jdi-virtual-machine")
 
-  ;; the jdi-frame that
-  ;; 1. we are looking at in the locals browser
-  ;; 2. we have selected in the frames buffer
-  ;; 3. our resume, step commands will go to
-  active-frame
-  active-thread
+(defvar jdibug-active-frame nil
+  "the jdi-frame that
+1. we are looking at in the locals browser
+2. we have selected in the frames buffer
+3. our resume, step commands will go to")
 
-  suspended-frames
+(defvar jdibug-active-thread nil
+  "the thread that is suspended")
 
-  current-line-overlay
-  threads-tree 
-  threads-buffer
+(defvar jdibug-current-line-overlay nil)
 
-  breakpoints ;; list of jdibug-breakpoint
-  breakpoints-buffer
+(defvar jdibug-threads-tree nil)
 
-  ;; buffer the shows a tree of the local variables
-  locals-buffer
-  ;; the variable that hold the tree-widget of the locals buffer
-  locals-tree
+(defvar jdibug-threads-buffer nil)
 
-  frames-buffer
-  frames-tree
+(defvar jdibug-breakpoints nil
+  "list of jdibug-breakpoint")
 
-  refresh-timer
-  )
+(defvar jdibug-breakpoints-buffer nil)
+
+(defvar jdibug-locals-buffer nil
+  "buffer the shows a tree of the local variables")
+
+(defvar jdibug-locals-tree nil
+  "the variable that hold the tree-widget of the locals buffer")
+
+(defvar jdibug-frames-buffer nil)
+(defvar jdibug-frames-tree nil)
+
+(defvar jdibug-refresh-timer nil)
 
 (defstruct jdibug-breakpoint
   source-file
@@ -164,10 +167,6 @@ jdibug-source-paths will be ignored if this is set to t."
   (let ((buf (jdibug-breakpoint-source-file bp)))
 	(setf buf (replace-regexp-in-string ".*/" "" buf))
 	buf))
-
-(makunbound 'jdibug-this)
-(defvar jdibug-this (make-jdibug)
-  "The current instance of jdibug, we can only have one jdibug running.")
 
 (defvar jdibug-current-message "")
 
@@ -201,16 +200,16 @@ jdibug-source-paths will be ignored if this is set to t."
 
   (jdibug-message "JDIbug connecting... ")
 
-  (setf (jdibug-threads-buffer jdibug-this)     (get-buffer-create jdibug-threads-buffer-name)
-		(jdibug-locals-buffer jdibug-this)      (get-buffer-create jdibug-locals-buffer-name)
-		(jdibug-frames-buffer jdibug-this)      (get-buffer-create jdibug-frames-buffer-name)
-		(jdibug-breakpoints-buffer jdibug-this) (get-buffer-create jdibug-breakpoints-buffer-name))
+  (setf jdibug-threads-buffer     (get-buffer-create jdibug-threads-buffer-name)
+		jdibug-locals-buffer      (get-buffer-create jdibug-locals-buffer-name)
+		jdibug-frames-buffer      (get-buffer-create jdibug-frames-buffer-name)
+		jdibug-breakpoints-buffer (get-buffer-create jdibug-breakpoints-buffer-name))
 
-  (with-current-buffer (jdibug-breakpoints-buffer jdibug-this)
+  (with-current-buffer jdibug-breakpoints-buffer
 	(use-local-map jdibug-breakpoints-mode-map)
 	(toggle-read-only 1))
 
-  (setf (jdibug-virtual-machines jdibug-this)
+  (setq jdibug-virtual-machines 
 		(mapcar (lambda (connect-host-and-port)
 				  (let* ((host (nth 0 (split-string connect-host-and-port ":")))
 						 (port (string-to-number (nth 1 (split-string connect-host-and-port ":"))))
@@ -221,11 +220,11 @@ jdibug-source-paths will be ignored if this is set to t."
 					  vm)))
 				jdibug-connect-hosts))
 
-  (let* ((bps (jdibug-breakpoints jdibug-this))
+  (let* ((bps jdibug-breakpoints)
 		 (signatures (loop for bp in bps
 						   collect (jdibug-source-file-to-class-signature
 									(jdibug-breakpoint-source-file bp)))))
-	(setf (jdibug-breakpoints jdibug-this) nil)
+	(setq jdibug-breakpoints nil)
 	(mapcar 'jdibug-set-breakpoint bps)
 
 	(run-hooks 'jdibug-connected-hook)
@@ -234,25 +233,25 @@ jdibug-source-paths will be ignored if this is set to t."
 (defun jdibug-disconnect ()
   (interactive)
   (jdibug-trace "jdibug-disconnect")
-  (if (jdibug-current-line-overlay jdibug-this)
-	  (delete-overlay (jdibug-current-line-overlay jdibug-this)))
+  (if jdibug-current-line-overlay
+	  (delete-overlay jdibug-current-line-overlay))
   (mapc (lambda (bp) 
 		  (if (jdibug-breakpoint-overlay bp)
 			  (delete-overlay (jdibug-breakpoint-overlay bp))))
-		(jdibug-breakpoints jdibug-this))
+		jdibug-breakpoints)
 
-  (and (timerp (jdibug-refresh-timer jdibug-this))
-	   (cancel-timer (jdibug-refresh-timer jdibug-this)))
+  (and (timerp jdibug-refresh-timer)
+	   (cancel-timer jdibug-refresh-timer))
 
-  (kill-buffer (jdibug-locals-buffer jdibug-this))
-  (kill-buffer (jdibug-frames-buffer jdibug-this))
-  (setf (jdibug-locals-tree             jdibug-this) nil
-		(jdibug-locals-buffer           jdibug-this) nil
+  (kill-buffer jdibug-locals-buffer)
+  (kill-buffer jdibug-frames-buffer)
+  (setq jdibug-locals-tree    nil
+		jdibug-locals-buffer  nil
 
-		(jdibug-frames-tree             jdibug-this) nil
-		(jdibug-frames-buffer           jdibug-this) nil
+		jdibug-frames-tree    nil
+		jdibug-frames-buffer  nil
 
-		(jdibug-active-frame            jdibug-this) nil)
+		jdibug-active-frame   nil)
 
   (jdibug-message "JDIbug disconnecting... ")
   (mapc (lambda (vm)
@@ -261,8 +260,8 @@ jdibug-source-paths will be ignored if this is set to t."
 								  (jdi-virtual-machine-port vm)) t)
 		  (jdi-virtual-machine-disconnect vm)
 		  (jdibug-message "(disconnected) " t))
-		(jdibug-virtual-machines jdibug-this))
-  (setf (jdibug-virtual-machines jdibug-this) nil)
+		jdibug-virtual-machines)
+  (setq jdibug-virtual-machines nil)
   (run-hooks 'jdibug-detached-hook))
 
 (defun jdibug-have-class-source-p (class)
@@ -286,7 +285,7 @@ jdibug-source-paths will be ignored if this is set to t."
 	(select-frame frame)
 	(select-window window)))
 
-(defun jdibug-show-file-and-line-number (jdibug file-name line-number &optional highlight)
+(defun jdibug-show-file-and-line-number (file-name line-number &optional highlight)
   "Show the buffer containing the file, or open the file if there are no open buffer for this file.
 And position the point at the line number."
   (jdibug-debug "jdibug-show-file-and-line-number:%s:%s" file-name line-number)
@@ -322,15 +321,14 @@ And position the point at the line number."
   (jdibug-debug "jdibug-goto-location")
   (let ((signature (jdi-class-get-signature (jdi-location-class location))))
 	(let ((line-number (jdi-location-get-line-number location)))
-	  (jdibug-show-file-and-line-number jdibug-this
-										(jdibug-class-signature-to-source-file signature)
+	  (jdibug-show-file-and-line-number (jdibug-class-signature-to-source-file signature)
 										line-number
 										t))))
 
 (defun jdibug-handle-breakpoint (thread location)
   (jdibug-debug "jdibug-handle-breakpoint")
 
-  (setf (jdibug-active-thread jdibug-this) thread)
+  (setq jdibug-active-thread thread)
 
   (jdibug-goto-location location)
 
@@ -340,7 +338,7 @@ And position the point at the line number."
 (defun jdibug-handle-step (thread location)
   (jdibug-debug "jdibug-handle-step")
 
-  (setf (jdibug-active-thread jdibug-this) thread)
+  (setq jdibug-active-thread thread)
 
 ;;   (let ((class (gethash class-id (jdi-virtual-machine-classes vm))))
 ;; 	(jdibug-goto-location (jdi-class-find-location class method-id line-code-index)))
@@ -370,14 +368,14 @@ And position the point at the line number."
 ;; 							   (jdi-location-line-code-index (jdi-frame-location frame)))))
   
 (defun jdibug-refresh ()
-  (dolist (buf (list (jdibug-frames-buffer jdibug-this) (jdibug-locals-buffer jdibug-this)))
+  (dolist (buf (list jdibug-frames-buffer jdibug-locals-buffer))
 	(with-current-buffer buf
 	  (let ((inhibit-read-only t))
 		(erase-buffer)
 		(insert "refreshing..."))))
-  (if (jdibug-refresh-timer jdibug-this)
-	  (cancel-timer (jdibug-refresh-timer jdibug-this)))
-  (setf (jdibug-refresh-timer jdibug-this)
+  (if jdibug-refresh-timer
+	  (cancel-timer jdibug-refresh-timer))
+  (setq jdibug-refresh-timer 
 		(jdibug-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-now)))
 
 (defun jdibug-refresh-now ()
@@ -392,21 +390,21 @@ And position the point at the line number."
 
 (defun jdibug-get-active-frame ()
   (jdibug-debug "jdibug-get-active-frame")
-  (if (jdibug-active-frame jdibug-this)
-	  (jdibug-active-frame jdibug-this)
+  (if jdibug-active-frame
+	  jdibug-active-frame
 
-	(let ((suspended-threads (mappend 'jdi-virtual-machine-get-suspended-threads (jdibug-virtual-machines jdibug-this))))
+	(let ((suspended-threads (mappend 'jdi-virtual-machine-get-suspended-threads jdibug-virtual-machines)))
 	  (jdibug-debug "jdibug-get-active-frame:number of suspended-threads:%s" (length suspended-threads))
 	  (if suspended-threads
 		  (let ((frames (jdi-thread-get-frames (car suspended-threads))))
-			(setf (jdibug-active-frame jdibug-this) (car frames))
-			(jdibug-active-frame jdibug-this))
-		(setf (jdibug-active-frame jdibug-this) nil)
+			(setq jdibug-active-frame (car frames))
+			jdibug-active-frame)
+		(setq jdibug-active-frame nil)
 		nil))))
 
 (defun jdibug-handle-class-prepare (class)
   (jdibug-debug "jdibug-handle-class-prepare")
-  (dolist (bp (jdibug-breakpoints jdibug-this))
+  (dolist (bp jdibug-breakpoints)
 	(when (equal (jdibug-breakpoint-source-file bp) (jdibug-class-signature-to-source-file (jdi-class-get-signature class)))
 	  (dolist (location (jdi-class-get-locations-of-line class (jdibug-breakpoint-line-number bp)))
 		(let ((er (jdi-event-request-manager-create-breakpoint (jdi-virtual-machine-event-request-manager (jdi-mirror-virtual-machine class)) location)))
@@ -414,16 +412,16 @@ And position the point at the line number."
 		  (push er (jdibug-breakpoint-event-requests bp))))
 	  (setf (jdibug-breakpoint-status bp) 'enabled)
 	  (jdibug-breakpoint-update bp)
-	  (jdibug-refresh-breakpoints-buffer jdibug-this))))
+	  (jdibug-refresh-breakpoints-buffer))))
 
 (defun jdibug-handle-detach (vm)
   (interactive)
-  (if (jdibug-current-line-overlay jdibug-this)
-	  (delete-overlay (jdibug-current-line-overlay jdibug-this)))
+  (if jdibug-current-line-overlay
+	  (delete-overlay jdibug-current-line-overlay))
   (mapc (lambda (bp) 
 		  (if (jdibug-breakpoint-overlay bp)
 			  (delete-overlay (jdibug-breakpoint-overlay bp))))
-		(jdibug-breakpoints jdibug-this))
+		jdibug-breakpoints)
   (message "JDIbug %s:%s vm detached" (jdi-virtual-machine-host vm) (jdi-virtual-machine-port vm))
   (unless (jdibug-connected-p)
 	(run-hooks 'jdibug-detached-hook)))
@@ -432,11 +430,11 @@ And position the point at the line number."
   (jdibug-debug "jdibug-highlight-current-line:%d:current-buffer=%s" line-number (current-buffer))
   (goto-line line-number)
   (beginning-of-line)
-  (if (jdibug-current-line-overlay jdibug-this)
-      (delete-overlay (jdibug-current-line-overlay jdibug-this)))
-  (setf (jdibug-current-line-overlay jdibug-this) (make-overlay (point) (1+ (line-end-position))))
-  (overlay-put (jdibug-current-line-overlay jdibug-this) 'face 'jdibug-current-line)
-  (overlay-put (jdibug-current-line-overlay jdibug-this) 'priority 10))
+  (if jdibug-current-line-overlay
+      (delete-overlay jdibug-current-line-overlay))
+  (setq jdibug-current-line-overlay (make-overlay (point) (1+ (line-end-position))))
+  (overlay-put jdibug-current-line-overlay 'face 'jdibug-current-line)
+  (overlay-put jdibug-current-line-overlay 'priority 10))
 
 ;;(custom-set-faces '(jdibug-current-line ((t (:foreground "navajo white" :background "DodgerBlue"))) t))
 (defface jdibug-current-line
@@ -471,7 +469,7 @@ And position the point at the line number."
   (jdibug-debug "jdibug-expand-method-node")
   (let ((value (widget-get tree :jdi-value))
 		(method (widget-get tree :jdi-method)))
-	(let ((result-value (jdi-value-invoke-method value (jdibug-active-thread jdibug-this) method nil nil)))
+	(let ((result-value (jdi-value-invoke-method value jdibug-active-thread method nil nil)))
 	  (let ((result-string (jdibug-value-get-string result-value)))
 		(jdibug-debug "running method %s returned %s" (jdi-method-name method) result-string)
 		(list (jdibug-make-tree-from-value "result" result-value result-string))))))
@@ -662,29 +660,29 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	(> (jdi-field-mod-bits o1) (jdi-field-mod-bits o2))))
 
 (defun jdibug-refresh-locals-buffer-now ()
-  (with-current-buffer (jdibug-locals-buffer jdibug-this)
+  (with-current-buffer jdibug-locals-buffer
 	(let ((inhibit-read-only t))
 	  (erase-buffer))
 
   (jdibug-debug "jdibug-refresh-locals-buffer-now:active-thread=%s active-frame=%s" 
-				(if (jdibug-active-thread jdibug-this) "yes" "no")
-				(if (jdibug-active-frame jdibug-this) "yes" "no"))
-  (if (null (jdibug-active-thread jdibug-this))
+				(if jdibug-active-thread "yes" "no")
+				(if jdibug-active-frame "yes" "no"))
+  (if (null jdibug-active-thread)
 	  (insert "Not suspended")
 
-	(if (null (jdibug-active-frame jdibug-this))
-		(setf (jdibug-active-frame jdibug-this) (car (jdi-thread-get-frames (jdibug-active-thread jdibug-this)))))
+	(if (null jdibug-active-frame)
+		(setq jdibug-active-frame (car (jdi-thread-get-frames jdibug-active-thread))))
 													  
 	(jdibug-time-start)
-	(let* ((variables (sort (copy-sequence (jdi-frame-get-visible-variables (jdibug-active-frame jdibug-this))) 'jdibug-variable-sorter))
-		   (values (jdi-frame-get-values (jdibug-active-frame jdibug-this) variables)))
-	  (with-current-buffer (jdibug-locals-buffer jdibug-this)
+	(let* ((variables (sort (copy-sequence (jdi-frame-get-visible-variables jdibug-active-frame)) 'jdibug-variable-sorter))
+		   (values (jdi-frame-get-values jdibug-active-frame variables)))
+	  (with-current-buffer jdibug-locals-buffer
 		(let ((inhibit-read-only t))
 		  (erase-buffer))
-		(setf (jdibug-locals-tree jdibug-this)
+		(setq jdibug-locals-tree
 			  (tree-mode-insert (jdibug-make-locals-tree variables values)))
-		(widget-put (jdibug-locals-tree jdibug-this) :jdibug-opened-path (tree-mode-opened-tree (jdibug-locals-tree jdibug-this)))
-		(jdi-info "current opened tree path:%s" (tree-mode-opened-tree (jdibug-locals-tree jdibug-this)))
+		(widget-put jdibug-locals-tree :jdibug-opened-path (tree-mode-opened-tree jdibug-locals-tree))
+		(jdi-info "current opened tree path:%s" (tree-mode-opened-tree jdibug-locals-tree))
 		(local-set-key "s" 'jdibug-node-tostring)
 		(local-set-key "c" 'jdibug-node-classname))))))
 
@@ -708,7 +706,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	  (jdi-thread-get-frames thread)
 	  (let ((frame (nth frame-index (jdi-thread-frames thread))))
 		(jdibug-debug "after reload frame-id:%s" (jdi-frame-id frame))
-		(setf (jdibug-active-frame jdibug-this) frame)
+		(setq jdibug-active-frame frame)
 
 		(jdibug-handle-change-frame frame)))
 	(jdibug-goto-location (jdi-frame-location frame))))
@@ -800,16 +798,16 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		   :tag "*"
 		   :format "%[%t%]\n")
 	:open t
-	:args ,(mapcar 'jdibug-make-virtual-machine-tree (jdibug-virtual-machines jdibug-this))))
+	:args ,(mapcar 'jdibug-make-virtual-machine-tree jdibug-virtual-machines)))
 
 (defun jdibug-refresh-frames-buffer-now ()
   (jdibug-debug "jdibug-refresh-frames-buffer-now")
-  (with-current-buffer (jdibug-frames-buffer jdibug-this)
+  (with-current-buffer jdibug-frames-buffer
 ;; 	(if (jdibug-frames-tree jdibug-this)
 ;; 		(tree-mode-reflesh-tree (jdibug-frames-tree jdibug-this))
 	  (let ((inhibit-read-only t))
 		(erase-buffer))
-	  (setf (jdibug-frames-tree jdibug-this)
+	  (setq jdibug-frames-tree
 			(tree-mode-insert (jdibug-make-frames-tree)))
 	  (tree-mode)))
 
@@ -829,7 +827,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 													   "()Ljava/lang/String;")))
 										 methods)))
 			(if tostringmethod
-				(let ((result-value (jdi-value-invoke-method value (jdibug-active-thread jdibug-this) tostringmethod nil nil)))
+				(let ((result-value (jdi-value-invoke-method value jdibug-active-thread tostringmethod nil nil)))
 				  (let ((result-string (jdibug-value-get-string-string result-value)))
 					(message "%s" result-string)))
 			  (message "no toString method"))))))))
@@ -897,11 +895,11 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (let ((source-file (jdibug-breakpoint-source-file bp))
 		(line-number (jdibug-breakpoint-line-number bp)))
 	(setf (jdibug-breakpoint-status bp) 'unresolved)
-	(push bp (jdibug-breakpoints jdibug-this))
+	(push bp jdibug-breakpoints)
 	(jdibug-breakpoint-update bp)
 	(jdibug-message "JDIbug setting breakpoint...")
 	(jdibug-time-start)
-	(dolist (vm (jdibug-virtual-machines jdibug-this))
+	(dolist (vm jdibug-virtual-machines)
 	  (if (not (jdibug-file-in-source-paths-p source-file))
 		  (progn
 			(jdibug-message "file is not in source path" t)
@@ -939,9 +937,9 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 
 (defun jdibug-remove-breakpoint (bp)
   (jdibug-disable-breakpoint bp)
-  (setf (jdibug-breakpoints jdibug-this) (delete bp (jdibug-breakpoints jdibug-this)))
+  (setq jdibug-breakpoints (delete bp jdibug-breakpoints))
   (delete-overlay (jdibug-breakpoint-overlay bp))
-  (jdibug-refresh-breakpoints-buffer jdibug-this)
+  (jdibug-refresh-breakpoints-buffer)
   (message "breakpoint removed"))
 
 (defun jdibug-toggle-breakpoint ()
@@ -954,7 +952,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		 (bp (find-if (lambda (bp) 
 						(and (equal (jdibug-breakpoint-source-file bp) source-file)
 							 (equal (jdibug-breakpoint-line-number bp) line-number)))
-					  (jdibug-breakpoints jdibug-this))))
+					  jdibug-breakpoints)))
 	(jdibug-debug "line-number:%s,current-line-text:%s" line-number current-line-text)
 	(cond ((and bp (member (jdibug-breakpoint-status bp) (list 'enabled 'unresolved)))
 		   (jdibug-disable-breakpoint bp))
@@ -972,7 +970,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 
 (defun jdibug-breakpoint-update (bp)
   (jdibug-debug "jdibug-breakpoint-update")
-  (jdibug-refresh-breakpoints-buffer jdibug-this)
+  (jdibug-refresh-breakpoints-buffer)
   (let ((buffer (find-if (lambda (buf)
 						   (string= (buffer-file-name buf) (jdibug-breakpoint-source-file bp)))
 						 (buffer-list))))
@@ -1019,29 +1017,28 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (interactive)
   (let ((bp (get-text-property (point) 'breakpoint)))
 	(if bp
-		(jdibug-show-file-and-line-number jdibug-this
-										  (jdibug-breakpoint-source-file bp)
+		(jdibug-show-file-and-line-number (jdibug-breakpoint-source-file bp)
 										  (jdibug-breakpoint-line-number bp)))))
 
 (defun jdibug-breakpoints-jde-mode-hook ()
   (mapc (lambda (bp)
 		  (jdibug-breakpoint-update bp))
-		(jdibug-breakpoints jdibug-this)))
+		jdibug-breakpoints))
 
 (add-hook 'jde-mode-hook 'jdibug-breakpoints-jde-mode-hook)
 
-(defun jdibug-refresh-breakpoints-buffer (jdibug)
-  (jdibug-debug "jdibug-refresh-breakpoints-buffer:%s breakpoints" (length (jdibug-breakpoints jdibug)))
-  (if (buffer-live-p (jdibug-breakpoints-buffer jdibug))
+(defun jdibug-refresh-breakpoints-buffer ()
+  (jdibug-debug "jdibug-refresh-breakpoints-buffer:%s breakpoints" (length jdibug-breakpoints))
+  (if (buffer-live-p jdibug-breakpoints-buffer)
 	  (let ((orig-line (line-number-at-pos)))
-		(with-current-buffer (jdibug-breakpoints-buffer jdibug)
+		(with-current-buffer jdibug-breakpoints-buffer
 		  (let* ((fmt "%s %-40s %-20s")
 				 (header (format fmt "  S" "File" "Line"))
 				 (inhibit-read-only t))
 			(erase-buffer)
 			(setq header-line-format header)
 			;; the breakpoints are added in reverse order, so in order to display the first one added first, we reverse it here
-			(dolist (bp (reverse (jdibug-breakpoints jdibug)))
+			(dolist (bp (reverse jdibug-breakpoints))
 			  (let ((str (format (concat fmt "\n")
 								 (cond ((equal (jdibug-breakpoint-status bp) 'enabled) " E")
 									   ((equal (jdibug-breakpoint-status bp) 'unresolved) " P")
@@ -1054,23 +1051,17 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 
 (defun jdibug-send-step (depth)
   (jdibug-debug "jdibug-send-step")
-  (mapc (lambda (buffer) 
-		  (with-current-buffer buffer
-			(let ((inhibit-read-only t))
-			  (erase-buffer)
-			  (insert "not suspended"))))
-		(list (jdibug-frames-buffer jdibug-this)))
-  (if (jdibug-current-line-overlay jdibug-this)
-      (delete-overlay (jdibug-current-line-overlay jdibug-this)))
-  (if (null (jdibug-active-thread jdibug-this))
+  (if jdibug-current-line-overlay
+      (delete-overlay jdibug-current-line-overlay))
+  (if (null jdibug-active-thread)
       (message "JDIbug Can not step. Not suspended.")
-	(let ((active-thread (jdibug-active-thread jdibug-this)))
+	(let ((active-thread jdibug-active-thread))
 	  ;; we can not clear the active-thread after calling send-step
 	  ;; because the send-step command is going to trigger the 
 	  ;; handle-step command first, and then return here
 	  ;; and we will be clearing it again
-	  (setf (jdibug-active-thread jdibug-this) nil)
-	  (setf (jdibug-active-frame jdibug-this) nil)
+	  (setq jdibug-active-thread nil)
+	  (setq jdibug-active-frame nil)
 	  (jdi-thread-send-step active-thread depth)
 	  (jdibug-debug "jdibug-send-step:end"))))
 
@@ -1088,32 +1079,12 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 
 (defun jdibug-resume ()
   (interactive)
-  (mapc (lambda (buffer) 
-		  (with-current-buffer buffer
-			(let ((inhibit-read-only t))
-			  (erase-buffer)
-			  (insert "not suspended"))))
-		(list (jdibug-frames-buffer jdibug-this)))
-  (if (jdibug-current-line-overlay jdibug-this)
-      (delete-overlay (jdibug-current-line-overlay jdibug-this)))
-  (jdi-thread-resume (jdi-frame-thread (jdibug-active-frame jdibug-this)))
+  (if jdibug-current-line-overlay
+      (delete-overlay jdibug-current-line-overlay))
+  (jdi-thread-resume (jdi-frame-thread jdibug-active-frame))
   (run-hooks 'jdibug-resumed-hook)
 
-  (setf (jdibug-suspended-frames jdibug-this) 
-		(remove-if (lambda (obj)
-					 (and (equal (jdi-thread-id (jdi-frame-thread obj))
-								 (jdi-thread-id (jdi-frame-thread (jdibug-active-frame jdibug-this))))
-						  (equal (jdi-location-class-id (jdi-frame-location obj))
-								 (jdi-location-class-id (jdi-frame-location (jdibug-active-frame jdibug-this))))
-						  (equal (jdi-location-method-id (jdi-frame-location obj))
-								 (jdi-location-method-id (jdi-frame-location (jdibug-active-frame jdibug-this))))
-						  (equal (jdi-location-line-code-index (jdi-frame-location obj))
-								 (jdi-location-line-code-index (jdi-frame-location (jdibug-active-frame jdibug-this))))))
-																					  
-				   (jdibug-suspended-frames jdibug-this)))
-  (setf (jdibug-active-frame jdibug-this) (car (jdibug-suspended-frames jdibug-this)))
-
-  (when (jdibug-active-frame jdibug-this)
+  (when jdibug-active-frame
 	(jdibug-refresh))
 ;; 	(if (jdibug-refresh-timer jdibug-this)
 ;; 		(cancel-timer (jdibug-refresh-timer jdibug-this)))
@@ -1137,7 +1108,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 			  (if (and proc
 					   (equal (process-status proc) 'open))
 				  (incf connected))))
-		  (jdibug-virtual-machines jdibug-this))
+		  jdibug-virtual-machines)
 	(jdibug-debug "connected = %s" connected)
 	(if (equal connected 0)
 		nil
@@ -1260,7 +1231,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 				   (setter2 (if setter (cadr setter))))
 			  (jdibug-debug "jdibug-value-get-string-object: value=%s found-setter:%s" (jdi-value-value value) setter)
 			  (cond ((stringp setter2)
-					 (jdibug-value-custom-set-string-with-method value (jdibug-active-thread jdibug-this) setter2))
+					 (jdibug-value-custom-set-string-with-method value jdibug-active-thread setter2))
 					((functionp setter2)
 					 (funcall setter2 value))
 					(t
@@ -1357,7 +1328,7 @@ to populate the jdi-value-values of the jdi-value.")
 	(if (null size-method)
 		(format "%s[nosize]" (jdi-class-name class))
 
-	  (let ((result-value (jdi-value-invoke-method value (jdibug-active-thread jdibug-this) size-method nil nil)))
+	  (let ((result-value (jdi-value-invoke-method value jdibug-active-thread size-method nil nil)))
 		(format "%s[%s]" (jdi-class-name class) (jdi-value-value result-value))))))
 
 (defun jdibug-value-custom-expand-collection (value)
