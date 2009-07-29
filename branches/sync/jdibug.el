@@ -590,6 +590,16 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (let ((value (widget-get tree :jdi-value)))
 	(jdibug-debug "jdibug-value-expander:type=%s" (jdi-value-type value))
 	(jdibug-time-start)
+
+	;; call the custom expander here, so that the custom expander can 
+	;; make a ArrayList look like an array by changing the value-type
+	(let* ((expander (find-if (lambda (custom)
+								(jdi-value-instance-of-p value (jdi-class-name-to-class-signature (car custom))))
+							  jdibug-value-custom-expanders))
+		   (expander2 (if expander (cadr expander))))
+	  (if expander2
+		  (funcall expander2 value)))
+
 	(cond ((= (jdi-value-type value) jdwp-tag-object)
 		   (let* ((class (jdi-value-get-class value))
 				  (fields (sort (copy-sequence (jdi-class-get-all-fields class)) 'jdibug-field-sorter))
@@ -1218,25 +1228,20 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 				(jdi-value-type value) (jdi-value-value value))
   (if (equal (jdi-value-value value) [0 0 0 0 0 0 0 0])
 	  "null"
-	(let ((class (jdi-value-get-class value)))
-	  (let ((supers (jdi-class-get-all-super class)))
-		(let ((interfaces (jdi-class-get-all-interfaces class)))
-		  (let ((signatures (mapcar 'jdi-class-get-signature (cons class (append supers interfaces)))))
-			(jdibug-debug "jdibug-value-get-string-object: value=%s super-signatures=%s" (jdi-value-value value) signatures)
-			(let* ((setter (find-if (lambda (custom)
-									  (member (jdi-class-name-to-class-signature (car custom)) signatures))
-									jdibug-value-custom-set-strings))
-				   (setter2 (if setter (cadr setter))))
-			  (jdibug-debug "jdibug-value-get-string-object: value=%s found-setter:%s" (jdi-value-value value) setter)
-			  (cond ((stringp setter2)
-					 (jdibug-value-custom-set-string-with-method value jdibug-active-thread setter2))
-					((functionp setter2)
-					 (funcall setter2 value))
-					(t
-					 (let ((signature (jdi-class-get-signature class)))
-					   (format "%s (id=%s)" 
-							   (jdi-class-name class)
-							   (jdwp-vec-to-int (jdi-value-value value)))))))))))))
+
+	(let* ((setter (find-if (lambda (custom)
+							  (jdi-value-instance-of-p value (jdi-class-name-to-class-signature (car custom))))
+							jdibug-value-custom-set-strings))
+		   (setter2 (if setter (cadr setter))))
+	  (jdibug-debug "jdibug-value-get-string-object: value=%s found-setter:%s" (jdi-value-value value) setter)
+	  (cond ((stringp setter2)
+			 (jdibug-value-custom-set-string-with-method value jdibug-active-thread setter2))
+			((functionp setter2)
+			 (funcall setter2 value))
+			(t
+			 (format "%s (id=%s)" 
+					 (jdi-class-name (jdi-value-get-class value))
+					 (jdwp-vec-to-int (jdi-value-value value))))))))
 
 (defun jdibug-value-get-string-array (value)
   (jdibug-debug "jdibug-value-get-string-array")
@@ -1330,12 +1335,16 @@ to populate the jdi-value-values of the jdi-value.")
 		(format "%s[%s]" (jdi-class-name class) (jdi-value-value result-value))))))
 
 (defun jdibug-value-custom-expand-collection (value)
-  (jdi-debug "jdibug-value-custom-expand-collection"))
-;;   (multiple-value-bind (reply error jdwp id)
-;; 	  (jdi-value-invoke-method value "toArray" nil)
-;; 	(let ((array-value (bindat-get-field reply :return-value :u :value)))
-;; 	  (setf (jdi-value-value value) array-value)
-;; 	  (jdi-value-array-get-values value))))
+  (jdi-debug "jdibug-value-custom-expand-collection")
+  (let* ((class (jdi-value-get-class value))
+		 (toarray-method (find-if (lambda (obj)
+									(equal (jdi-method-name obj)
+										   "toArray"))
+								  (jdi-class-get-methods class))))
+	(when toarray-method
+	  (let ((result-value (jdi-value-invoke-method value jdibug-active-thread toarray-method nil nil)))
+		(setf (jdi-value-type value) jdwp-tag-array
+			  (jdi-value-value value) (jdi-value-value result-value))))))
 
 (defun jdibug-value-custom-expand-map (value)
   (jdi-debug "jdibug-value-custom-expand-collection"))

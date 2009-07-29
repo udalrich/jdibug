@@ -1058,15 +1058,11 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 
 (defun jdi-value-instance-of-p (value signature)
   (jdi-debug "jdi-value-instance-of-p")
-  (let ((class (jdi-value-get-class value)))
-	(if (null class)
-		nil
-
-	  (let ((supers (jdi-class-get-all-super class)))
-		(let ((super-signatures (mapcar 'jdi-class-get-signature supers)))
-		  (find-if (lambda (super-signature)
-					 (string= signature super-signature))
-				   super-signatures))))))
+  (let* ((class (jdi-value-get-class value))
+		 (supers (jdi-class-get-all-super class))
+		 (interfaces (jdi-class-get-all-interfaces class))
+		 (signatures (mapcar 'jdi-class-get-signature (cons class (append supers interfaces)))))
+	(member signature signatures)))
 
 (defun jdi-value-extract-generic-class-name (generic-signature)
   (string-match "<L.*/\\(.*\\);>" generic-signature)
