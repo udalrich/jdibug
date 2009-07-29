@@ -782,7 +782,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 
 (defun jdibug-make-virtual-machine-tree (vm)
   `(tree-widget
-    :value ,(format "%s:%s" (jdi-virtual-machine-host vm) (jdi-virtual-machine-port vm))
+    :value ,(format "%s [%s:%s]" (jdi-virtual-machine-name vm) (jdi-virtual-machine-host vm) (jdi-virtual-machine-port vm))
     :open t
 	:args nil
 	:jdi-virtual-machine ,vm
@@ -793,7 +793,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (jdibug-debug "jdibug-make-frames-tree")
   `(tree-widget
 	:node (push-button
-		   :tag "*"
+		   :tag "Debuggees"
 		   :format "%[%t%]\n")
 	:open t
 	:args ,(mapcar 'jdibug-make-virtual-machine-tree jdibug-virtual-machines)))

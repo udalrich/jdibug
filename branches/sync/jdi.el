@@ -9,6 +9,12 @@
 (defstruct jdi-virtual-machine
   jdwp
 
+  description
+  jdwp-major
+  jdwp-minor
+  version
+  name
+
   (event-request-manager (make-jdi-event-request-manager))
   host 
   port
@@ -223,6 +229,12 @@
   (when (jdwp-connect (jdi-virtual-machine-jdwp vm) (jdi-virtual-machine-host vm) (jdi-virtual-machine-port vm))
 	(jdwp-put (jdi-virtual-machine-jdwp vm) 'jdi-virtual-machine vm)
 	(let ((reply (jdwp-send-command (jdi-virtual-machine-jdwp vm) "version" nil)))
+	  (setf (jdi-virtual-machine-description vm) (jdwp-get-string reply :description)
+			(jdi-virtual-machine-jdwp-major vm)  (bindat-get-field reply :jdwp-major)
+			(jdi-virtual-machine-jdwp-minor vm)  (bindat-get-field reply :jdwp-minor)
+			(jdi-virtual-machine-version vm)  (jdwp-get-string reply :vm-version)
+			(jdi-virtual-machine-name vm)     (jdwp-get-string reply :vm-name))
+
 	  (jdi-trace "description: \n%s" (jdwp-get-string reply :description))
 	  (jdi-trace "major      : %s"   (bindat-get-field reply :jdwp-major))
 	  (jdi-trace "minor      : %s"   (bindat-get-field reply :jdwp-minor))
