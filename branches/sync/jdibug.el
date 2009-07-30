@@ -343,9 +343,6 @@ And position the point at the line number."
 
   (setq jdibug-active-thread thread)
 
-;;   (let ((class (gethash class-id (jdi-virtual-machine-classes vm))))
-;; 	(jdibug-goto-location (jdi-class-find-location class method-id line-code-index)))
-
   (jdibug-goto-location location)
 
   (jdibug-refresh))
@@ -355,16 +352,6 @@ And position the point at the line number."
 
   (jdibug-goto-location (jdi-frame-location frame))
   (jdibug-refresh))
-;;   (if (jdibug-refresh-timer jdibug-this)
-;; 	  (cancel-timer (jdibug-refresh-timer jdibug-this)))
-;;   (setf (jdibug-refresh-timer jdibug-this)
-;; 		(jdibug-run-with-timer jdibug-refresh-delay nil 
-;; 							   'jdibug-refresh-now 
-;; 							   (jdi-mirror-virtual-machine frame)
-;; 							   (jdi-thread-id (jdi-frame-thread frame))
-;; 							   (jdi-class-id (jdi-location-class (jdi-frame-location frame)))
-;; 							   (jdi-method-id (jdi-location-method (jdi-frame-location frame)))
-;; 							   (jdi-location-line-code-index (jdi-frame-location frame)))))
   
 (defun jdibug-refresh ()
   (dolist (buf (list jdibug-frames-buffer jdibug-locals-buffer))
