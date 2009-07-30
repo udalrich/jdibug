@@ -460,6 +460,15 @@
 	(let ((reply (jdwp-send-command (jdi-mirror-jdwp class) "signature" `((:ref-type . ,(jdi-class-id class))))))
 	  (setf (jdi-class-signature class) (jdwp-get-string reply :signature)))))
 
+(defun jdi-method-get-signature (method)
+  (jdi-debug "jdi-method-get-signature")
+  (if (jdi-method-signature method)
+	  (jdi-method-signature method)
+	(setf (jdi-method-signature method)
+		  (jdi-method-signature (find-if (lambda (obj)
+										   (equal (jdi-method-id method) (jdi-method-id obj)))
+										 (jdi-class-get-methods (jdi-method-class method)))))))
+
 (defun jdi-method-get-locations (method)
   (jdi-debug "jdi-method-get-locations:class=%s method=%s" (jdi-class-signature (jdi-method-class method)) (jdi-method-name method))
   (if (or (jdi-method-locations method)
@@ -697,6 +706,74 @@
 			 (setq class-name (replace-regexp-in-string ".*/" "" class-name))
 			 (setq class-name (replace-regexp-in-string ";" "" class-name))))
 	  class-name)))
+
+(defun jdi-jni-to-print (sig &optional short)
+  "Convert a string of JNI signature to list of printable characters.
+
+If second parameter short is true, it will only return the class name instead of the
+fully qualified class name.
+
+For method-type, the return type is returned as the first element of the list.
+
+Implemented according to
+http://java.sun.com/j2se/1.5.0/docs/guide/jni/spec/types.html#wp428"
+  (let ((array-count 0)
+		result)
+	(while (> (length sig) 0)
+	  (let ((first (substring sig 0 1)))
+		(cond ((string= first "Z") (push "boolean" result) (setq sig (substring sig 1)))
+			  ((string= first "B") (push "byte"    result) (setq sig (substring sig 1)))
+			  ((string= first "C") (push "char"    result) (setq sig (substring sig 1)))
+			  ((string= first "S") (push "short"   result) (setq sig (substring sig 1)))
+			  ((string= first "I") (push "int"     result) (setq sig (substring sig 1)))
+			  ((string= first "J") (push "long"    result) (setq sig (substring sig 1)))
+			  ((string= first "F") (push "float"   result) (setq sig (substring sig 1)))
+			  ((string= first "D") (push "double"  result) (setq sig (substring sig 1)))
+			  ((string= first "V") (push "void"    result) (setq sig (substring sig 1)))
+			  ((string= first "L") 
+			   (let ((end (string-match ";" sig)))
+				 (unless end
+				   (error "jni class without ;"))
+				 (push (if short
+						   (replace-regexp-in-string ".*/" "" (substring sig 1 end))
+						 (replace-regexp-in-string "/" "." (substring sig 1 end)))
+					   result)
+				 (setq sig (substring sig (1+ end)))))
+
+			  ;; for array type, we will process it later, so handling of multiple dimension
+			  ;; array will be easier
+			  ((string= first "[") (incf array-count)      (setq sig (substring sig 1)))
+
+			  ((string= first "(") 
+			   (let ((end (string-match ")" sig)))
+				 (unless end
+				   (error "jni method without )"))
+				 ;; we will just move the return type to the front and remove the parenthesis
+				 (let ((return-type (substring sig (1+ end)))
+					   (without-paren (substring sig 1 end)))
+				   (setq sig (concat return-type without-paren)))))
+									
+			  (t (error "invalid jni signature:%s" first)))
+
+		;; append [] at the end of arrays
+		(unless (or (string= first "[")
+					(= array-count 0))
+		  (let ((lasttype (car result)))
+			(dotimes (i array-count)
+			  (setq lasttype (concat lasttype "[]")))
+			(setq array-count 0)
+			(setq result (cons lasttype (cdr result)))))))
+	(reverse result)))
+
+(eval-when-compile
+  (assert (equal (jdi-jni-to-print "ZBCSIJFD") (list "boolean" "byte" "char" "short" "int" "long" "float" "double")))
+  (assert (equal (jdi-jni-to-print "Ljava/lang/String;") (list "java.lang.String")))
+  (assert (equal (jdi-jni-to-print "[I") (list "int[]")))
+  (assert (equal (jdi-jni-to-print "[[I") (list "int[][]")))
+  (assert (equal (jdi-jni-to-print "[[Ljava/lang/String;") (list "java.lang.String[][]")))
+  (assert (equal (jdi-jni-to-print "[[Ljava/lang/String;" t) (list "String[][]")))
+  (assert (equal (jdi-jni-to-print "(I)J") (list "long" "int")))
+  (assert (equal (jdi-jni-to-print "(ILjava/lang/String;[I)J" t) (list "long" "int" "String" "int[]"))))
 
 (defun jdi-class-get-name (class)
   (let ((signature (jdi-class-get-signature class)))

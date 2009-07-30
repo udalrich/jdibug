@@ -709,31 +709,24 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		(jdibug-handle-change-frame frame)))
 	(jdibug-goto-location (jdi-frame-location frame))))
 
-(defun jdibug-make-frame-value (frame)
-  (jdibug-debug "jdibug-make-frame-value:frame-id=%s:class-id=%s:method-id=%s" 
-				(jdi-frame-id frame)
-				(jdi-class-id (jdi-location-class (jdi-frame-location frame)))
-				(jdi-method-id (jdi-location-method (jdi-frame-location frame))))
-  (let ((class-name (jdi-class-get-name (jdi-location-class (jdi-frame-location frame)))))
-	(let ((method-name (jdi-method-get-name (jdi-location-method (jdi-frame-location frame)))))
-	  (let ((line-number (jdi-location-get-line-number (jdi-frame-location frame))))
-		(format "%s.%s:%s" class-name method-name line-number)))))
-
 (defun jdibug-make-frame-node (frame)
   (jdibug-debug "jdibug-make-frame-node:frame-id=%s" (jdi-frame-id frame))
-  (let ((has-class-source (jdibug-have-class-source-p (jdi-location-class (jdi-frame-location frame)))))
-	(let ((value (jdibug-make-frame-value frame)))
-	  (let ((active-frame (jdibug-get-active-frame)))
-		(jdibug-info "jdibug-make-frame-node:frame-id=%s:active-frame-id=%s" (jdi-frame-id frame) (jdi-frame-id active-frame))
-		(if has-class-source
-			`(push-button
-			  :value ,value
-			  :jdi-frame ,frame
-			  :button-face ,(if (equal (jdi-frame-id frame) (jdi-frame-id active-frame)) 'jdibug-current-frame)
-			  :notify jdibug-frame-notify
-			  :format "%[%t%]\n")
-		  `(item 
-			:value ,value))))))
+  (let* ((location (jdi-frame-location frame))
+		 (value (format "%s.%s(%s) line: %s" 
+						(jdi-class-get-name (jdi-location-class location))
+						(jdi-method-get-name (jdi-location-method location))
+						(mapconcat 'identity (cdr (jdi-jni-to-print (jdi-method-get-signature (jdi-location-method location)) t)) ", ")
+						(jdi-location-get-line-number location))))
+	(jdibug-info "jdibug-make-frame-node:frame-id=%s:active-frame-id=%s" (jdi-frame-id frame) (jdi-frame-id jdibug-active-frame))
+	(if (jdibug-have-class-source-p (jdi-location-class (jdi-frame-location frame)))
+		`(push-button
+		  :value ,value
+		  :jdi-frame ,frame
+		  :button-face ,(if (equal (jdi-frame-id frame) (jdi-frame-id jdibug-active-frame)) 'jdibug-current-frame)
+		  :notify jdibug-frame-notify
+		  :format "%[%t%]\n")
+	  `(item 
+		:value ,value))))
   
 (defun jdibug-make-thread-value (thread)
   (jdibug-debug "jdibug-make-thread-value")
