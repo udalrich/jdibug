@@ -354,11 +354,11 @@ And position the point at the line number."
   (jdibug-refresh))
   
 (defun jdibug-refresh ()
-  (dolist (buf (list jdibug-frames-buffer jdibug-locals-buffer))
-	(with-current-buffer buf
-	  (let ((inhibit-read-only t))
-		(erase-buffer)
-		(insert "refreshing..."))))
+;;   (dolist (buf (list jdibug-frames-buffer jdibug-locals-buffer))
+;; 	(with-current-buffer buf
+;; 	  (let ((inhibit-read-only t))
+;; 		(erase-buffer)
+;; 		(insert "refreshing..."))))
   (if jdibug-refresh-timer
 	  (cancel-timer jdibug-refresh-timer))
   (setq jdibug-refresh-timer 
