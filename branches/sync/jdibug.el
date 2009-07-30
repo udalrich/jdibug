@@ -353,11 +353,7 @@ And position the point at the line number."
 (defun jdibug-handle-change-frame (frame)
   (jdibug-debug "jdibug-handle-change-frame")
 
-  (jdibug-goto-location (jdi-class-find-location (gethash (jdi-location-class-id (jdi-frame-location frame)) 
-														  (jdi-virtual-machine-classes (jdi-mirror-virtual-machine frame)))
-												 (jdi-location-method-id (jdi-frame-location frame))
-												 (jdi-location-line-code-index (jdi-frame-location frame))))
-
+  (jdibug-goto-location (jdi-frame-location frame))
   (jdibug-refresh))
 ;;   (if (jdibug-refresh-timer jdibug-this)
 ;; 	  (cancel-timer (jdibug-refresh-timer jdibug-this)))
