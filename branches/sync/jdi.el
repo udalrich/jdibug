@@ -700,12 +700,7 @@
   (if (null class-or-signature)
 	  "null"
 	(let* ((class-name (if (stringp class-or-signature) class-or-signature (jdi-class-signature class-or-signature))))
-	  (cond ((string= class-name "I")
-			 (setq class-name "int"))
-			(t
-			 (setq class-name (replace-regexp-in-string ".*/" "" class-name))
-			 (setq class-name (replace-regexp-in-string ";" "" class-name))))
-	  class-name)))
+	  (car (jdi-jni-to-print class-name t)))))
 
 (defun jdi-jni-to-print (sig &optional short)
   "Convert a string of JNI signature to list of printable characters.
