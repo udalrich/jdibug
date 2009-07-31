@@ -72,12 +72,19 @@
   server
   port)
 
-(defstruct jdwp-request
-  name
-  data
-  command-data
-  ;; list of continuations
-  conts)
+(defstruct jdwp-packet
+  length
+  id
+  flags
+
+  data)
+
+(defstruct (jdwp-packet-reply (:include jdwp-packet))
+  error)
+
+(defstruct (jdwp-packet-command (:include jdwp-packet))
+  command-set
+  command)
 
 ;;; Constants:
 (defconst jdwp-event-single-step         1)
@@ -209,12 +216,11 @@
 		(:flags      u8)))
 
 (setq jdwp-command-spec
-      '((:length     u32)
-		(:id         u32)
-		(:flags      u8)
-		(:commandset u8)
-		(:command    u8)
-		(:outdata   vec (eval (- (bindat-get-field struct :length) 11)))))
+      '((:length      u32)
+		(:id          u32)
+		(:flags       u8)
+		(:command-set u8)
+		(:command     u8)))
 
 (setq jdwp-reply-spec
       '((:length     u32)
@@ -280,9 +286,9 @@
 				(,jdwp-tag-class-loader (:value vec (eval jdwp-object-id-size)))
 				(,jdwp-tag-class-object (:value vec (eval jdwp-object-id-size))))))
 
-(setq jdwp-arrayregion-spec
-      '((:type    u8)
-		(:length  u32)))
+(defconst jdwp-arrayregion-header-spec
+  '((:type    u8)
+	(:length  u32)))
 
 (defun jdwp-unpack-arrayregion (jdwp packet)
   (jdwp-trace "jdwp-unpack-arrayregion:%s" (jdwp-string-to-hex packet))
@@ -309,7 +315,7 @@
 
 (setq jdwp-protocol
       `((:name         "version"
-					   :commandset   1 
+					   :command-set   1 
 					   :command      1
 					   :command-spec nil
 					   :reply-spec   ((:description   struct jdwp-string-spec)
@@ -318,7 +324,7 @@
 									  (:vm-version    struct jdwp-string-spec)
 									  (:vm-name       struct jdwp-string-spec)))
 		(:name         "classes-by-signature"
-					   :commandset   1
+					   :command-set   1
 					   :command      2
 					   :command-spec ((:signature     struct jdwp-string-spec))
 					   :reply-spec   ((:classes       u32)
@@ -327,7 +333,7 @@
 													  (:type-id      vec (eval jdwp-reference-type-id-size))
 													  (:status       u32))))
 		(:name         "all-classes"
-					   :commandset   1
+					   :command-set   1
 					   :command      3
 					   :command-spec nil
 					   :reply-spec   ((:classes       u32)
@@ -337,26 +343,26 @@
 													  (:signature    struct jdwp-string-spec)
 													  (:status       u32))))
 		(:name         "all-threads"
-					   :commandset   1
+					   :command-set   1
 					   :command      4
 					   :command-spec nil
 					   :reply-spec   ((:threads       u32)
 									  (:thread        repeat (:threads)
 													  (:id   vec (eval jdwp-object-id-size)))))
 		(:name         "top-level-thread-groups"
-					   :commandset   1
+					   :command-set   1
 					   :command      5
 					   :command-spec nil
 					   :reply-spec   ((:groups        u32)
 									  (:group         repeat (:group)
 													  (:id   vec (eval jdwp-object-id-size)))))
 		(:name         "dispose"
-					   :commandset   1
+					   :command-set   1
 					   :command      6
 					   :command-spec nil
 					   :reply-spec   nil)
 		(:name         "id-sizes"
-					   :commandset   1
+					   :command-set   1
 					   :command      7
 					   :command-spec nil
 					   :reply-spec   ((:field-id-size          u32)
@@ -365,17 +371,17 @@
 									  (:reference-type-id-size u32)
 									  (:frame-id-size          u32)))
 		(:name         "suspend"
-					   :commandset   1
+					   :command-set   1
 					   :command      8
 					   :command-spec nil
 					   :reply-spec   nil)
 		(:name         "resume"
-					   :commandset   1
+					   :command-set   1
 					   :command      9
 					   :command-spec nil
 					   :reply-spec   nil)
 		(:name         "capabilities-new"
-					   :commandset   1
+					   :command-set   1
 					   :command      17
 					   :command-spec nil
 					   :reply-spec   ((:can-watch-field-modification      u8)
@@ -394,7 +400,7 @@
 									  (:can-request-vm-death-event        u8)
 									  (:can-set-default-stratum           u8)))
 		(:name         "all-classes-with-generic"
-					   :commandset   1
+					   :command-set   1
 					   :command      20
 					   :command-spec nil
 					   :reply-spec   ((:classes       u32)
@@ -405,17 +411,17 @@
 													  (:generic-signature    struct jdwp-string-spec)
 													  (:status       u32))))
 		(:name         "signature"
-					   :commandset   2
+					   :command-set   2
 					   :command      1
 					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
 					   :reply-spec   ((:signature     struct jdwp-string-spec)))
 		(:name         "class-loader"
-					   :commandset   2
+					   :command-set   2
 					   :command      2
 					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
 					   :reply-spec   ((:class-loader  vec (eval jdwp-object-id-size))))
 		(:name         "fields"
-					   :commandset   2
+					   :command-set   2
 					   :command      4
 					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
 					   :reply-spec   ((:declared      u32)
@@ -425,7 +431,7 @@
 													  (:signature struct jdwp-string-spec)
 													  (:mod-bits  u32))))
 		(:name         "methods"
-					   :commandset   2
+					   :command-set   2
 					   :command      5
 					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
 					   :reply-spec   ((:methods       u32)
@@ -435,7 +441,7 @@
 													  (:signature      struct jdwp-string-spec)
 													  (:mod-bits       u32))))
 		(:name         "reference-get-values"
-					   :commandset   2
+					   :command-set   2
 					   :command      6
 					   :command-spec ((:ref-type     vec (eval jdwp-object-id-size))
 									  (:fields        u32)
@@ -445,24 +451,24 @@
 									  (:value         repeat (:values)
 													  (:value struct jdwp-value-spec))))
 		(:name         "source-file"
-					   :commandset   2
+					   :command-set   2
 					   :command      7
 					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
 					   :reply-spec   ((:source-file   struct jdwp-string-spec)))
 		(:name         "interfaces"
-					   :commandset   2
+					   :command-set   2
 					   :command      10
 					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
 					   :reply-spec   ((:interfaces    u32)
 									  (:interface     repeat (:interfaces)
 													  (:type   vec (eval jdwp-reference-type-id-size)))))
 		(:name         "class-object"
-					   :commandset   2
+					   :command-set   2
 					   :command      11
 					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
 					   :reply-spec   ((:class-object  vec (eval jdwp-object-id-size))))
 		(:name         "fields-with-generic"
-					   :commandset   2
+					   :command-set   2
 					   :command      14
 					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
 					   :reply-spec   ((:declared      u32)
@@ -473,12 +479,12 @@
 													  (:generic-signature struct jdwp-string-spec)
 													  (:mod-bits  u32))))
 		(:name         "superclass"
-					   :commandset   3
+					   :command-set   3
 					   :command      1
 					   :command-spec ((:class         vec (eval jdwp-reference-type-id-size)))
 					   :reply-spec   ((:superclass    vec (eval jdwp-reference-type-id-size))))
 		(:name         "class-invoke-method"
-					   :commandset   3
+					   :command-set   3
 					   :command      3
 					   :command-spec ((:class         vec (eval jdwp-reference-type-id-size))
 									  (:thread        vec (eval jdwp-object-id-size))
@@ -491,7 +497,7 @@
 									  (:exception-type   u8)
 									  (:exception-object vec (eval jdwp-object-id-size))))
 		(:name         "line-table"
-					   :commandset   6
+					   :command-set   6
 					   :command      1
 					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size))
 									  (:method-id     vec (eval jdwp-method-id-size)))
@@ -502,7 +508,7 @@
 													  (:line-code-index vec 8)
 													  (:line-number     u32))))
 		(:name         "variable-table"
-					   :commandset   6
+					   :command-set   6
 					   :command      2
 					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size))
 									  (:method-id     vec (eval jdwp-method-id-size)))
@@ -515,7 +521,7 @@
 													  (:length        u32)
 													  (:slot          u32))))
 		(:name         "variable-table-with-generic"
-					   :commandset   6
+					   :command-set   6
 					   :command      5
 					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size))
 									  (:method-id     vec (eval jdwp-method-id-size)))
@@ -529,13 +535,13 @@
 													  (:length        u32)
 													  (:slot          u32))))
 		(:name         "reference-type"
-					   :commandset   9
+					   :command-set   9
 					   :command      1
 					   :command-spec ((:object        vec (eval jdwp-object-id-size)))
 					   :reply-spec   ((:ref-type-tag  u8)
 									  (:type-id       vec (eval jdwp-object-id-size))))
 		(:name         "object-get-values"
-					   :commandset   9
+					   :command-set   9
 					   :command      2
 					   :command-spec ((:object        vec (eval jdwp-object-id-size))
 									  (:fields        u32)
@@ -545,7 +551,7 @@
 									  (:value         repeat (:values)
 													  (:value struct jdwp-value-spec))))
 		(:name         "object-invoke-method"
-					   :commandset   9
+					   :command-set   9
 					   :command      6
 					   :command-spec ((:object        vec (eval jdwp-object-id-size))
 									  (:thread        vec (eval jdwp-object-id-size))
@@ -559,33 +565,33 @@
 									  (:exception-type   u8)
 									  (:exception-object vec (eval jdwp-object-id-size))))
 		(:name         "string-value"
-					   :commandset   10
+					   :command-set   10
 					   :command      1
 					   :command-spec ((:object        vec (eval jdwp-object-id-size)))
 					   :reply-spec   ((:value         struct jdwp-string-spec)))
 		(:name         "thread-name"
-					   :commandset   11
+					   :command-set   11
 					   :command      1
 					   :command-spec ((:thread        vec (eval jdwp-object-id-size)))
 					   :reply-spec   ((:thread-name   struct jdwp-string-spec)))
 		(:name         "thread-resume"
-					   :commandset   11
+					   :command-set   11
 					   :command      3
 					   :command-spec ((:thread        vec (eval jdwp-object-id-size)))
 					   :reply-spec   nil)
 		(:name         "thread-status"
-					   :commandset   11
+					   :command-set   11
 					   :command      4
 					   :command-spec ((:thread         vec (eval jdwp-object-id-size)))
 					   :reply-spec   ((:thread-status  u32)
 									  (:suspend-status u32)))
 		(:name         "thread-group"
-					   :commandset   11
+					   :command-set   11
 					   :command      5
 					   :command-spec ((:thread         vec (eval jdwp-object-id-size)))
 					   :reply-spec   ((:group          vec (eval jdwp-object-id-size))))
 		(:name         "frames"
-					   :commandset   11
+					   :command-set   11
 					   :command      6
 					   :command-spec ((:thread         vec (eval jdwp-object-id-size))
 									  (:start-frame    u32)
@@ -595,22 +601,22 @@
 													   (:id       vec (eval jdwp-frame-id-size))
 													   (:location struct jdwp-location-spec))))
 		(:name         "frame-count"
-					   :commandset   11
+					   :command-set   11
 					   :command      7
 					   :command-spec ((:thread         vec (eval jdwp-object-id-size)))
 					   :reply-spec   ((:frame-count    u32)))
 		(:name         "thread-group-name"
-					   :commandset   12
+					   :command-set   12
 					   :command      1
 					   :command-spec ((:group         vec (eval jdwp-object-id-size)))
 					   :reply-spec   ((:group-name    struct jdwp-string-spec)))
 		(:name         "thread-group-parent"
-					   :commandset   12
+					   :command-set   12
 					   :command      2
 					   :command-spec ((:group         vec (eval jdwp-object-id-size)))
 					   :reply-spec   ((:parent-group  vec (eval jdwp-object-id-size))))
 		(:name         "thread-group-children"
-					   :commandset   12
+					   :command-set   12
 					   :command      3
 					   :command-spec ((:group         vec (eval jdwp-object-id-size)))
 					   :reply-spec   ((:child-threads u32)
@@ -620,19 +626,19 @@
 									  (:child-group   repeat (:child-groups)
 													  (:child-group    vec (eval jdwp-object-id-size)))))
 		(:name         "array-length"
-					   :commandset   13
+					   :command-set   13
 					   :command      1
 					   :command-spec ((:array-object  vec (eval jdwp-object-id-size)))
 					   :reply-spec   ((:array-length  u32)))
 		(:name         "array-get-values"
-					   :commandset   13
+					   :command-set   13
 					   :command      2
 					   :command-spec ((:array-object  vec (eval jdwp-object-id-size))
 									  (:first-index   u32)
 									  (:length        u32))
 					   :reply-spec   nil)
 		(:name         "set"
-					   :commandset   15
+					   :command-set   15
 					   :command      1
 					   :command-spec ((:event-kind     u8)
 									  (:suspend-policy u8)
@@ -651,13 +657,13 @@
 																		   (:depth    u32)))))
 					   :reply-spec   ((:request-id    u32)))
 		(:name         "clear"
-					   :commandset   15
+					   :command-set   15
 					   :command      2
 					   :command-spec ((:event         u8)
 									  (:request-id    u32))
 					   :reply-spec   nil)
 		(:name         "stack-get-values"
-					   :commandset   16
+					   :command-set   16
 					   :command      1
 					   :command-spec ((:thread        vec (eval jdwp-object-id-size))
 									  (:frame         vec (eval jdwp-frame-id-size))
@@ -692,21 +698,25 @@
 
 (defun jdwp-process-filter (process string)
   (jdwp-debug "jdwp-process-filter")
-  (jdwp-ordinary-insertion-filter process string)
-  (let ((jdwp (process-get process 'jdwp))
-		(packet))
-	(while (setq packet (jdwp-get-packet jdwp))
-	  (if (jdwp-reply-packet-p packet)
-		  ;; reply packet
-		  (progn
-			(jdwp-debug "jdwp-process-filter:reply packet")
-			(setf (jdwp-current-reply jdwp) packet))
+  (condition-case err
+	  (progn
+		(jdwp-ordinary-insertion-filter process string)
+		(let ((jdwp (process-get process 'jdwp))
+			  packet)
+		  (while (setq packet (jdwp-packet-unpack (jdwp-residual-output jdwp)))
+			(jdwp-consume-output jdwp (jdwp-packet-length packet))
+			(jdwp-debug "jdwp-process-filter received packet:type=%s" (type-of packet))
+			(if (jdwp-packet-reply-p packet)
+				;; reply packet
+				(progn
+				  (jdwp-debug "jdwp-process-filter:reply packet:%s" packet)
+				  (setf (jdwp-current-reply jdwp) packet))
 
-		(jdwp-debug "jdwp-process-filter:command-packet")
-		;; command packet
-		(jdwp-process-command jdwp packet)
-		;;			  (jdwp-process-command jdwp packet)
-		(jdwp-trace "received command packet")))))
+			  (jdwp-debug "jdwp-process-filter:command-packet")
+			  ;; command packet
+			  (jdwp-process-command jdwp packet)
+			  (jdwp-trace "received command packet")))))
+	(error (jdwp-error "jdwp-process-filter:%s" err))))
 
 (defun jdwp-process-id-sizes (jdwp reply)
   (setf (jdwp-field-id-size jdwp) (bindat-get-field reply :field-id-size))
@@ -775,32 +785,31 @@
 		 (jdwp-frame-id-size          (jdwp-frame-id-size          ,jdwp)))
      ,@body))
 
-(defun jdwp-process-reply (jdwp str command-data)
+(defun jdwp-process-reply (jdwp packet command-data)
   (jdwp-debug "jdwp-process-reply")
   (jdwp-with-size 
     jdwp
-    (let* ((packet       (bindat-unpack jdwp-reply-spec (substring str 0 11)))
-		   (id           (bindat-get-field packet :id))
-		   (error        (bindat-get-field packet :error))
+    (let* ((id           (jdwp-packet-id packet))
+		   (error        (jdwp-packet-reply-error packet))
 		   (protocol     (jdwp-get-protocol (cdr (assoc :name command-data))))
 		   (reply-spec   (getf protocol :reply-spec)))
 	  (jdwp-trace "jdwp-process-reply packet-header:%s" packet)
       (if (not (= error 0))
 		  (progn
 			(jdwp-error "jdwp-process-reply: received error:%d:%s for id:%d command:%s" error (jdwp-error-string error) id (getf protocol :name))
-			(error error))
+			(error "%s" error))
 		(if reply-spec
-			(let ((reply-data   (bindat-unpack reply-spec str 11)))
+			(let ((reply-data   (bindat-unpack reply-spec (jdwp-packet-data packet))))
 			  (jdwp-info "jdwp-process-reply:id:%5s command:[%20s] time:%-6s len:%5s error:%1d" 
 						 id 
 						 (getf protocol :name)
 						 (float-time (time-subtract (current-time) (cdr (assoc :sent-time command-data))))
-						 (bindat-get-field packet :length) 
-						 (bindat-get-field packet :error))
+						 (jdwp-packet-length packet)
+						 error)
 			  (jdwp-trace "reply-data:%s" (elog-trim reply-data 100))
 			  reply-data)
 		  ;; special case for array, we return the string so the caller can call unpack-arrayregion
-		  (substring str 11))))))
+		  (jdwp-packet-data packet))))))
 
 (defvar jdwp-event-hooks nil)
 
@@ -810,41 +819,28 @@
 (defvar jdwp-input-pending nil
   "The symbol that will be thrown when jdwp-throw-on-input-pending is non-nil and there's input pending")
 
-(defun jdwp-process-command (jdwp str)
+(defun jdwp-process-command (jdwp packet)
   (jdwp-debug "jdwp-process-command")
   (jdwp-with-size 
     jdwp
-    (let* ((packet        (bindat-unpack jdwp-command-spec str))
-		   (commandset    (bindat-get-field packet :commandset))
-		   (command       (bindat-get-field packet :command))
-		   (id            (bindat-get-field packet :id))
-		   (flags         (bindat-get-field packet :flags)))
-      (if (and (= commandset 64) (= command 100))
-		  (let* ((packet          (bindat-unpack jdwp-event-spec str 11))
+    (let ((command-set    (jdwp-packet-command-command-set packet))
+		  (command       (jdwp-packet-command-command packet))
+		  (id            (jdwp-packet-id packet))
+		  (flags         (jdwp-packet-flags packet)))
+      (if (and (= command-set 64) (= command 100))
+		  (let* ((packet          (bindat-unpack jdwp-event-spec (jdwp-packet-data packet)))
 				 (suspend-policy  (bindat-get-field packet :suspend-policy))
 				 (events          (bindat-get-field packet :events)))
 			(jdwp-debug "event suspend-policy:%d events:%d" suspend-policy events)
 			(jdwp-trace "event:%s" (bindat-get-field packet :event))
 			(dolist (event (bindat-get-field packet :event))
 			  (run-hook-with-args 'jdwp-event-hooks jdwp event)))
-		(jdwp-error "do not know how to handle commandset %d command %d" commandset command)))))
+		(jdwp-error "do not know how to handle command-set %d command %d" command-set command)))))
 
 (defun jdwp-reply-packet-p (str)
   (let* ((packet (bindat-unpack jdwp-packet-spec str))
 		 (flags (bindat-get-field packet :flags)))
 	(= flags #x80)))
-
-(defun jdwp-get-packet (jdwp)
-  (jdwp-debug "jdwp-get-packet")
-  (let ((packet nil)
-		(total-length (jdwp-output-length jdwp))
-		(first-packet-length (jdwp-output-first-packet-length jdwp)))
-	(jdwp-debug "jdwp-get-packet total-length=%s first-packet-length=%s" total-length first-packet-length)
-	(when (and (>= total-length 11)
-			   (>= total-length first-packet-length))
-	  (setq packet (substring (jdwp-residual-output jdwp) 0 first-packet-length))
-	  (jdwp-consume-output jdwp first-packet-length))
-	packet))
 
 (defun jdwp-ordinary-insertion-filter (proc string)
   (with-current-buffer (process-buffer proc)
@@ -970,7 +966,7 @@
 	  (let* ((protocol     (jdwp-get-protocol name))
 			 (reply-spec   (getf protocol :reply-spec))
 			 (command-spec (getf protocol :command-spec))
-			 (commandset   (getf protocol :commandset))
+			 (command-set   (getf protocol :command-set))
 			 (command      (getf protocol :command))
 			 (outdata      (jdwp-bindat-pack command-spec data))
 			 (id           (jdwp-get-next-id jdwp))
@@ -978,12 +974,10 @@
 							 (:length      . ,(+ 11 (length outdata)))
 							 (:id          . ,id)
 							 (:flags       . 0)
-							 (:commandset  . ,commandset)
+							 (:command-set  . ,command-set)
 							 (:command     . ,command)
-							 (:data        . ,data)
-							 (:outdata     . ,outdata)
 							 (:sent-time   . ,(if jdwp-info-flag (current-time) 0))))
-			 (command-packed (jdwp-bindat-pack jdwp-command-spec command-data)))
+			 (command-packed (concat (jdwp-bindat-pack jdwp-command-spec command-data) outdata)))
 		(jdwp-info "sending command [%-20s] id:%-4d len:%-4d data:%s" 
 				   name 
 				   id 
@@ -995,11 +989,15 @@
 		(jdwp-debug "data:%s" data)
 		(let ((inhibit-eol-conversion t))
 		  (setf (jdwp-current-reply jdwp) nil)
+		  (jdwp-debug "command-packed:%s" (jdwp-string-to-hex command-packed))
 		  (jdwp-process-send-string jdwp command-packed)
 		  (jdwp-process-reply jdwp 
 							  (jdwp-receive-message (jdwp-process jdwp)
 													(lambda ()
-													  (jdwp-current-reply jdwp)))
+													  (if (and (jdwp-current-reply jdwp)
+															   (= (jdwp-packet-id (jdwp-current-reply jdwp)) id))
+														  (jdwp-current-reply jdwp)
+														(setf (jdwp-current-reply jdwp) nil))))
 							  command-data))))))
 
 (defun jdwp-receive-message (proc func)
@@ -1013,10 +1011,7 @@
 		  (if result
 			  (throw 'done result)
 			(if (and jdwp-throw-on-input-pending (input-pending-p))
-				(progn
-				  (with-current-buffer (process-buffer proc)
-					(erase-buffer))
-				  (throw 'jdwp-input-pending nil)))
+				(throw 'jdwp-input-pending nil))
 			(if (> (float-time) timeout)
 				(error "timed out"))))))))
 
@@ -1054,6 +1049,38 @@
 				  (:count    . 1))))))
     (jdwp-send-command jdwp "set" data)))
 
+(defconst jdwp-packet-header-size 11)
+(defconst jdwp-packet-reply-flag #x80)
+
+(defun jdwp-packet-unpack (string)
+  "Returns a jdwp-packet if there's enough information, nil if short.
+
+This method does not consume the packet, the caller can know by checking jdwp-packet-length of the returned packet for the size."
+  (jdwp-debug "jdwp-packet-unpack")
+  (let ((string-length (length string)))
+	(when (>= string-length jdwp-packet-header-size)
+	  (let ((packet-length (bindat-get-field (bindat-unpack '((:length u32)) string) :length)))
+		(when (>= string-length packet-length)
+		  (jdwp-debug "jdwp-packet-unpack: found full packet:%s" (jdwp-string-to-hex string))
+		  (let ((packet-flags (string-to-char (substring string 8))))
+			(jdwp-debug "jdwp-packet-unpack: packet-flags=%s" packet-flags)
+			(if (= packet-flags jdwp-packet-reply-flag)
+				(let ((unpacked (bindat-unpack jdwp-reply-spec (substring string 0 jdwp-packet-header-size))))
+				  (jdwp-debug "jdwp-packet-unpack: returning jdwp-packet-reply")
+				  (make-jdwp-packet-reply :length (bindat-get-field unpacked :length)
+										  :id     (bindat-get-field unpacked :id)
+										  :flags  (bindat-get-field unpacked :flags)
+										  :error  (bindat-get-field unpacked :error)
+										  :data   (substring string jdwp-packet-header-size)))
+			  (let ((unpacked (bindat-unpack jdwp-command-spec (substring string 0 jdwp-packet-header-size))))
+				(jdwp-debug "jdwp-packet-unpack: returning jdwp-packet-command")
+				(make-jdwp-packet-command :length      (bindat-get-field unpacked :length)
+										  :id          (bindat-get-field unpacked :id)
+										  :flags       (bindat-get-field unpacked :flags)
+										  :command     (bindat-get-field unpacked :command)
+										  :command-set (bindat-get-field unpacked :command-set)
+										  :data        (substring string jdwp-packet-header-size))))))))))
+				
 (provide 'jdwp)
 
 ;;; jdwp.el ends here
