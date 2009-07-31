@@ -36,6 +36,7 @@
   id
   ;; jni-style
   signature 
+  generic-signature
   ref-type-tag
   status
   ;; list of jdi-field
@@ -450,8 +451,21 @@
   (jdi-debug "jdi-class-get-signature")
   (if (jdi-class-signature class)
 	  (jdi-class-signature class)
-	(let ((reply (jdwp-send-command (jdi-mirror-jdwp class) "signature" `((:ref-type . ,(jdi-class-id class))))))
-	  (setf (jdi-class-signature class) (jdwp-get-string reply :signature)))))
+	(let ((reply (jdwp-send-command (jdi-mirror-jdwp class) (if (jdi-virtual-machine-have-generic-p (jdi-mirror-virtual-machine class))
+																"signature-with-generic"
+															  "signature")
+									`((:ref-type . ,(jdi-class-id class))))))
+	  (setf (jdi-class-generic-signature class) (jdwp-get-string reply :generic-signature)
+			(jdi-class-signature class) (jdwp-get-string reply :signature)))))
+
+(defun jdi-class-get-generic-signature (class)
+  (jdi-debug "jdi-class-get-generic-signature")
+  (when (jdi-virtual-machine-have-generic-p (jdi-mirror-virtual-machine class))
+	(if (jdi-class-generic-signature class)
+		(jdi-class-generic-signature class)
+	  (let ((reply (jdwp-send-command (jdi-mirror-jdwp class) "signature-with-generic" `((:ref-type . ,(jdi-class-id class))))))
+		(setf (jdi-class-signature class) (jdwp-get-string reply :signature)
+			  (jdi-class-generic-signature class) (jdwp-get-string reply :generic-signature))))))
 
 (defun jdi-method-get-signature (method)
   (jdi-debug "jdi-method-get-signature")
@@ -679,12 +693,31 @@
 (defun jdi-value-object-p (value)
   (equal (jdi-value-type value) jdwp-tag-object))
 
-(defun jdi-class-name (class-or-signature)
+(defun jdi-generic-signature-to-print (generic-signature)
+  (setq generic-signature (replace-regexp-in-string "^<" "" generic-signature))
+  (setq generic-signature (replace-regexp-in-string ">.*$" "" generic-signature))
+  (setq generic-signature (replace-regexp-in-string "L[^;]*;" "" generic-signature))
+  (setq generic-signature (replace-regexp-in-string ":$" "" generic-signature))
+  (setq generic-signature (replace-regexp-in-string ":" "," generic-signature))
+  generic-signature)
+
+(eval-when-compile
+  (assert (equal (jdi-generic-signature-to-print "<K:Ljava/lang/Object;V:Ljava/lang/Object;>Ljava/util/AbstractMap<TK;TV;>;Ljava/util/Map<TK;TV;>;Ljava/lang/Cloneable;Ljava/io/Serializable;") "K,V"))
+  (assert (equal (jdi-generic-signature-to-print "<E:Ljava/lang/Object;>Ljava/util/AbstractList<TE;>;Ljava/util/List<TE;>;Ljava/util/RandomAccess;Ljava/lang/Cloneable;Ljava/io/Serializable;") "E")))
+
+(defun jdi-class-name (class)
   (jdi-debug "jdi-class-name")
-  (if (null class-or-signature)
+  (if (null class)
 	  "null"
-	(let* ((class-name (if (stringp class-or-signature) class-or-signature (jdi-class-signature class-or-signature))))
-	  (car (jdi-jni-to-print class-name t)))))
+	(let ((signature (jdi-class-get-signature class))
+		  (generic-signature (jdi-class-get-generic-signature class)))
+	  (jdi-debug "jdi-class-name:signature=%s:generic-signature=%s" signature generic-signature)
+	  (format "%s%s" 
+			  (car (jdi-jni-to-print signature t))
+			  (if (> (length generic-signature) 0)
+				  (format "<%s>" (jdi-generic-signature-to-print generic-signature))
+				"")))))
+
 
 (defun jdi-jni-to-print (sig &optional short)
   "Convert a string of JNI signature to list of printable characters.
@@ -754,10 +787,6 @@ http://java.sun.com/j2se/1.5.0/docs/guide/jni/spec/types.html#wp428"
   (assert (equal (jdi-jni-to-print "(I)J") (list "long" "int")))
   (assert (equal (jdi-jni-to-print "(ILjava/lang/String;[I)J" t) (list "long" "int" "String" "int[]"))))
 
-(defun jdi-class-get-name (class)
-  (let ((signature (jdi-class-get-signature class)))
-	(jdi-class-name signature)))
-
 (defun jdi-value-get-class (value)
   "populate the jdi-value-class field"
   (jdi-debug "jdi-value-get-class:type=%s value=%s" (jdi-value-type value) (jdi-value-value value))
@@ -776,19 +805,12 @@ http://java.sun.com/j2se/1.5.0/docs/guide/jni/spec/types.html#wp428"
 
 (defun jdi-value-array-display-string (value size)
   "for array of three dimension, return i[2][][]."
-  (let ((class (jdi-value-get-class value)))
-	(let ((signature (jdi-class-get-signature class)))
-	  (let ((sig (string-to-list signature))
-			(suffix ""))
-		(pop sig)
-		(loop while (equal (car sig) jdwp-tag-array)
-			  do
-			  (setf suffix (concat suffix "[]"))
-			  (pop sig))
-		(format "%s[%s]%s" 
-				(jdi-class-name (concat sig))
-				size
-				suffix)))))
+  (let* ((class-name (jdi-class-name (jdi-value-get-class value))) ;; this will be i[][][]
+		 (pos (string-match "\\]" class-name))) ;; just find the first closing bracket and insert the size before that
+	(format "%s%s%s"
+			(substring class-name 0 pos)
+			size
+			(substring class-name pos))))
 
 (defun jdi-value-get-array-length (value)
   (jdi-debug "jdi-value-get-array-length:%s" (jdi-value-value value))
