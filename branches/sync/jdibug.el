@@ -787,6 +787,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	  (let ((active-frame-point (jdibug-point-of-active-frame)))
 		(when active-frame-point 
 		  (goto-char active-frame-point)
+		  (set-window-point (get-buffer-window jdibug-frames-buffer t) (point))
 		  (forward-line -1)
 		  (set-window-start (get-buffer-window jdibug-frames-buffer t) (point))))))
 
@@ -1109,6 +1110,8 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 
   (other-window 1)
   (switch-to-buffer jdibug-frames-buffer-name)
+  (setq truncate-lines t)
+  (setq truncate-partial-width-windows t)
   (set-window-dedicated-p (get-buffer-window (current-buffer)) t)
   (split-window-horizontally)
   (other-window 1)
