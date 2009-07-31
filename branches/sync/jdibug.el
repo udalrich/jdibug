@@ -783,7 +783,12 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		(erase-buffer))
 	  (setq jdibug-frames-tree
 			(tree-mode-insert (jdibug-make-frames-tree)))
-	  (tree-mode)))
+	  (tree-mode)
+	  (let ((active-frame-point (jdibug-point-of-active-frame)))
+		(when active-frame-point 
+		  (goto-char active-frame-point)
+		  (forward-line -1)
+		  (set-window-start (get-buffer-window jdibug-frames-buffer t) (point))))))
 
 (defun jdibug-node-tostring ()
   (interactive)
@@ -1333,6 +1338,20 @@ to populate the jdi-value-values of the jdi-value.")
 
 			  (jdi-value-get-all-fields value))))))))
 
+(defun jdibug-point-of-active-frame ()
+  (catch 'done
+	(with-current-buffer jdibug-frames-buffer
+	  (goto-char (point-min))
+	  (while (not (eobp))
+		(let ((plist (overlays-at (point)))
+			  (next-change
+			   (or (next-overlay-change (point))
+				   (point-max))))
+		  (dolist (overlay (overlays-at next-change))
+			(when (eq (overlay-get overlay 'face) 'jdibug-current-frame)
+			  (throw 'done next-change)))
+		  (goto-char next-change))))))
+
 (provide 'jdibug)
 
 (defun jdibug-signal-hook (error-symbol data)
@@ -1342,6 +1361,7 @@ to populate the jdi-value-values of the jdi-value.")
 (defun jdibug-run-with-timer (secs repeat function &rest args)
   (apply 'run-with-timer secs repeat (lambda (function &rest args)
 									   (setq signal-hook-function 'jdibug-signal-hook)
-									   (apply function args)
-									   (setq signal-hook-function nil)) 
+									   (unwind-protect 
+										   (apply function args)
+										 (setq signal-hook-function nil)))
 		 function args))
