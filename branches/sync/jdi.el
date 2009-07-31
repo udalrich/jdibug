@@ -91,7 +91,6 @@
   id)
 
 (defstruct (jdi-thread (:include jdi-object))
-  name
   status
   suspend-status
   frames
@@ -320,11 +319,7 @@
 
 (defun jdi-thread-get-name (thread)
   (jdi-debug "jdi-thread-get-name")
-  (let ((reply (jdwp-send-command (jdi-mirror-jdwp thread) "thread-name" `((:thread . ,(jdi-thread-id thread))))))
-	(setf (jdi-thread-name thread)
-		  (jdwp-get-string reply :thread-name))
-	(jdi-debug "thread-name=%s" (jdi-thread-name thread))
-	(jdi-thread-name thread)))
+  (jdwp-get-string (jdwp-send-command (jdi-mirror-jdwp thread) "thread-name" `((:thread . ,(jdi-thread-id thread)))) :thread-name))
 
 (defun jdi-thread-get-status (thread)
   (jdi-debug "jdi-thread-get-status")
