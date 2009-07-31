@@ -467,6 +467,12 @@
 					   :command      11
 					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
 					   :reply-spec   ((:class-object  vec (eval jdwp-object-id-size))))
+		(:name         "signature-with-generic"
+					   :command-set   2
+					   :command      13
+					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
+					   :reply-spec   ((:signature     struct jdwp-string-spec)
+									  (:generic-signature struct jdwp-string-spec)))
 		(:name         "fields-with-generic"
 					   :command-set   2
 					   :command      14
