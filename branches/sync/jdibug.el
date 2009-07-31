@@ -181,17 +181,9 @@ jdibug-source-paths will be ignored if this is set to t."
 (add-hook 'jdi-detached-hooks 'jdibug-handle-detach)
 (add-hook 'jdi-class-prepare-hooks 'jdibug-handle-class-prepare)
 
-(defvar jdibug-start-time nil)
-
-(defun jdibug-time-start ()
-  (setf jdibug-start-time (current-time)))
-
 (unless (fboundp 'mappend)
   (defun mappend (fn &rest lsts)
 	(apply 'append (apply 'mapcar fn lsts))))
-
-(defun jdibug-time-end (message)
-  (jdibug-info "benchmark: %s took %s seconds" message (float-time (time-subtract (current-time) jdibug-start-time))))
 
 (defun jdibug-connect ()
   (interactive)
@@ -537,7 +529,6 @@ And position the point at the line number."
 If tree has attribute :dynargs, generate new :args from that function.
 Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (jdibug-debug "jdibug-tree-mode-reflesh-tree")
-  (jdibug-time-start)
   (unless tree
 	(jdibug-error "tree is null!"))
   (let ((path (or (jdibug-tree-mode-find-child-path tree (widget-get tree :jdibug-opened-path))
@@ -551,13 +542,11 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	(jdibug-debug "before widget-value-set")
     (widget-value-set tree (widget-value tree))
 	(jdibug-debug "before tree-mode-open-tree")
-    (tree-mode-open-tree tree path)
-	(jdibug-time-end "jdibug-tree-mode-reflesh-tree")))
+    (tree-mode-open-tree tree path)))
 
 (defun jdibug-value-expander (tree)
   (let ((value (widget-get tree :jdi-value)))
 	(jdibug-debug "jdibug-value-expander:type=%s" (jdi-value-type value))
-	(jdibug-time-start)
 
 	;; call the custom expander here, so that the custom expander can 
 	;; make a ArrayList look like an array by changing the value-type
@@ -577,7 +566,6 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		 (fields (sort (copy-sequence (jdi-class-get-all-fields class)) 'jdibug-field-sorter))
 		 (values (jdi-value-get-values value fields)))
 	(jdibug-debug "jdibug-value-expander got %s values" (length values))
-	(jdibug-time-end "expanded")
 	(append (loop for v in values
 				  for f in fields
 				  collect (jdibug-make-tree-from-field-value f v))
@@ -654,7 +642,6 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	(if (null jdibug-active-frame)
 		(setq jdibug-active-frame (car (jdi-thread-get-frames jdibug-active-thread))))
 													  
-	(jdibug-time-start)
 	(let* ((variables (sort (copy-sequence (jdi-frame-get-visible-variables jdibug-active-frame)) 'jdibug-variable-sorter))
 		   (values (jdi-frame-get-values jdibug-active-frame variables)))
 	  (with-current-buffer jdibug-locals-buffer
@@ -743,14 +730,9 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 
 (defun jdibug-make-threads-tree (tree)
   (jdibug-debug "jdibug-make-threads-tree")
-  (jdibug-time-start)
   (let ((vm (widget-get tree :jdi-virtual-machine)))
 	(let ((threads (jdi-virtual-machine-get-threads vm)))
-	  (jdibug-time-end "jdi-virtual-machine-get-threads")
-	  (jdibug-time-start)
 	  (let ((system-threads-p (mapcar 'jdi-thread-get-system-thread-p threads)))
-		(jdibug-time-end "mapcar jdi-therad-get-system-thread-p")
-		(jdibug-time-start)
 		(jdibug-debug "jdibug-make-threads-tree:system-threads-p:%s" system-threads-p)
 		(mapcar 'jdibug-make-thread-tree (loop for thread in threads
 											   for system-thread-p in system-threads-p
@@ -878,7 +860,6 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	(push bp jdibug-breakpoints)
 	(jdibug-breakpoint-update bp)
 	(jdibug-message "JDIbug setting breakpoint...")
-	(jdibug-time-start)
 	(dolist (vm jdibug-virtual-machines)
 	  (if (not (jdibug-file-in-source-paths-p source-file))
 		  (progn

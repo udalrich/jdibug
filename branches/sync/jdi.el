@@ -249,9 +249,7 @@
   (jdi-debug "jdi-virtual-machine-get-threads")
   (if (jdi-virtual-machine-threads vm)
  	  (jdi-virtual-machine-threads vm)
-	(jdi-time-start)
 	(let ((reply (jdwp-send-command (jdi-virtual-machine-jdwp vm) "all-threads" nil)))
-	  (jdi-time-end "jdi-virtual-machine-get-threads:all-threads")
 	  (jdi-debug "number of threads:%s" (bindat-get-field reply :threads))
 	  (setf (jdi-virtual-machine-threads vm)
 			(loop for thread in (bindat-get-field reply :thread)
@@ -500,19 +498,10 @@
 									   (jdi-method-id method)))
 							  methods))))
 
-(defvar jdi-start-time nil)
-
-(defun jdi-time-start ()
-  (setf jdi-start-time (current-time)))
-
-(defun jdi-time-end (message)
-  (jdi-info "benchmark: %s took %s seconds" message (float-time (time-subtract (current-time) jdi-start-time))))
-
 (defun jdi-virtual-machine-set-breakpoint (vm signature line)
   "Set breakpoint and return a list of jdi-event-request"
 
   (jdi-debug "jdi-virtual-machine-set-breakpoint:signature=%s:line=%s" signature line)
-  (jdi-time-start)
   (let ((result))
 	(dolist (class (jdi-virtual-machine-get-classes-by-signature vm signature))
 	  (dolist (location (jdi-class-get-locations-of-line class line))
