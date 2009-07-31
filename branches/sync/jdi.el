@@ -1122,7 +1122,7 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 (defun jdi-handle-vm-death (jdwp event)
   (jdi-debug "jdi-handle-vm-death")
   (let ((vm (jdwp-get jdwp 'jdi-virtual-machine)))
-	(run-hook-with-args 'jdi-detached-hooks vm)))
+	(if vm (run-hook-with-args 'jdi-detached-hooks vm))))
 
 (defun jdi-class-name-to-class-signature (class-name)
   "Converts a.b.c class name to JNI class signature."
