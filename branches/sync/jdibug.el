@@ -211,20 +211,25 @@ jdibug-source-paths will be ignored if this is set to t."
 						 (port (string-to-number (nth 1 (split-string connect-host-and-port ":"))))
 						 (jdwp (make-jdwp))
 						 (vm (make-jdi-virtual-machine :host host :port port :jdwp jdwp)))
-					(let ((result (jdi-virtual-machine-connect vm)))
-					  (jdibug-message (format "%s:%s(%s)" host port (if result "connected" "failed")) t)
-					  vm)))
+					(jdibug-message (format "%s:%s" host port) t)
+					(condition-case err
+						(progn
+						  (jdi-virtual-machine-connect vm)
+						  (jdibug-message "(connected)" t)
+						  vm)
+					  (file-error (jdibug-message "(failed)" t) nil))))
 				jdibug-connect-hosts))
 
-  (let* ((bps jdibug-breakpoints)
-		 (signatures (loop for bp in bps
-						   collect (jdibug-source-file-to-class-signature
-									(jdibug-breakpoint-source-file bp)))))
-	(setq jdibug-breakpoints nil)
-	(mapcar 'jdibug-set-breakpoint bps)
+  (if (find-if 'identity jdibug-virtual-machines)
+	  (let* ((bps jdibug-breakpoints)
+			 (signatures (loop for bp in bps
+							   collect (jdibug-source-file-to-class-signature
+										(jdibug-breakpoint-source-file bp)))))
+		(setq jdibug-breakpoints nil)
+		(mapcar 'jdibug-set-breakpoint bps)
 
-	(run-hooks 'jdibug-connected-hook)
-	(jdibug-refresh-frames-buffer)))
+		(run-hooks 'jdibug-connected-hook)
+		(jdibug-refresh-frames-buffer))))
   
 (defun jdibug-disconnect ()
   (interactive)
