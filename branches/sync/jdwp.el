@@ -146,6 +146,18 @@
 
 (defconst jdwp-suspend-status-suspended 1)
 
+(defconst jdwp-mod-kind-case-count       1)
+(defconst jdwp-mod-kind-case-conditional 2)
+(defconst jdwp-mod-kind-case-thread-only 3)
+(defconst jdwp-mod-kind-class-only       4)
+(defconst jdwp-mod-kind-class-match      5)
+(defconst jdwp-mod-kind-class-exclude    6)
+(defconst jdwp-mod-kind-location-only    7)
+(defconst jdwp-mod-kind-exception-only   8)
+(defconst jdwp-mod-kind-field-only       9)
+(defconst jdwp-mod-kind-case-step       10)
+(defconst jdwp-mod-kind-instance-only   11)
+
 (setq jdwp-error-constants
       `((0   none                 "No error has occured.")
 		(10  invalid-thread       "Passed thread is null, is not a valid thread or has exited.")
@@ -652,15 +664,15 @@
 									  (:modifier       repeat (:modifiers)
 													   (:mod-kind    u8)
 													   (:u           union (:mod-kind)
-																	 (1    (:count    u32))
-																	 (5    (:class-pattern struct jdwp-string-spec))
-																	 (7    (:location struct jdwp-location-spec))
-																	 (8    (:exception vec (eval jdwp-reference-type-id-size))
-																		   (:caught    u8)
-																		   (:uncaught  u8))
-																	 (10   (:thread   vec (eval jdwp-object-id-size))
-																		   (:size     u32)
-																		   (:depth    u32)))))
+																	 (,jdwp-mod-kind-case-count     (:count    u32))
+																	 (,jdwp-mod-kind-class-match    (:class-pattern struct jdwp-string-spec))
+																	 (,jdwp-mod-kind-location-only  (:location struct jdwp-location-spec))
+																	 (,jdwp-mod-kind-exception-only (:exception vec (eval jdwp-reference-type-id-size))
+																									(:caught    u8)
+																									(:uncaught  u8))
+																	 (,jdwp-mod-kind-case-step      (:thread   vec (eval jdwp-object-id-size))
+																									(:size     u32)
+																									(:depth    u32)))))
 					   :reply-spec   ((:request-id    u32)))
 		(:name         "clear"
 					   :command-set   15
