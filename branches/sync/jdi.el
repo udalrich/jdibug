@@ -90,8 +90,6 @@
   id)
 
 (defstruct (jdi-thread (:include jdi-object))
-  frames
-
   ; jdi-thread-group
   thread-group
   system-thread-p
@@ -566,38 +564,31 @@
   
 (defun jdi-thread-get-frames (thread)
   (jdi-debug "jdi-thread-get-frames")
-  (if (jdi-thread-frames thread)
-	  (jdi-thread-frames thread)
-	(let ((reply (jdwp-send-command (jdi-mirror-jdwp thread) "frame-count" `((:thread . ,(jdi-thread-id thread))))))
-	  (jdi-debug "number of frames:%s" (bindat-get-field reply :frame-count))
-	  (let ((reply (jdwp-send-command (jdi-mirror-jdwp thread) "frames" `((:thread . ,(jdi-thread-id thread))
-																		  (:start-frame . 0)
-																		  (:length . ,(bindat-get-field reply :frame-count))))))
-		(setf (jdi-thread-frames thread) 
-			  (loop for frame           in (bindat-get-field reply :frame)
-					for class-id        = (bindat-get-field frame :location :class-id)
-					for method-id       = (bindat-get-field frame :location :method-id)
-					for type            = (bindat-get-field frame :location :type)
-					for line-code-index = (bindat-get-field frame :location :index)
+  (let ((reply (jdwp-send-command (jdi-mirror-jdwp thread) "frame-count" `((:thread . ,(jdi-thread-id thread))))))
+	(jdi-debug "number of frames:%s" (bindat-get-field reply :frame-count))
+	(let ((reply (jdwp-send-command (jdi-mirror-jdwp thread) "frames" `((:thread . ,(jdi-thread-id thread))
+																		(:start-frame . 0)
+																		(:length . ,(bindat-get-field reply :frame-count))))))
+	  (loop for frame           in (bindat-get-field reply :frame)
+			for class-id        = (bindat-get-field frame :location :class-id)
+			for method-id       = (bindat-get-field frame :location :method-id)
+			for type            = (bindat-get-field frame :location :type)
+			for line-code-index = (bindat-get-field frame :location :index)
 
-					for class           = (jdi-virtual-machine-get-class-create (jdi-mirror-virtual-machine thread) class-id)
-					for method          = (make-jdi-method :virtual-machine (jdi-mirror-virtual-machine thread)
-														   :id method-id
-														   :class class)
+			for class           = (jdi-virtual-machine-get-class-create (jdi-mirror-virtual-machine thread) class-id)
+			for method          = (make-jdi-method :virtual-machine (jdi-mirror-virtual-machine thread)
+												   :id method-id
+												   :class class)
 
-					for location        = (make-jdi-location :virtual-machine (jdi-mirror-virtual-machine thread)
-															 :class class
-															 :method method
-															 :type type
-															 :line-code-index line-code-index)
-					collect (make-jdi-frame :virtual-machine (jdi-mirror-virtual-machine thread)
-											:thread thread
-											:location location
-											:id (bindat-get-field frame :id))))
-
-		(loop for frame in (jdi-thread-frames thread)
-			  do (jdi-debug "thread:%s frame:%s" (jdi-thread-id thread) (jdi-frame-id frame)))
-		(jdi-thread-frames thread)))))
+			for location        = (make-jdi-location :virtual-machine (jdi-mirror-virtual-machine thread)
+													 :class class
+													 :method method
+													 :type type
+													 :line-code-index line-code-index)
+			collect (make-jdi-frame :virtual-machine (jdi-mirror-virtual-machine thread)
+									:thread thread
+									:location location
+									:id (bindat-get-field frame :id))))))
 
 (defun jdi-thread-get-suspended-p (thread)
   (jdi-debug "jdi-thread-get-suspended-p")
@@ -1062,8 +1053,6 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 								:thread thread
 								:location location)))
 
-	(setf (jdi-thread-frames thread) nil)
-
 	(setf (jdi-virtual-machine-suspended-frames vm) (nreverse (cons frame (jdi-virtual-machine-suspended-frames vm))))
 
 	(setf (jdi-virtual-machine-suspended-thread-id vm) (bindat-get-field event :u :thread))
@@ -1089,8 +1078,6 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 		 (frame (make-jdi-frame :virtual-machine vm
 								:thread thread
 								:location location)))
-
-	(setf (jdi-thread-frames thread) nil)
 
 	(setf (jdi-virtual-machine-suspended-frames vm) (nreverse (cons frame (jdi-virtual-machine-suspended-frames vm))))
 
