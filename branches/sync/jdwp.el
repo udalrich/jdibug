@@ -1011,7 +1011,7 @@
   (catch 'done
 	(let ((timeout (+ (float-time) jdwp-timeout)))
 	  (while t
-		(let ((result (accept-process-output proc jdwp-block-seconds 0 t)))
+		(let ((result (accept-process-output proc jdwp-block-seconds 0 1)))
 		  (jdwp-debug "jdwp-receive-message:accept-process-output returned %s" result))
 		(let ((result (funcall func)))
 		  (if result
