@@ -733,8 +733,8 @@
 			(if (jdwp-packet-reply-p packet)
 				;; reply packet
 				(progn
-				  (jdwp-debug "jdwp-process-filter:reply packet:%s" packet)
-				  (jdwp-debug "jdwp-process-filter:reply packet data:%s" (jdwp-string-to-hex (jdwp-packet-data packet)))
+				  (jdwp-trace "jdwp-process-filter:reply packet:%s" packet)
+				  (jdwp-trace "jdwp-process-filter:reply packet data:%s" (jdwp-string-to-hex (jdwp-packet-data packet)))
 				  (setf (jdwp-current-reply jdwp) packet))
 
 			  (jdwp-debug "jdwp-process-filter:command-packet")
