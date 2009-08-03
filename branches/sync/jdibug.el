@@ -327,15 +327,13 @@ And position the point at the line number."
 (defun jdibug-handle-breakpoint (thread location)
   (jdibug-debug "jdibug-handle-breakpoint")
 
-  (setq jdibug-active-thread thread)
-
-  (jdibug-goto-location location)
+  (unless jdibug-active-frame
+	(jdibug-goto-location location)
+	(setq jdibug-active-frame (car (jdi-thread-get-frames thread)))
+	(jdibug-refresh-locals-buffer)
+	(setq jdibug-active-thread thread))
 
   (jdibug-refresh-frames-buffer)
-
-  (unless jdibug-active-frame
-	(setq jdibug-active-frame (car (jdi-thread-get-frames jdibug-active-thread)))
-	(jdibug-refresh-locals-buffer))
 
   (run-hooks 'jdibug-breakpoint-hit-hook))
 
@@ -718,7 +716,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (jdibug-debug "jdibug-make-threads-tree")
   (mapcar 'jdibug-make-thread-tree 
 		  (loop for thread in (jdi-virtual-machine-get-threads (widget-get tree :jdi-virtual-machine))
-				unless (jdi-thread-system-thread-p thread) collect thread)))
+				unless (jdi-thread-get-system-thread-p thread) collect thread)))
 
 (defun jdibug-make-virtual-machine-tree (vm)
   `(tree-widget
