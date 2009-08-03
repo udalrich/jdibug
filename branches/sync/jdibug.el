@@ -635,8 +635,9 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 						(widget-put jdibug-locals-tree :jdibug-opened-path (tree-mode-opened-tree jdibug-locals-tree))
 						(jdi-info "current opened tree path:%s" (tree-mode-opened-tree jdibug-locals-tree))
 						(local-set-key "s" 'jdibug-node-tostring)
-						(local-set-key "c" 'jdibug-node-classname)))))
-				t))
+						(local-set-key "c" 'jdibug-node-classname))))
+				  t)))
+	(jdibug-debug "jdibug-refresh-frames-buffer-now:input-pending")
 	(jdibug-refresh-locals-buffer)))
 
 (defun jdibug-frame-notify (button &rest ignore)
@@ -715,13 +716,9 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 
 (defun jdibug-make-threads-tree (tree)
   (jdibug-debug "jdibug-make-threads-tree")
-  (let ((vm (widget-get tree :jdi-virtual-machine)))
-	(let ((threads (jdi-virtual-machine-get-threads vm)))
-	  (let ((system-threads-p (mapcar 'jdi-thread-get-system-thread-p threads)))
-		(jdibug-debug "jdibug-make-threads-tree:system-threads-p:%s" system-threads-p)
-		(mapcar 'jdibug-make-thread-tree (loop for thread in threads
-											   for system-thread-p in system-threads-p
-											   unless system-thread-p collect thread))))))
+  (mapcar 'jdibug-make-thread-tree 
+		  (loop for thread in (jdi-virtual-machine-get-threads (widget-get tree :jdi-virtual-machine))
+				unless (jdi-thread-system-thread-p thread) collect thread)))
 
 (defun jdibug-make-virtual-machine-tree (vm)
   `(tree-widget
@@ -763,8 +760,9 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 					  (goto-char active-frame-point)
 					  (set-window-point (get-buffer-window jdibug-frames-buffer t) (point))
 					  (forward-line -1)
-					  (set-window-start (get-buffer-window jdibug-frames-buffer t) (point)))))
-				t))
+					  (set-window-start (get-buffer-window jdibug-frames-buffer t) (point))))
+				  t)))
+	(jdibug-debug "jdibug-refresh-frames-buffer-now:input-pending")
 	(jdibug-refresh-frames-buffer)))
 
 (defun jdibug-node-tostring ()
@@ -1036,7 +1034,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (interactive)
   (if jdibug-current-line-overlay
       (delete-overlay jdibug-current-line-overlay))
-  (jdi-thread-resume (jdi-frame-thread jdibug-active-frame))
+  (jdi-thread-resume jdi-active-thread)
   (run-hooks 'jdibug-resumed-hook)
 
   (jdibug-refresh-frames-buffer)
