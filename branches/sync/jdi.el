@@ -1126,6 +1126,11 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
   (let ((vm (jdwp-get jdwp 'jdi-virtual-machine)))
 	(if vm (run-hook-with-args 'jdi-detached-hooks vm))))
 
+(defun jdi-handle-vm-start (jdwp event)
+  (let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
+		 (thread (make-jdi-thread :virtual-machine vm :id (bindat-get-field event :u :thread))))
+	(jdi-thread-resume thread)))
+
 (defun jdi-class-name-to-class-signature (class-name)
   "Converts a.b.c class name to JNI class signature."
   (let ((buf class-name))
@@ -1197,6 +1202,7 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 					`(,jdwp-event-thread-start  . jdi-handle-thread-start)
 					`(,jdwp-event-thread-end    . jdi-handle-thread-end)
 					`(,jdwp-event-vm-death      . jdi-handle-vm-death)
+					`(,jdwp-event-vm-start      . jdi-handle-vm-start)
 					))
 		 (event-kind (if (integerp event) event (bindat-get-field event :event-kind)))
 		 (handler (find-if (lambda (pair)

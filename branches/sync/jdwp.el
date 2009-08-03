@@ -767,11 +767,15 @@
 		(set-buffer-multibyte nil))
 	  (set-process-coding-system (jdwp-process jdwp) 'no-conversion 'no-conversion)
 	  (jdwp-process-send-string jdwp jdwp-handshake)
-	  (unless (string= jdwp-handshake (jdwp-receive-message (jdwp-process jdwp)
-															(lambda ()
-															  (if (>= (jdwp-output-length jdwp) (length jdwp-handshake))
-																  (jdwp-residual-output jdwp)))))
-		(error "Handshake error"))
+	  (let ((received (jdwp-receive-message (jdwp-process jdwp)
+											(lambda ()
+											  (if (>= (jdwp-output-length jdwp) (length jdwp-handshake))
+												  (jdwp-residual-output jdwp))))))
+		;; note that if the debuggee is started with suspend=y
+		;; we will get a command packet straight away after the handshake packet
+		;; so we will need to do substring for the comparison
+		(unless (string= jdwp-handshake (substring received 0 (length jdwp-handshake)))
+		  (error "Handshake error:%s" received)))
 	  (jdwp-consume-output jdwp (length jdwp-handshake))
 	  ;; only after the handshake we use the process filter
 	  (set-process-filter        (jdwp-process jdwp) 'jdwp-process-filter)
