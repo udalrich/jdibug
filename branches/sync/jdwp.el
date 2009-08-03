@@ -720,7 +720,7 @@
 
 			  (jdwp-debug "jdwp-process-filter:command-packet")
 			  ;; command packet
-			  (jdwp-process-command jdwp packet)
+			  (jdwp-run-with-timer 0 nil 'jdwp-process-command jdwp packet)
 			  (jdwp-trace "received command packet")))))
 	(error (jdwp-error "jdwp-process-filter:%s" err))))
 
@@ -1018,8 +1018,9 @@
 			  (throw 'done result)
 			(if (and jdwp-throw-on-input-pending (input-pending-p))
 				(throw 'jdwp-input-pending nil))
-			(if (> (float-time) timeout)
-				(error "timed out"))))))))
+			(when (> (float-time) timeout)
+			  (jdwp-error "timed out")
+			  (error "timed out"))))))))
 
 (defun jdwp-class-status-string (status)
   (concat (if (zerop (logand status 1)) nil "[VERIFIED]")
@@ -1087,6 +1088,18 @@ This method does not consume the packet, the caller can know by checking jdwp-pa
 										  :command-set (bindat-get-field unpacked :command-set)
 										  :data        (substring string jdwp-packet-header-size))))))))))
 				
+(defun jdwp-signal-hook (error-symbol data)
+  (jdwp-error "jdwp-signal-hook:%s:%s\n%s\n" error-symbol data
+				(with-output-to-string (backtrace))))
+
+(defun jdwp-run-with-timer (secs repeat function &rest args)
+  (apply 'run-with-timer secs repeat (lambda (function &rest args)
+									   (setq signal-hook-function 'jdwp-signal-hook)
+									   (unwind-protect 
+										   (apply function args)
+										 (setq signal-hook-function nil)))
+		 function args))
+
 (provide 'jdwp)
 
 ;;; jdwp.el ends here
