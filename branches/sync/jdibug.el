@@ -680,13 +680,14 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 						  declaring-type-name)
 						(jdi-method-get-name (jdi-location-method location))
 						(mapconcat 'identity (cdr (jdi-jni-to-print (jdi-method-get-signature (jdi-location-method location)) t)) ", ")
-						(jdi-location-get-line-number location))))
-	(jdibug-info "jdibug-make-frame-node:frame-id=%s:active-frame-id=%s" (jdi-frame-id frame) (jdi-frame-id jdibug-active-frame))
+						(jdi-location-get-line-number location)))
+		 (active-frame-id (if jdibug-active-frame (jdi-frame-id jdibug-active-frame))))
+	(jdibug-info "jdibug-make-frame-node:frame-id=%s:active-frame-id=%s" (jdi-frame-id frame) active-frame-id)
 	(if (jdibug-have-class-source-p (jdi-location-class (jdi-frame-location frame)))
 		`(push-button
 		  :value ,value
 		  :jdi-frame ,frame
-		  :button-face ,(if (equal (jdi-frame-id frame) (jdi-frame-id jdibug-active-frame)) 'jdibug-current-frame)
+		  :button-face ,(if (equal (jdi-frame-id frame) active-frame-id 'jdibug-current-frame))
 		  :notify jdibug-frame-notify
 		  :format "%[%t%]\n")
 	  `(item 
