@@ -672,8 +672,12 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 (defun jdibug-make-frame-node (frame)
   (jdibug-debug "jdibug-make-frame-node:frame-id=%s" (jdi-frame-id frame))
   (let* ((location (jdi-frame-location frame))
+		 (declaring-type-name (jdi-class-name (jdi-location-class location)))
+		 (receiving-type-name (jdi-class-name (jdi-value-get-class (jdi-frame-get-this-object frame))))
 		 (value (format "%s.%s(%s) line: %s" 
-						(jdi-class-name (jdi-location-class location))
+						(if (and receiving-type-name (not (string= declaring-type-name receiving-type-name)))
+							(format "%s(%s)" receiving-type-name declaring-type-name)
+						  declaring-type-name)
 						(jdi-method-get-name (jdi-location-method location))
 						(mapconcat 'identity (cdr (jdi-jni-to-print (jdi-method-get-signature (jdi-location-method location)) t)) ", ")
 						(jdi-location-get-line-number location))))

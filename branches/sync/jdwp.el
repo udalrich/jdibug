@@ -680,7 +680,7 @@
 					   :command-spec ((:event         u8)
 									  (:request-id    u32))
 					   :reply-spec   nil)
-		(:name         "stack-get-values"
+		(:name         "stack-frame-get-values"
 					   :command-set   16
 					   :command      1
 					   :command-spec ((:thread        vec (eval jdwp-object-id-size))
@@ -691,7 +691,13 @@
 													  (:sigbyte u8)))
 					   :reply-spec   ((:values        u32)
 									  (:value         repeat (:values)
-													  (:slot-value struct jdwp-value-spec))))))
+													  (:slot-value struct jdwp-value-spec))))
+		(:name         "stack-frame-this-object"
+					   :command-set   16
+					   :command      3
+					   :command-spec ((:thread        vec (eval jdwp-object-id-size))
+									  (:frame         vec (eval jdwp-frame-id-size)))
+					   :reply-spec   ((:object-this   struct jdwp-value-spec)))))
 
 (defconst jdwp-handshake "JDWP-Handshake")
 
@@ -728,6 +734,7 @@
 				;; reply packet
 				(progn
 				  (jdwp-debug "jdwp-process-filter:reply packet:%s" packet)
+				  (jdwp-debug "jdwp-process-filter:reply packet data:%s" (jdwp-string-to-hex (jdwp-packet-data packet)))
 				  (setf (jdwp-current-reply jdwp) packet))
 
 			  (jdwp-debug "jdwp-process-filter:command-packet")

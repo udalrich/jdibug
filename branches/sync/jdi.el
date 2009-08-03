@@ -678,13 +678,21 @@
 								variables)))))
 	(let ((reply (jdwp-send-command 
 				  (jdi-mirror-jdwp frame) 
-				  "stack-get-values" 
+				  "stack-frame-get-values" 
 				  data)))
 	  (loop for variable in variables
 			for value in (bindat-get-field reply :value)
 			collect (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine frame)
 									:type (bindat-get-field value :slot-value :type)
 									:value (bindat-get-field value :slot-value :u :value))))))
+
+(defun jdi-frame-get-this-object (frame)
+  (jdi-debug "jdi-frame-get-this-object")
+  (let ((reply (jdwp-send-command (jdi-mirror-jdwp frame) "stack-frame-this-object" `((:thread . ,(jdi-thread-id (jdi-frame-thread frame)))
+																					  (:frame  . ,(jdi-frame-id frame))))))
+	(make-jdi-value :virtual-machine (jdi-mirror-virtual-machine frame)
+					:type (bindat-get-field reply :object-this :type)
+					:value (bindat-get-field reply :object-this :u :value))))
 
 (defun jdi-value-object-p (value)
   (equal (jdi-value-type value) jdwp-tag-object))
