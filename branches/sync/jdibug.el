@@ -150,7 +150,8 @@ jdibug-source-paths will be ignored if this is set to t."
 (defvar jdibug-frames-buffer nil)
 (defvar jdibug-frames-tree nil)
 
-(defvar jdibug-refresh-timer nil)
+(defvar jdibug-refresh-frames-buffer-timer nil)
+(defvar jdibug-refresh-locals-buffer-timer nil)
 
 (defstruct jdibug-breakpoint
   source-file
@@ -223,7 +224,7 @@ jdibug-source-paths will be ignored if this is set to t."
 	(mapcar 'jdibug-set-breakpoint bps)
 
 	(run-hooks 'jdibug-connected-hook)
-	(jdibug-refresh)))
+	(jdibug-refresh-frames-buffer)))
   
 (defun jdibug-disconnect ()
   (interactive)
@@ -235,8 +236,11 @@ jdibug-source-paths will be ignored if this is set to t."
 			  (delete-overlay (jdibug-breakpoint-overlay bp))))
 		jdibug-breakpoints)
 
-  (and (timerp jdibug-refresh-timer)
-	   (cancel-timer jdibug-refresh-timer))
+  (and (timerp jdibug-locals-refresh-timer)
+	   (cancel-timer jdibug-locals-refresh-timer))
+
+  (and (timerp jdibug-frames-refresh-timer)
+	   (cancel-timer jdibug-frames-refresh-timer))
 
   (kill-buffer jdibug-locals-buffer)
   (kill-buffer jdibug-frames-buffer)
@@ -327,7 +331,12 @@ And position the point at the line number."
 
   (jdibug-goto-location location)
 
-  (jdibug-refresh)
+  (jdibug-refresh-frames-buffer)
+
+  (unless jdibug-active-frame
+	(setq jdibug-active-frame (car (jdi-thread-get-frames jdibug-active-thread)))
+	(jdibug-refresh-locals-buffer))
+
   (run-hooks 'jdibug-breakpoint-hit-hook))
 
 (defun jdibug-handle-step (thread location)
@@ -337,49 +346,19 @@ And position the point at the line number."
 
   (jdibug-goto-location location)
 
-  (jdibug-refresh))
+  (jdibug-refresh-frames-buffer)
+
+  (unless jdibug-active-frame
+	(setq jdibug-active-frame (car (jdi-thread-get-frames jdibug-active-thread)))
+	(jdibug-refresh-locals-buffer)))
 
 (defun jdibug-handle-change-frame (frame)
   (jdibug-debug "jdibug-handle-change-frame")
 
   (jdibug-goto-location (jdi-frame-location frame))
-  (jdibug-refresh))
+  (jdibug-refresh-frames-buffer)
+  (jdibug-refresh-locals-buffer))
   
-(defun jdibug-refresh ()
-;;   (dolist (buf (list jdibug-frames-buffer jdibug-locals-buffer))
-;; 	(with-current-buffer buf
-;; 	  (let ((inhibit-read-only t))
-;; 		(erase-buffer)
-;; 		(insert "refreshing..."))))
-  (if jdibug-refresh-timer
-	  (cancel-timer jdibug-refresh-timer))
-  (setq jdibug-refresh-timer 
-		(jdibug-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-now)))
-
-(defun jdibug-refresh-now ()
-  (jdibug-debug "jdibug-refresh-now")
-  (when (null (catch 'jdwp-input-pending
-				(let ((jdwp-throw-on-input-pending t))
-				  (jdibug-refresh-locals-buffer-now)
-				  (jdibug-refresh-frames-buffer-now)
-				  t)))
-	(jdibug-debug "jdibug-refresh-now:jdwp-input-pending")
-	(jdibug-refresh)))
-
-(defun jdibug-get-active-frame ()
-  (jdibug-debug "jdibug-get-active-frame")
-  (if jdibug-active-frame
-	  jdibug-active-frame
-
-	(let ((suspended-threads (mappend 'jdi-virtual-machine-get-suspended-threads jdibug-virtual-machines)))
-	  (jdibug-debug "jdibug-get-active-frame:number of suspended-threads:%s" (length suspended-threads))
-	  (if suspended-threads
-		  (let ((frames (jdi-thread-get-frames (car suspended-threads))))
-			(setq jdibug-active-frame (car frames))
-			jdibug-active-frame)
-		(setq jdibug-active-frame nil)
-		nil))))
-
 (defun jdibug-handle-class-prepare (class)
   (jdibug-debug "jdibug-handle-class-prepare")
   (dolist (bp jdibug-breakpoints)
@@ -628,31 +607,37 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	  (string< (jdi-field-name o1) (jdi-field-name o2))
 	(> (jdi-field-mod-bits o1) (jdi-field-mod-bits o2))))
 
+(defun jdibug-refresh-locals-buffer ()
+  (if (timerp jdibug-refresh-locals-buffer-timer)
+	  (cancel-timer jdibug-refresh-locals-buffer-timer))
+  (setq jdibug-refresh-locals-buffer-timer 
+		(jdibug-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-locals-buffer-now)))
+
 (defun jdibug-refresh-locals-buffer-now ()
-  (with-current-buffer jdibug-locals-buffer
-	(let ((inhibit-read-only t))
-	  (erase-buffer))
+  (when (null (catch 'jdwp-input-pending
+				(with-current-buffer jdibug-locals-buffer
+				  (let ((inhibit-read-only t))
+					(erase-buffer))
 
-  (jdibug-debug "jdibug-refresh-locals-buffer-now:active-thread=%s active-frame=%s" 
-				(if jdibug-active-thread "yes" "no")
-				(if jdibug-active-frame "yes" "no"))
-  (if (null jdibug-active-thread)
-	  (insert "Not suspended")
+				  (jdibug-debug "jdibug-refresh-locals-buffer-now:active-thread=%s active-frame=%s" 
+								(if jdibug-active-thread "yes" "no")
+								(if jdibug-active-frame "yes" "no"))
+				  (if (null jdibug-active-thread)
+					  (insert "Not suspended")
 
-	(if (null jdibug-active-frame)
-		(setq jdibug-active-frame (car (jdi-thread-get-frames jdibug-active-thread))))
-													  
-	(let* ((variables (sort (copy-sequence (jdi-frame-get-visible-variables jdibug-active-frame)) 'jdibug-variable-sorter))
-		   (values (jdi-frame-get-values jdibug-active-frame variables)))
-	  (with-current-buffer jdibug-locals-buffer
-		(let ((inhibit-read-only t))
-		  (erase-buffer))
-		(setq jdibug-locals-tree
-			  (tree-mode-insert (jdibug-make-locals-tree variables values)))
-		(widget-put jdibug-locals-tree :jdibug-opened-path (tree-mode-opened-tree jdibug-locals-tree))
-		(jdi-info "current opened tree path:%s" (tree-mode-opened-tree jdibug-locals-tree))
-		(local-set-key "s" 'jdibug-node-tostring)
-		(local-set-key "c" 'jdibug-node-classname))))))
+					(let* ((variables (sort (copy-sequence (jdi-frame-get-visible-variables jdibug-active-frame)) 'jdibug-variable-sorter))
+						   (values (jdi-frame-get-values jdibug-active-frame variables)))
+					  (with-current-buffer jdibug-locals-buffer
+						(let ((inhibit-read-only t))
+						  (erase-buffer))
+						(setq jdibug-locals-tree
+							  (tree-mode-insert (jdibug-make-locals-tree variables values)))
+						(widget-put jdibug-locals-tree :jdibug-opened-path (tree-mode-opened-tree jdibug-locals-tree))
+						(jdi-info "current opened tree path:%s" (tree-mode-opened-tree jdibug-locals-tree))
+						(local-set-key "s" 'jdibug-node-tostring)
+						(local-set-key "c" 'jdibug-node-classname)))))
+				t))
+	(jdibug-refresh-locals-buffer)))
 
 (defun jdibug-frame-notify (button &rest ignore)
   (jdibug-debug "jdibug-frame-notify")
@@ -756,22 +741,31 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	:open t
 	:args ,(mapcar 'jdibug-make-virtual-machine-tree jdibug-virtual-machines)))
 
+(defun jdibug-refresh-frames-buffer ()
+  (if (timerp jdibug-refresh-frames-buffer-timer)
+	  (cancel-timer jdibug-refresh-frames-buffer-timer))
+  (setq jdibug-refresh-frames-buffer-timer 
+		(jdibug-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-frames-buffer-now)))
+
 (defun jdibug-refresh-frames-buffer-now ()
   (jdibug-debug "jdibug-refresh-frames-buffer-now")
-  (with-current-buffer jdibug-frames-buffer
-;; 	(if (jdibug-frames-tree jdibug-this)
-;; 		(tree-mode-reflesh-tree (jdibug-frames-tree jdibug-this))
-	  (let ((inhibit-read-only t))
-		(erase-buffer))
-	  (setq jdibug-frames-tree
-			(tree-mode-insert (jdibug-make-frames-tree)))
-	  (tree-mode)
-	  (let ((active-frame-point (jdibug-point-of-active-frame)))
-		(when active-frame-point 
-		  (goto-char active-frame-point)
-		  (set-window-point (get-buffer-window jdibug-frames-buffer t) (point))
-		  (forward-line -1)
-		  (set-window-start (get-buffer-window jdibug-frames-buffer t) (point))))))
+  (when (null (catch 'jdwp-input-pending
+				(with-current-buffer jdibug-frames-buffer
+				  ;; 	(if (jdibug-frames-tree jdibug-this)
+				  ;; 		(tree-mode-reflesh-tree (jdibug-frames-tree jdibug-this))
+				  (let ((inhibit-read-only t))
+					(erase-buffer))
+				  (setq jdibug-frames-tree
+						(tree-mode-insert (jdibug-make-frames-tree)))
+				  (tree-mode)
+				  (let ((active-frame-point (jdibug-point-of-active-frame)))
+					(when active-frame-point 
+					  (goto-char active-frame-point)
+					  (set-window-point (get-buffer-window jdibug-frames-buffer t) (point))
+					  (forward-line -1)
+					  (set-window-start (get-buffer-window jdibug-frames-buffer t) (point)))))
+				t))
+	(jdibug-refresh-frames-buffer)))
 
 (defun jdibug-node-tostring ()
   (interactive)
@@ -1045,19 +1039,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (jdi-thread-resume (jdi-frame-thread jdibug-active-frame))
   (run-hooks 'jdibug-resumed-hook)
 
-  (when jdibug-active-frame
-	(jdibug-refresh))
-;; 	(if (jdibug-refresh-timer jdibug-this)
-;; 		(cancel-timer (jdibug-refresh-timer jdibug-this)))
-;; 	(setf (jdibug-refresh-timer jdibug-this)
-;; 		  (jdibug-run-with-timer jdibug-refresh-delay nil 
-;; 								 'jdibug-refresh-now 
-;; 								 (jdi-mirror-virtual-machine (jdibug-active-frame jdibug-this))
-;; 								 (jdi-thread-id (jdi-frame-thread (jdibug-active-frame jdibug-this)))
-;; 								 (jdi-location-class-id (jdi-frame-location (jdibug-active-frame jdibug-this)))
-;; 								 (jdi-location-method-id (jdi-frame-location (jdibug-active-frame jdibug-this)))
-;; 								 (jdi-location-line-code-index (jdi-frame-location (jdibug-active-frame jdibug-this))))))
-
+  (jdibug-refresh-frames-buffer)
   (message "JDIbug resumed"))
 
 (defun jdibug-connected-p ()

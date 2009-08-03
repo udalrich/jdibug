@@ -21,8 +21,6 @@
   (classes (make-hash-table :test 'equal)) ;; hash table where key=class-id value=jdi-class
   classes-by-signature ;; hash table where key=signature value=jdi-class
 
-  threads
-
   suspended-thread-id
 
   ;; list of jdi-frame that is suspended (by breakpoint/step events)
@@ -92,8 +90,6 @@
   id)
 
 (defstruct (jdi-thread (:include jdi-object))
-  status
-  suspend-status
   frames
 
   ; jdi-thread-group
@@ -247,15 +243,12 @@
 
 (defun jdi-virtual-machine-get-threads (vm)
   (jdi-debug "jdi-virtual-machine-get-threads")
-  (if (jdi-virtual-machine-threads vm)
- 	  (jdi-virtual-machine-threads vm)
-	(let ((reply (jdwp-send-command (jdi-virtual-machine-jdwp vm) "all-threads" nil)))
-	  (jdi-debug "number of threads:%s" (bindat-get-field reply :threads))
-	  (setf (jdi-virtual-machine-threads vm)
-			(loop for thread in (bindat-get-field reply :thread)
-				  collect (jdi-virtual-machine-get-object-create 
-						   vm
-						   (make-jdi-thread :id (bindat-get-field thread :id))))))))
+  (let ((reply (jdwp-send-command (jdi-virtual-machine-jdwp vm) "all-threads" nil)))
+	(jdi-debug "number of threads:%s" (bindat-get-field reply :threads))
+	(loop for thread in (bindat-get-field reply :thread)
+		  collect (jdi-virtual-machine-get-object-create 
+				   vm
+				   (make-jdi-thread :id (bindat-get-field thread :id))))))
 
 (defun jdi-virtual-machine-get-top-level-thread-groups (vm)
   (jdi-debug "jdi-virtual-machine-get-top-level-thread-groups")
@@ -324,16 +317,9 @@
 
 (defun jdi-thread-get-status (thread)
   (jdi-debug "jdi-thread-get-status")
-  (if (jdi-thread-status thread)
-	  (values (jdi-thread-status thread) (jdi-thread-suspend-status thread))
-
-	(let ((reply (jdwp-send-command (jdi-mirror-jdwp thread) "thread-status" `((:thread . ,(jdi-thread-id thread))))))
-	  (setf (jdi-thread-status thread)
-			(bindat-get-field reply :thread-status)
-			(jdi-thread-suspend-status thread)
-			(bindat-get-field reply :suspend-status))
-	  (jdi-debug "thread-status:%s suspend-status:%s" (jdi-thread-status thread) (jdi-thread-suspend-status thread))
-	  (values (jdi-thread-status thread) (jdi-thread-suspend-status thread)))))
+  (let ((reply (jdwp-send-command (jdi-mirror-jdwp thread) "thread-status" `((:thread . ,(jdi-thread-id thread))))))
+	(values (bindat-get-field reply :thread-status)
+			(bindat-get-field reply :suspend-status))))
 
 (defun jdi-thread-get-thread-group (thread)
   (jdi-debug "jdi-thread-get-thread-group:%s" (jdi-thread-id thread))
@@ -1077,7 +1063,6 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 								:location location)))
 
 	(setf (jdi-thread-frames thread) nil)
-	(setf (jdi-thread-suspend-status thread) jdwp-suspend-status-suspended)
 
 	(setf (jdi-virtual-machine-suspended-frames vm) (nreverse (cons frame (jdi-virtual-machine-suspended-frames vm))))
 
