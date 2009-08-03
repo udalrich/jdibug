@@ -1034,11 +1034,14 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (interactive)
   (if jdibug-current-line-overlay
       (delete-overlay jdibug-current-line-overlay))
-  (jdi-thread-resume jdi-active-thread)
-  (run-hooks 'jdibug-resumed-hook)
+  (let ((active-thread jdibug-active-thread))
+	(setq jdibug-active-thread nil
+		  jdibug-active-frame nil)
+	(jdi-thread-resume active-thread)
+	(run-hooks 'jdibug-resumed-hook)
 
-  (jdibug-refresh-frames-buffer)
-  (message "JDIbug resumed"))
+	(jdibug-refresh-frames-buffer)
+	(message "JDIbug resumed")))
 
 (defun jdibug-connected-p ()
   (interactive)
