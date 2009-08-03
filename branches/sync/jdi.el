@@ -451,7 +451,7 @@
   (jdi-debug "jdi-class-get-signature")
   (if (jdi-class-signature class)
 	  (jdi-class-signature class)
-	(let ((reply (jdwp-send-command (jdi-mirror-jdwp class) (if (jdi-virtual-machine-have-generic-p (jdi-mirror-virtual-machine class))
+	(let ((reply (jdwp-send-command (jdi-mirror-jdwp class) (if (jdi-virtual-machine-has-generic-p (jdi-mirror-virtual-machine class))
 																"signature-with-generic"
 															  "signature")
 									`((:ref-type . ,(jdi-class-id class))))))
@@ -460,7 +460,7 @@
 
 (defun jdi-class-get-generic-signature (class)
   (jdi-debug "jdi-class-get-generic-signature")
-  (when (jdi-virtual-machine-have-generic-p (jdi-mirror-virtual-machine class))
+  (when (jdi-virtual-machine-has-generic-p (jdi-mirror-virtual-machine class))
 	(if (jdi-class-generic-signature class)
 		(jdi-class-generic-signature class)
 	  (let ((reply (jdwp-send-command (jdi-mirror-jdwp class) "signature-with-generic" `((:ref-type . ,(jdi-class-id class))))))
@@ -518,6 +518,9 @@
 		  (jdi-event-request-enable er)
 		  (push er result))))
 	result))
+
+(defun jdi-virtual-machine-has-generic-p (vm)
+  (>= (jdi-virtual-machine-jdwp-minor vm) 5))
 
 (defun jdi-method-location-by-line-code-index (method line-code-index)
   (jdi-trace "jdi-method-location-by-line-code-index:%s:%s:%s" (jdi-method-name method) line-code-index (length (jdi-method-locations method)))
@@ -1125,6 +1128,12 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
   (jdi-debug "jdi-handle-class-unload-event")
   ())
 
+(defun jdi-handle-thread-start (jdwp event)
+  (jdi-debug "jdi-handle-thread-start"))
+
+(defun jdi-handle-thread-end (jdwp event)
+  (jdi-debug "jdi-handle-thread-end"))
+
 (defun jdi-handle-vm-death (jdwp event)
   (jdi-debug "jdi-handle-vm-death")
   (let ((vm (jdwp-get jdwp 'jdi-virtual-machine)))
@@ -1198,6 +1207,8 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 					`(,jdwp-event-single-step   . jdi-handle-step-event)
 					`(,jdwp-event-class-prepare . jdi-handle-class-prepare-event)
 					`(,jdwp-event-class-unload  . jdi-handle-class-unload-event)
+					`(,jdwp-event-thread-start  . jdi-handle-thread-start)
+					`(,jdwp-event-thread-end    . jdi-handle-thread-end)
 					`(,jdwp-event-vm-death      . jdi-handle-vm-death)
 					))
 		 (event-kind (if (integerp event) event (bindat-get-field event :event-kind)))
