@@ -357,7 +357,7 @@ And position the point at the line number."
   (jdibug-refresh-frames-buffer)
   (jdibug-refresh-locals-buffer))
   
-(defun jdibug-handle-class-prepare (class)
+(defun jdibug-handle-class-prepare (class thread)
   (jdibug-debug "jdibug-handle-class-prepare")
   (dolist (bp jdibug-breakpoints)
 	(when (equal (jdibug-breakpoint-source-file bp) (jdibug-class-signature-to-source-file (jdi-class-get-signature class)))
@@ -367,7 +367,8 @@ And position the point at the line number."
 		  (push er (jdibug-breakpoint-event-requests bp))))
 	  (setf (jdibug-breakpoint-status bp) 'enabled)
 	  (jdibug-breakpoint-update bp)
-	  (jdibug-refresh-breakpoints-buffer))))
+	  (jdibug-refresh-breakpoints-buffer)))
+  (jdi-thread-resume thread))
 
 (defun jdibug-handle-detach (vm)
   (interactive)

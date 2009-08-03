@@ -176,7 +176,7 @@
 		 (data `((:event-kind     . ,jdwp-event-breakpoint)
 				 (:suspend-policy . ,jdwp-suspend-policy-event-thread)
 				 (:modifiers      . 1)
-				 (:modifier       ((:mod-kind .  7)
+				 (:modifier       ((:mod-kind .  ,jdwp-mod-kind-location-only)
 								   (:location .  ,location-data))))))
 	(make-jdi-event-request :virtual-machine (jdi-mirror-virtual-machine location) :data data)))
 
@@ -189,13 +189,23 @@
 				(:suspend-policy . ,jdwp-suspend-policy-event-thread)
 				(:modifiers      . 2)
 				(:modifier       
-				 ((:mod-kind . 10)
+				 ((:mod-kind . ,jdwp-mod-kind-case-step)
 				  (:thread   . ,(jdi-thread-id thread))
 				  (:size     . 1)
 				  (:depth    . ,depth))
-				 ((:mod-kind . 1)
+				 ((:mod-kind . ,jdwp-mod-kind-case-count)
 				  (:count    . 1))))))
 	(make-jdi-event-request :virtual-machine (jdi-mirror-virtual-machine thread) :data data)))
+
+(defun jdi-event-request-manager-create-class-prepare (erm vm signature)
+  (let ((data `((:event-kind     . ,jdwp-event-class-prepare)
+				(:suspend-policy . ,jdwp-suspend-policy-event-thread)
+				(:modifiers      . 1)
+				(:modifier       
+				 ((:mod-kind . ,jdwp-mod-kind-class-match)
+				  (:class-pattern . ((:length . ,(length signature))
+									 (:string . ,signature))))))))
+	(make-jdi-event-request :virtual-machine vm :data data)))
 
 (defun jdi-event-request-enable (er)
   (let ((reply (jdwp-send-command (jdi-mirror-jdwp er) "set" (jdi-event-request-data er))))
@@ -212,8 +222,7 @@
 							   `((:event-kind . ,event)
 								 (:suspend-policy . ,jdwp-suspend-policy-none)
 								 (:modifiers . 0))))
-		  (list jdwp-event-class-prepare
-				jdwp-event-class-unload
+		  (list jdwp-event-class-unload
 				jdwp-event-thread-start
 				jdwp-event-thread-end
 				jdwp-event-vm-death)))
@@ -496,11 +505,19 @@
 
   (jdi-debug "jdi-virtual-machine-set-breakpoint:signature=%s:line=%s" signature line)
   (let ((result))
-	(dolist (class (jdi-virtual-machine-get-classes-by-signature vm signature))
-	  (dolist (location (jdi-class-get-locations-of-line class line))
-		(let ((er (jdi-event-request-manager-create-breakpoint (jdi-virtual-machine-event-request-manager vm) location)))
-		  (jdi-event-request-enable er)
-		  (push er result))))
+	(let ((classes (jdi-virtual-machine-get-classes-by-signature vm signature)))
+	  (if classes
+		  (dolist (class classes)
+			(dolist (location (jdi-class-get-locations-of-line class line))
+			  (let ((er (jdi-event-request-manager-create-breakpoint (jdi-virtual-machine-event-request-manager vm) location)))
+				(jdi-event-request-enable er)
+				(push er result)))))
+
+	  ;; the class might be loaded again by another class loader
+	  ;; so we install the class prepare event anyway
+	  (let ((er (jdi-event-request-manager-create-class-prepare (jdi-virtual-machine-event-request-manager vm) vm (car (jdi-jni-to-print signature)))))
+		(jdi-event-request-enable er)))
+
 	result))
 
 (defun jdi-virtual-machine-has-generic-p (vm)
@@ -1089,12 +1106,13 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
   (let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
 		 (type-id (bindat-get-field event :u :type-id))
 		 (signature (jdwp-get-string event :u :signature))
+		 (thread (make-jdi-thread :virtual-machine vm :id (bindat-get-field event :u :thread)))
 		 (newclass (jdi-virtual-machine-get-class-create vm type-id :signature signature)))
 	(jdi-debug "class-loaded:%s" signature)
 ;; 	(puthash type-id newclass (jdi-virtual-machine-classes vm))
 ;; 	(puthash signature (cons newclass (gethash signature (jdi-virtual-machine-classes-by-signature vm)))
 ;; 			 (jdi-virtual-machine-classes-by-signature vm))
-	(run-hook-with-args 'jdi-class-prepare-hooks newclass)))
+	(run-hook-with-args 'jdi-class-prepare-hooks newclass thread)))
 
 (defun jdi-handle-class-unload-event (jdwp event)
   (jdi-debug "jdi-handle-class-unload-event")
