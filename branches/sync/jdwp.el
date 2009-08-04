@@ -739,7 +739,7 @@
 
 			  (jdwp-debug "jdwp-process-filter:command-packet")
 			  ;; command packet
-			  (jdwp-run-with-timer 0 nil 'jdwp-process-command jdwp packet)
+			  (jdwp-run-with-timer 0.1 nil 'jdwp-process-command jdwp packet)
 			  (jdwp-trace "received command packet")))))
 	(error (jdwp-error "jdwp-process-filter:%s" err))))
 
