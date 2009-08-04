@@ -100,6 +100,10 @@
 
 (defstruct (jdi-array (:include jdi-object)))
 
+(defstruct (jdi-class-object (:include jdi-object)))
+
+(defstruct (jdi-class-loader (:include jdi-object)))
+
 (defstruct (jdi-thread (:include jdi-object))
   ; jdi-thread-group
   thread-group
@@ -380,18 +384,6 @@
   (jdi-debug "jdi-thread-group-get-threads:%s" (jdi-thread-group-id thread-group))
   (multiple-value-bind (child-threads child-groups) (jdi-thread-group-get-children thread-group)
 	child-groups))
-
-(defun jdi-thread-status-string (thread)
-  (cond ((equal (jdi-thread-status thread) jdwp-thread-status-zombie) "Zombie")
-		((equal (jdi-thread-status thread) jdwp-thread-status-running) "Running")
-		((equal (jdi-thread-status thread) jdwp-thread-status-sleeping) "Sleeping")
-		((equal (jdi-thread-status thread) jdwp-thread-status-monitor) "Monitor")
-		((equal (jdi-thread-status thread) jdwp-thread-status-wait) "Wait")))
-
-(defun jdi-thread-suspend-status-string (thread)
-  (if (equal (jdi-thread-suspend-status thread) jdwp-suspend-status-suspended)
-	  "Suspended"
-	"Running"))
 
 (defun jdi-virtual-machine-disconnect (vm)
   (jdwp-disconnect (jdi-virtual-machine-jdwp vm)))
@@ -851,10 +843,9 @@ http://java.sun.com/j2se/1.5.0/docs/guide/jni/spec/types.html#wp428"
 
 (defun jdi-value-has-children-p (value)
   (jdi-debug "jdi-value-has-children-p")
-  (and (not (equal (jdi-value-value value)
-				   [0 0 0 0 0 0 0 0]))
-	   (or (equal (jdi-value-type value) jdwp-tag-object)
-		   (equal (jdi-value-type value) jdwp-tag-array))))
+  (and (not (jdi-primitive-value-p value))
+	   (and (jdi-object-p value)
+			(not (equal (jdi-object-id value) [0 0 0 0 0 0 0 0])))))
 
 (defun jdi-field-static-p (field)
   (not (equal (logand (jdi-field-mod-bits field) jdi-access-static) 0)))
@@ -878,12 +869,6 @@ http://java.sun.com/j2se/1.5.0/docs/guide/jni/spec/types.html#wp428"
 	(jdi-debug "jdi-class-get-all-fields:%s:%s" (jdi-class-id class) (loop for super in supers
 																		   collect (jdi-class-id super)))
 	(mappend 'jdi-class-get-fields (cons class supers))))
-
-(defun jdi-value-get-all-fields (value)
-  (jdi-debug "jdi-value-get-all-fields:%s" (jdi-value-value value))
-  (let ((class (jdi-value-get-reference-type value)))
-	(let ((supers (jdi-class-get-all-super class)))
-	  (mappend 'jdi-class-get-fields (cons class supers)))))
 
 (defun jdi-object-get-values (object fields)
   (jdi-debug "jdi-object-get-values")
@@ -1164,14 +1149,15 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 	(jdi-debug "jdi-class-name-to-class-signature:%s:%s" class-name buf)
 	buf))
 
-(defun jdi-value-instance-of-p (value signature)
-  (jdi-debug "jdi-value-instance-of-p:signature=%s" signature)
-  (let* ((class (jdi-value-get-reference-type value))
+(defun jdi-object-instance-of-p (object signature)
+  (jdi-debug "jdi-object-instance-of-p:signature=%s" signature)
+  (let* ((class (jdi-object-get-reference-type object))
 		 (supers (jdi-class-get-all-super class))
 		 (interfaces (jdi-class-get-all-interfaces class))
 		 (signatures (mapcar 'jdi-class-get-signature (cons class (append supers interfaces)))))
-	(jdi-debug "jdi-value-instance-of-p:all-signatures=%s" signatures)
+	(jdi-debug "jdi-object-instance-of-p:all-signatures=%s" signatures)
 	(member signature signatures)))
+
 
 (defun jdi-value-extract-generic-class-name (generic-signature)
   (string-match "<L.*/\\(.*\\);>" generic-signature)

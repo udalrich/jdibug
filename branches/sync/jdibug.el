@@ -231,7 +231,7 @@ When the user resume, we will switch to this thread and location.")
 							   collect (jdibug-source-file-to-class-signature
 										(jdibug-breakpoint-source-file bp)))))
 		(setq jdibug-breakpoints nil)
-		(mapcar 'jdibug-set-breakpoint bps)
+		(mapc 'jdibug-set-breakpoint bps)
 
 		(run-hooks 'jdibug-connected-hook)
 		(jdibug-refresh-frames-buffer))))
@@ -541,8 +541,8 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	;; call the custom expander here, so that the custom expander can 
 	;; make a ArrayList look like an array by changing the value-type
 	(let* ((expander (find-if (lambda (custom)
-								(jdi-value-instance-of-p value (jdi-class-name-to-class-signature (car custom))))
-							  jdibug-value-custom-expanders))
+								(jdi-object-instance-of-p value (jdi-class-name-to-class-signature (car custom))))
+							  jdibug-object-custom-expanders))
 		   (expander2 (if expander (cadr expander))))
 	  (cond (expander2
 			 (funcall expander2 value))
@@ -653,12 +653,13 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 
 (defun jdibug-frame-notify (button &rest ignore)
   (jdibug-debug "jdibug-frame-notify")
-  (let ((frame (widget-get button :jdi-frame)))
+  (let* ((frame (widget-get button :jdi-frame))
+		 (frames (jdi-thread-get-frames (jdi-frame-thread frame))))
 	(jdibug-debug "going to class=%s method=%s line-number=%s"
 				 (jdi-class-name (jdi-location-class (jdi-frame-location frame)))
 				 (jdi-method-name (jdi-location-method (jdi-frame-location frame)))
 				 (jdi-location-line-number (jdi-frame-location frame)))
-	(let ((frame-index (position frame (jdi-thread-frames (jdi-frame-thread frame))))
+	(let ((frame-index (position frame frames))
 		  (thread (jdi-frame-thread frame)))
 	  (jdibug-debug "looking at frame-id:%s frame-index:%s" (jdi-frame-id frame) frame-index)
 
@@ -667,9 +668,8 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	  ;; if not, we will get into some invalid frame id errors
 	  ;; when doing stack-get-values
 
-	  (setf (jdi-thread-frames thread) nil)
 	  (jdi-thread-get-frames thread)
-	  (let ((frame (nth frame-index (jdi-thread-frames thread))))
+	  (let ((frame (nth frame-index frames)))
 		(jdibug-debug "after reload frame-id:%s" (jdi-frame-id frame))
 		(setq jdibug-active-frame frame)
 
@@ -798,7 +798,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 										 methods)))
 			(if tostringmethod
 				(let ((result-value (jdi-value-invoke-method value jdibug-active-thread tostringmethod nil nil)))
-				  (let ((result-string (jdibug-value-get-string-string result-value)))
+				  (let ((result-string (jdibug-string-get-string result-value)))
 					(message "%s" result-string)))
 			  (message "no toString method"))))))))
 
@@ -1136,22 +1136,16 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 			 (equal (jdi-value-type value) jdwp-tag-byte)
 			 (equal (jdi-value-type value) jdwp-tag-char)
 			 (equal (jdi-value-type value) jdwp-tag-short))
-		 (format "%d" (jdi-value-value value)))
+		 (format "%d" (jdi-primitive-value-value value)))
 
 		((equal (jdi-value-type value) jdwp-tag-long)
-		 (format "%d" (jdwp-vec-to-int (jdi-value-value value))))
+		 (format "%d" (jdwp-vec-to-int (jdi-primitive-value-value value))))
 
 		((equal (jdi-value-type value) jdwp-tag-float)
-		 (format "%f" (jdwp-vec-to-float (jdi-value-value value))))
-
-;; 		((and parent
-;; 			  (equal (jdi-value-type parent) jdwp-tag-object)
-;; 			  (equal (jdi-value-type value) jdwp-tag-object)
-;; 			  (equal (jdi-value-value parent) (jdi-value-value value)))
-;; 		 "this")
+		 (format "%f" (jdwp-vec-to-float (jdi-primitive-value-value value))))
 
 		((equal (jdi-value-type value) jdwp-tag-boolean)
-		 (if (= 0 (jdi-value-value value)) "false" "true"))
+		 (if (= 0 (jdi-primitive-value-value value)) "false" "true"))
 
 		((equal (jdi-value-type value) jdwp-tag-void)
 		 "void")
@@ -1170,52 +1164,51 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		 "thread-group")
 
  		((equal (jdi-value-type value) jdwp-tag-object)
- 		 (jdibug-value-get-string-object value))
+ 		 (jdibug-object-get-string value))
 
 		((equal (jdi-value-type value) jdwp-tag-string)
-		 (jdibug-value-get-string-string value))
+		 (jdibug-string-get-string value))
 
   		((equal (jdi-value-type value) jdwp-tag-array)
-  		 (jdibug-value-get-string-array value))
+  		 (jdibug-array-get-string value))
 
 		(t 
 		 (jdi-error "fixme: do not know how to print value of type:%s" (jdi-value-type value))
 		 "...")))
 
-(defun jdibug-value-get-string-object (value)
-  (jdibug-debug "jdibug-value-get-string-object:type=%s:value=%s" 
-				(jdi-value-type value) (jdi-value-value value))
-  (if (equal (jdi-value-value value) [0 0 0 0 0 0 0 0])
+(defun jdibug-object-get-string (object)
+  (jdibug-debug "jdibug-object-get-string:object-id=%s" (jdi-object-id object))
+  (if (equal (jdi-object-id object) [0 0 0 0 0 0 0 0])
 	  "null"
 
 	(let* ((setter (find-if (lambda (custom)
-							  (jdi-value-instance-of-p value (jdi-class-name-to-class-signature (car custom))))
-							jdibug-value-custom-set-strings))
+							  (jdi-object-instance-of-p object (jdi-class-name-to-class-signature (car custom))))
+							jdibug-object-custom-set-strings))
 		   (setter2 (if setter (cadr setter))))
-	  (jdibug-debug "jdibug-value-get-string-object: value=%s found-setter:%s" (jdi-value-value value) setter)
+	  (jdibug-debug "jdibug-object-get-string: object-id=%s found-setter:%s" (jdi-object-id object) setter)
 	  (cond ((stringp setter2)
-			 (jdibug-value-custom-set-string-with-method value jdibug-active-thread setter2))
+			 (jdibug-object-custom-set-string-with-method object jdibug-active-thread setter2))
 			((functionp setter2)
-			 (funcall setter2 value))
+			 (funcall setter2 object))
 			(t
 			 (format "%s (id=%s)" 
-					 (jdi-class-name (jdi-value-get-reference-type value))
-					 (jdwp-vec-to-int (jdi-value-value value))))))))
+					 (jdi-class-name (jdi-object-get-reference-type object))
+					 (jdwp-vec-to-int (jdi-object-id object))))))))
 
-(defun jdibug-value-get-string-array (value)
-  (jdibug-debug "jdibug-value-get-string-array")
-  (let ((length (jdi-value-get-array-length value)))
-	(jdi-array-display-string value length)))
+(defun jdibug-array-get-string (array)
+  (jdibug-debug "jdibug-array-get-string")
+  (let ((length (jdi-array-get-array-length array)))
+	(jdi-array-display-string array length)))
 
-(defun jdibug-value-get-string-string (value)
-  (jdibug-debug "jdibug-value-get-string-string")
-  (let ((reply (jdwp-send-command (jdi-mirror-jdwp value) "string-value" `((:object . ,(jdi-value-value value))))))
+(defun jdibug-string-get-string (string)
+  (jdibug-debug "jdibug-string-get-string")
+  (let ((reply (jdwp-send-command (jdi-mirror-jdwp string) "string-value" `((:object . ,(jdi-object-id string))))))
 
-	(jdibug-debug "jdibug-value-get-string-string:%s:%s" (jdwp-get-string reply :value) (jdi-format-string (jdwp-get-string reply :value)))
+	(jdibug-debug "jdibug-string-get-string:%s:%s" (jdwp-get-string reply :value) (jdi-format-string (jdwp-get-string reply :value)))
 	(jdi-format-string (jdwp-get-string reply :value))))
 
 ;;; Customized display and expanders:
-(defvar jdibug-value-custom-set-strings nil
+(defvar jdibug-object-custom-set-strings nil
   "a list of (class setter) where
 
 class is a string which hold the class name of the object to be matched.
@@ -1226,66 +1219,52 @@ to populate the jdi-value-string of the jdi-value. If setter
 is a string, it will be the method that will be invoked on the java object
 and the value that is returned is shown.")
 
-(setq jdibug-value-custom-set-strings
+(setq jdibug-object-custom-set-strings
       '(("java.lang.Boolean"      "toString")
 		("java.lang.Number"       "toString")
 		("java.lang.StringBuffer" "toString")
 		("java.util.Date"         "toString")
-		("java.util.Collection"   jdibug-value-custom-set-string-with-size)
-		("java.util.Map"          jdibug-value-custom-set-string-with-size)))
+		("java.util.Collection"   jdibug-object-custom-set-string-with-size)
+		("java.util.Map"          jdibug-object-custom-set-string-with-size)))
 
-(defvar jdibug-value-custom-expanders nil
+(defvar jdibug-object-custom-expanders nil
   "a list of (instance expander-func) where
 
-instance is a string that is matched with jdi-value-instance-of-p with the 
+instance is a string that is matched with jdi-object-instance-of-p with the 
 value
 
 expander-func is a function that is passed (jdi jdi-value) and is expected
 to populate the jdi-value-values of the jdi-value.")
 
-(setq jdibug-value-custom-expanders
+(setq jdibug-object-custom-expanders
       '(("java.util.Collection" jdibug-value-custom-expand-collection)
 		("java.util.Map"        jdibug-value-custom-expand-map)))
 
-(defun jdibug-value-custom-set-strings-find (value)
-  (let ((element (find-if (lambda (custom)
-							(jdi-value-instance-of-p value (jdi-class-name-to-class-signature (car custom))))
-						  jdibug-value-custom-set-strings)))
-    (if element
-		(cadr element))))
+(defun jdibug-object-custom-set-string-with-method (object thread method-name)
+  (jdibug-debug "jdibug-object-custom-set-string-with-method")
+  (let* ((class (jdi-object-get-reference-type object))
+		 (methods (jdi-class-get-all-methods class))
+		 (method (find-if (lambda (obj)
+							(and (string= (jdi-method-name obj) method-name)
+								 (string= (jdi-method-signature obj) "()Ljava/lang/String;")))
+						  methods)))
+	(if (null method)
+		(format "setter %s not found" method-name)
 
-(defun jdibug-value-custom-expanders-find (value)
-  (let ((element (find-if (lambda (custom)
-							(jdi-value-instance-of-p value (jdi-class-name-to-class-signature (car custom))))
-						  jdibug-value-custom-expanders)))
-    (if element
-		(cadr element))))
+	  (let ((result-value (jdi-object-invoke-method object thread method nil nil)))
+		(if (equal (jdi-object-id result-value) [0 0 0 0 0 0 0 0])
+			"null"
 
-(defun jdibug-value-custom-set-string-with-method (value thread method-name)
-  (jdibug-debug "jdibug-value-custom-set-string-with-method")
-  (let ((class (jdi-value-get-reference-type value)))
-	(let ((methods (jdi-class-get-all-methods class)))
-	  (let ((method (find-if (lambda (obj)
-							   (and (string= (jdi-method-name obj) method-name)
-									(string= (jdi-method-signature obj) "()Ljava/lang/String;")))
-							 methods)))
-		(if (null method)
-			(format "setter %s not found" method-name)
+		  (let ((reply (jdwp-send-command (jdi-mirror-jdwp object) "string-value" 
+										  `((:object . ,(jdi-object-id result-value))))))
+			(jdi-format-string (jdwp-get-string reply :value))))))))
 
-		  (let ((result-value (jdi-value-invoke-method value thread method nil nil)))
-			(if (equal (jdi-value-value result-value) [0 0 0 0 0 0 0 0])
-				"null"
-
-			  (let ((reply (jdwp-send-command (jdi-mirror-jdwp value) "string-value" 
-											  `((:object . ,(jdi-value-value result-value))))))
-				(jdi-format-string (jdwp-get-string reply :value))))))))))
-
-(defun jdibug-value-custom-set-string-with-size (value)
-  (jdi-debug "jdibug-value-custom-set-string-with-size")
-  (let ((result-value (jdi-value-invoke-method value jdibug-active-thread "size" nil nil)))
+(defun jdibug-object-custom-set-string-with-size (object)
+  (jdi-debug "jdibug-object-custom-set-string-with-size")
+  (let ((result-value (jdi-object-invoke-method object jdibug-active-thread "size" nil nil)))
 	(if result-value
-		(format "%s[%s]" (jdi-class-name (jdi-value-get-reference-type value)) (jdi-value-value result-value))
-	  (format "%s[nosize]" (jdi-class-name (jdi-value-get-reference-type value))))))
+		(format "%s[%s]" (jdi-class-name (jdi-object-get-reference-type object)) (jdi-primitive-value-value result-value))
+	  (format "%s[nosize]" (jdi-class-name (jdi-object-get-reference-type object))))))
 
 (defun jdibug-value-custom-expand-collection (value)
   (jdi-debug "jdibug-value-custom-expand-collection")
@@ -1310,21 +1289,6 @@ to populate the jdi-value-values of the jdi-value.")
 															 (if (= 0 (mod i 2)) "k" "v")
 															 (/ i 2))
 													 v s)))))))
-
-(defun jdibug-value-object-get-fields (value)
-  (jdibug-debug "jdibug-value-object-get-values")
-  (let ((class (jdi-value-get-reference-type value)))
-	(let ((supers (jdi-class-get-all-super class)))
-	  (let ((interfaces (jdi-class-get-all-interfaces class)))
-		(let ((signatures (mapcar 'jdi-class-get-signature (cons class (append supers interfaces)))))
-		  (let* ((setter (find-if (lambda (custom)
-									(member (jdi-class-name-to-class-signature (car custom)) signatures))
-								  jdibug-value-custom-expanders))
-				 (setter2 (if setter (cadr setter))))
-			(if setter2
-				(funcall setter2 value)
-
-			  (jdi-value-get-all-fields value))))))))
 
 (defun jdibug-point-of-active-frame ()
   (catch 'done
