@@ -1125,7 +1125,7 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
   (let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
 		 (type-id (bindat-get-field event :u :type-id))
 		 (signature (jdwp-get-string event :u :signature))
-		 (thread (make-jdi-thread :virtual-machine vm :id (bindat-get-field event :u :thread)))
+		 (thread (jdi-virtual-machine-get-object-create vm (make-jdi-thread :id (bindat-get-field event :u :thread))))
 		 (newclass (jdi-virtual-machine-get-class-create vm type-id :signature signature)))
 	(jdi-debug "class-loaded:%s" signature)
 ;; 	(puthash type-id newclass (jdi-virtual-machine-classes vm))
@@ -1138,10 +1138,20 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
   ())
 
 (defun jdi-handle-thread-start (jdwp event)
-  (jdi-debug "jdi-handle-thread-start"))
+  (jdi-debug "jdi-handle-thread-start")
+  (let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
+		 (thread (jdi-virtual-machine-get-object-create vm (make-jdi-thread
+															:id (bindat-get-field event :u :thread)))))
+	(jdi-debug "jdi-handle-thread-start:%s" (jdi-thread-id thread))
+	(run-hook-with-args 'jdi-thread-start-hooks thread)))
 
 (defun jdi-handle-thread-end (jdwp event)
-  (jdi-debug "jdi-handle-thread-end"))
+  (jdi-debug "jdi-handle-thread-end")
+  (let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
+		 (thread (jdi-virtual-machine-get-object-create vm (make-jdi-thread
+															:id (bindat-get-field event :u :thread)))))
+	(jdi-debug "jdi-handle-thread-end:%s" (jdi-thread-id thread))
+	(run-hook-with-args 'jdi-thread-end-hooks thread)))
 
 (defun jdi-handle-vm-death (jdwp event)
   (jdi-debug "jdi-handle-vm-death")
@@ -1150,7 +1160,7 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 
 (defun jdi-handle-vm-start (jdwp event)
   (let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
-		 (thread (make-jdi-thread :virtual-machine vm :id (bindat-get-field event :u :thread))))
+		 (thread (jdi-virtual-machine-get-object-create vm (make-jdi-thread :id (bindat-get-field event :u :thread)))))
 	(jdi-thread-resume thread)))
 
 (defun jdi-class-name-to-class-signature (class-name)
@@ -1216,6 +1226,12 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 
 (defvar jdi-class-unload-hooks nil
   "handler to be called when a class is unloaded, called with (jdi-class)")
+
+(defvar jdi-thread-start-hooks nil
+  "handler to be called when a thread is started, called with (jdi-thread)")
+
+(defvar jdi-thread-end-hooks nil
+  "handler to be called when a thread is ended, called with (jdi-thread)")
 
 (defun jdi-handle-event (jdwp event)
   (jdi-debug "jdi-handle-event")

@@ -185,6 +185,8 @@ When the user resume, we will switch to this thread and location.")
 (add-hook 'jdi-step-hooks 'jdibug-handle-step)
 (add-hook 'jdi-detached-hooks 'jdibug-handle-detach)
 (add-hook 'jdi-class-prepare-hooks 'jdibug-handle-class-prepare)
+(add-hook 'jdi-thread-start-hooks 'jdibug-handle-thread-start)
+(add-hook 'jdi-thread-end-hooks 'jdibug-handle-thread-end)
 
 (unless (fboundp 'mappend)
   (defun mappend (fn &rest lsts)
@@ -393,6 +395,12 @@ And position the point at the line number."
   (message "JDIbug %s:%s vm detached" (jdi-virtual-machine-host vm) (jdi-virtual-machine-port vm))
   (unless (jdibug-connected-p)
 	(run-hooks 'jdibug-detached-hook)))
+
+(defun jdibug-handle-thread-start (thread)
+  (jdibug-refresh-frames-buffer))
+
+(defun jdibug-handle-thread-end (thread)
+  (jdibug-refresh-frames-buffer))
 
 (defun jdibug-highlight-current-line (line-number)
   (jdibug-debug "jdibug-highlight-current-line:%d:current-buffer=%s" line-number (current-buffer))
