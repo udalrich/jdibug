@@ -158,62 +158,62 @@
 (defconst jdwp-mod-kind-case-step       10)
 (defconst jdwp-mod-kind-instance-only   11)
 
-(setq jdwp-error-constants
-      `((0   none                 "No error has occured.")
-		(10  invalid-thread       "Passed thread is null, is not a valid thread or has exited.")
-		(11  invalid-thread-group "Thread group invalid.")
-		(12  invalid-priority     "Invalid priority.")
-		(13  thread-not-suspended "If the specified thread as not been suspended by and event.")
-		(14  thread-suspended     "Thread already suspended.")
-		(20  invalid-object       "If this reference type has been unloaded and garbage collected.")
-		(21  invalid-class        "Invalid class.")
-		(22  invalid-location     "Invalid location.")
-		(23  invalid-methodid     "Invalid method.")
-		(24  invalid-location     "Invalid location.")
-		(25  invalid-fieldid      "Invalid field.")
-		(30  invalid-frameid      "Invalid jframeID.")
-		(31  no-more-frames       "There are no more Java or JNI frames on the call stack.")
-		(32  opaque-frame         "Information about the frame is not available.")
-		(33  not-current-frame    "Operation can only be performed on current frame.")
-		(34  type-mismatch        "The variable is not appropriate type for the function used.")
-		(35  invalid-slot         "Invalid slot")
-		(40  duplicate            "Item already set.")
-		(41  not-found            "Desired element not found.")
-		(50  invalid-monitor      "Invalid monitor.")
-		(51  not-monitor-owner    "This thread doesn't own the monitor.")
-		(52  interrupt            "The call has been interrupted before completion.")
-		(60  invalid-class-format "The virtual machine attempted to read a class file and determined that the file is malformed or otherwise cannot be interpreted as a class file")
-		(61  circular-class-definition "A circularity has been detected while initializing a class.")
-		(62  fails_verification   "The verifier detected that a class file, though well formed, contained some sort of internal inconsistency or security problem.")
-		(63  add-method-not-implemented "Adding methods has not been implemented.")
-		(64  schema-change-not-implemented "Schema change has not been implemented.")
-		(65  invalid-typestate    "The state of the thread has been modified, and is not inconsistent.")
-		(66  hierarchy-change-not-implemented "A direct superclass is different for the new class version, or the set of directly implemented interfaces is different and canUnrestrictedlyRedefineClasses is false.")
-		(67  delete-method-not-implemented "The new class version does not declare a method declared in the old class version and canUnrestrictedlyRedefineClasses is false.")
-		(68  unsupported-version  "A class file has a version number not supported by this VM.")
-		(69  names-dont-match     "The class name defined in the new class file is different from the name in the old class object.")
-		(70  class-modifiers-change-not-implemented "The new class version has different modifiers and canUnrestrictedlyRedefineClasses is false.")
-		(71  method-modifiers-change-not-implemented "A method in the new class version has different modifiers than its counterpart in the old class version and canUnrestrictedlyRedefineClasses is false.")
-		(99  not-implemented      "The functionality is not implemented in this virtual machine.")
-		(100 null-pointer         "Invalid pointer.")
-		(101 absent-information   "Desired information is not available.")
-		(102 invalid-event-type   "The specified event type id is not recognized.")
-		(103 illegal-argument     "Illegal argument.")
-		(110 out-of-memory        "The function needed to allocate memory and no more memory was available for allocation.")
-		(111 access-denied        "Debugging has not been enabled in this virtual machine. JVMDI cannot be used.")
-		(112 vm-dead              "The virtual machine is not running.")
-		(113 internal             "An unexpected internal error has occurred.")
-		(500 invalid-tag          "object type id or class tag.")
-		(502 already-invoking     "Previous invoke not complete.")
-		(503 invalid-index        "Index is invalid.")
-		(504 invalid-length       "The length is invalid.")
-		(506 invalid-string       "The string is invalid.")
-		(507 invalid-class-loader "The class loader is invalid.")
-		(508 invalid-array        "The array is invalid.")
-		(509 transport-load       "Unable to load the transport.")
-		(510 transport-init       "Unable to initialize the transport.")
-		(511 native-method        "")
-		(512 invalid-count        "The count is invalid.")))
+(defconst jdwp-error-constants
+  `((0   none                 "No error has occured.")
+	(10  invalid-thread       "Passed thread is null, is not a valid thread or has exited.")
+	(11  invalid-thread-group "Thread group invalid.")
+	(12  invalid-priority     "Invalid priority.")
+	(13  thread-not-suspended "If the specified thread as not been suspended by and event.")
+	(14  thread-suspended     "Thread already suspended.")
+	(20  invalid-object       "If this reference type has been unloaded and garbage collected.")
+	(21  invalid-class        "Invalid class.")
+	(22  invalid-location     "Invalid location.")
+	(23  invalid-methodid     "Invalid method.")
+	(24  invalid-location     "Invalid location.")
+	(25  invalid-fieldid      "Invalid field.")
+	(30  invalid-frameid      "Invalid jframeID.")
+	(31  no-more-frames       "There are no more Java or JNI frames on the call stack.")
+	(32  opaque-frame         "Information about the frame is not available.")
+	(33  not-current-frame    "Operation can only be performed on current frame.")
+	(34  type-mismatch        "The variable is not appropriate type for the function used.")
+	(35  invalid-slot         "Invalid slot")
+	(40  duplicate            "Item already set.")
+	(41  not-found            "Desired element not found.")
+	(50  invalid-monitor      "Invalid monitor.")
+	(51  not-monitor-owner    "This thread doesn't own the monitor.")
+	(52  interrupt            "The call has been interrupted before completion.")
+	(60  invalid-class-format "The virtual machine attempted to read a class file and determined that the file is malformed or otherwise cannot be interpreted as a class file")
+	(61  circular-class-definition "A circularity has been detected while initializing a class.")
+	(62  fails_verification   "The verifier detected that a class file, though well formed, contained some sort of internal inconsistency or security problem.")
+	(63  add-method-not-implemented "Adding methods has not been implemented.")
+	(64  schema-change-not-implemented "Schema change has not been implemented.")
+	(65  invalid-typestate    "The state of the thread has been modified, and is not inconsistent.")
+	(66  hierarchy-change-not-implemented "A direct superclass is different for the new class version, or the set of directly implemented interfaces is different and canUnrestrictedlyRedefineClasses is false.")
+	(67  delete-method-not-implemented "The new class version does not declare a method declared in the old class version and canUnrestrictedlyRedefineClasses is false.")
+	(68  unsupported-version  "A class file has a version number not supported by this VM.")
+	(69  names-dont-match     "The class name defined in the new class file is different from the name in the old class object.")
+	(70  class-modifiers-change-not-implemented "The new class version has different modifiers and canUnrestrictedlyRedefineClasses is false.")
+	(71  method-modifiers-change-not-implemented "A method in the new class version has different modifiers than its counterpart in the old class version and canUnrestrictedlyRedefineClasses is false.")
+	(99  not-implemented      "The functionality is not implemented in this virtual machine.")
+	(100 null-pointer         "Invalid pointer.")
+	(101 absent-information   "Desired information is not available.")
+	(102 invalid-event-type   "The specified event type id is not recognized.")
+	(103 illegal-argument     "Illegal argument.")
+	(110 out-of-memory        "The function needed to allocate memory and no more memory was available for allocation.")
+	(111 access-denied        "Debugging has not been enabled in this virtual machine. JVMDI cannot be used.")
+	(112 vm-dead              "The virtual machine is not running.")
+	(113 internal             "An unexpected internal error has occurred.")
+	(500 invalid-tag          "object type id or class tag.")
+	(502 already-invoking     "Previous invoke not complete.")
+	(503 invalid-index        "Index is invalid.")
+	(504 invalid-length       "The length is invalid.")
+	(506 invalid-string       "The string is invalid.")
+	(507 invalid-class-loader "The class loader is invalid.")
+	(508 invalid-array        "The array is invalid.")
+	(509 transport-load       "Unable to load the transport.")
+	(510 transport-init       "Unable to initialize the transport.")
+	(511 native-method        "")
+	(512 invalid-count        "The count is invalid.")))
 
 ;; generate variables for each of the error codes for easier access
 (dolist (element jdwp-error-constants)
@@ -222,81 +222,81 @@
     (set sym code)))
 
 ;;; The bindat specifications:
-(setq jdwp-packet-spec
-      '((:length     u32)
-		(:id         u32)
-		(:flags      u8)))
+(defconst jdwp-packet-spec
+  '((:length     u32)
+	(:id         u32)
+	(:flags      u8)))
 
-(setq jdwp-command-spec
-      '((:length      u32)
-		(:id          u32)
-		(:flags       u8)
-		(:command-set u8)
-		(:command     u8)))
+(defconst jdwp-command-spec
+  '((:length      u32)
+	(:id          u32)
+	(:flags       u8)
+	(:command-set u8)
+	(:command     u8)))
 
-(setq jdwp-reply-spec
-      '((:length     u32)
-		(:id         u32)
-		(:flags      u8)
-		(:error      u16)))
+(defconst jdwp-reply-spec
+  '((:length     u32)
+	(:id         u32)
+	(:flags      u8)
+	(:error      u16)))
 
-(setq jdwp-string-spec
-      '((:length     u32)
-		(:string     vec (:length))))
+(defconst jdwp-string-spec
+  '((:length     u32)
+	(:string     vec (:length))))
 
-(setq jdwp-location-spec
-      '((:type      u8)
-		(:class-id  vec (eval jdwp-reference-type-id-size))
-		(:method-id vec (eval jdwp-method-id-size))
-		(:index     vec 8)))
+(defconst jdwp-location-spec
+  '((:type      u8)
+	(:class-id  vec (eval jdwp-reference-type-id-size))
+	(:method-id vec (eval jdwp-method-id-size))
+	(:index     vec 8)))
 
-(setq jdwp-event-spec
-      `((:suspend-policy         u8)
-		(:events                 u32)
-		(:event                  repeat (:events)
-								 (:event-kind     u8)
-								 (:u              union (:event-kind)
-												  (,jdwp-event-vm-start       (:request-id    u32)
-																			  (:thread        vec (eval jdwp-object-id-size)))
-												  (,jdwp-event-single-step    (:request-id    u32)
-																			  (:thread        vec (eval jdwp-object-id-size))
-																			  (:location      struct jdwp-location-spec))
-												  (,jdwp-event-thread-start   (:request-id    u32)
-																			  (:thread        vec (eval jdwp-object-id-size)))
-												  (,jdwp-event-breakpoint     (:request-id    u32)
-																			  (:thread        vec (eval jdwp-object-id-size))
-																			  (:location      struct jdwp-location-spec))
-												  (,jdwp-event-class-prepare  (:request-id    u32)
-																			  (:thread        vec (eval jdwp-object-id-size))
-																			  (:ref-type-tag  u8)
-																			  (:type-id       vec (eval jdwp-reference-type-id-size))
-																			  (:signature     struct jdwp-string-spec)
-																			  (:status        u32))
-												  (,jdwp-event-class-unload   (:request-id    u32)
-																			  (:signature     struct jdwp-string-spec))
-												  (,jdwp-event-vm-death       (:request-id    u32))))))
+(defconst jdwp-event-spec
+  `((:suspend-policy         u8)
+	(:events                 u32)
+	(:event                  repeat (:events)
+							 (:event-kind     u8)
+							 (:u              union (:event-kind)
+											  (,jdwp-event-vm-start       (:request-id    u32)
+																		  (:thread        vec (eval jdwp-object-id-size)))
+											  (,jdwp-event-single-step    (:request-id    u32)
+																		  (:thread        vec (eval jdwp-object-id-size))
+																		  (:location      struct jdwp-location-spec))
+											  (,jdwp-event-thread-start   (:request-id    u32)
+																		  (:thread        vec (eval jdwp-object-id-size)))
+											  (,jdwp-event-breakpoint     (:request-id    u32)
+																		  (:thread        vec (eval jdwp-object-id-size))
+																		  (:location      struct jdwp-location-spec))
+											  (,jdwp-event-class-prepare  (:request-id    u32)
+																		  (:thread        vec (eval jdwp-object-id-size))
+																		  (:ref-type-tag  u8)
+																		  (:type-id       vec (eval jdwp-reference-type-id-size))
+																		  (:signature     struct jdwp-string-spec)
+																		  (:status        u32))
+											  (,jdwp-event-class-unload   (:request-id    u32)
+																		  (:signature     struct jdwp-string-spec))
+											  (,jdwp-event-vm-death       (:request-id    u32))))))
 
 
 
-(setq jdwp-value-spec
-      `((:type  u8)
-		(:u     union (:type)
-				(,jdwp-tag-array        (:value vec (eval jdwp-object-id-size)))
-				(,jdwp-tag-byte         (:value u8))
-				(,jdwp-tag-char         (:value u16))
-				(,jdwp-tag-object       (:value vec (eval jdwp-object-id-size)))
-				(,jdwp-tag-float        (:value vec 4))
-				(,jdwp-tag-double       (:value vec 8))
-				(,jdwp-tag-int          (:value u32))
-				(,jdwp-tag-long         (:value vec 8))
-				(,jdwp-tag-short        (:value u16))
-				(,jdwp-tag-void)
-				(,jdwp-tag-boolean      (:value u8))
-				(,jdwp-tag-string       (:value vec (eval jdwp-object-id-size)))
-				(,jdwp-tag-thread       (:value vec (eval jdwp-object-id-size)))
-				(,jdwp-tag-thread-group (:value vec (eval jdwp-object-id-size)))
-				(,jdwp-tag-class-loader (:value vec (eval jdwp-object-id-size)))
-				(,jdwp-tag-class-object (:value vec (eval jdwp-object-id-size))))))
+(defconst jdwp-value-spec
+  `((:type  u8)
+	(:u     union (:type)
+			(,jdwp-tag-array        (:value vec (eval jdwp-object-id-size)))
+			(,jdwp-tag-byte         (:value u8))
+			(,jdwp-tag-char         (:value u16))
+			(,jdwp-tag-object       (:value vec (eval jdwp-object-id-size)))
+			(,jdwp-tag-float        (:value vec 4))
+			(,jdwp-tag-double       (:value vec 8))
+			(,jdwp-tag-int          (:value u32))
+			(,jdwp-tag-long         (:value vec 8))
+			(,jdwp-tag-short        (:value u16))
+			(,jdwp-tag-void)
+			(,jdwp-tag-boolean      (:value u8))
+			(,jdwp-tag-string       (:value vec (eval jdwp-object-id-size)))
+			(,jdwp-tag-thread       (:value vec (eval jdwp-object-id-size)))
+			(,jdwp-tag-thread-group (:value vec (eval jdwp-object-id-size)))
+			(,jdwp-tag-class-loader (:value vec (eval jdwp-object-id-size)))
+			(,jdwp-tag-class-object (:value vec (eval jdwp-object-id-size))))))
 
 (defconst jdwp-arrayregion-header-spec
   '((:type    u8)
@@ -325,379 +325,379 @@
 	  (setq spec `((:type u8) (:length u32) (:value repeat (:length) ,repeater)))
 	  (bindat-unpack spec packet))))
 
-(setq jdwp-protocol
-      `((:name         "version"
-					   :command-set   1 
-					   :command      1
-					   :command-spec nil
-					   :reply-spec   ((:description   struct jdwp-string-spec)
-									  (:jdwp-major    u32)
-									  (:jdwp-minor    u32)
-									  (:vm-version    struct jdwp-string-spec)
-									  (:vm-name       struct jdwp-string-spec)))
-		(:name         "classes-by-signature"
-					   :command-set   1
-					   :command      2
-					   :command-spec ((:signature     struct jdwp-string-spec))
-					   :reply-spec   ((:classes       u32)
-									  (:class         repeat (:classes)
-													  (:ref-type-tag u8)
-													  (:type-id      vec (eval jdwp-reference-type-id-size))
-													  (:status       u32))))
-		(:name         "all-classes"
-					   :command-set   1
-					   :command      3
-					   :command-spec nil
-					   :reply-spec   ((:classes       u32)
-									  (:class         repeat (:classes)
-													  (:ref-type-tag u8)
-													  (:type-id      vec (eval jdwp-reference-type-id-size))
-													  (:signature    struct jdwp-string-spec)
-													  (:status       u32))))
-		(:name         "all-threads"
-					   :command-set   1
-					   :command      4
-					   :command-spec nil
-					   :reply-spec   ((:threads       u32)
-									  (:thread        repeat (:threads)
-													  (:id   vec (eval jdwp-object-id-size)))))
-		(:name         "top-level-thread-groups"
-					   :command-set   1
-					   :command      5
-					   :command-spec nil
-					   :reply-spec   ((:groups        u32)
-									  (:group         repeat (:group)
-													  (:id   vec (eval jdwp-object-id-size)))))
-		(:name         "dispose"
-					   :command-set   1
-					   :command      6
-					   :command-spec nil
-					   :reply-spec   nil)
-		(:name         "id-sizes"
-					   :command-set   1
-					   :command      7
-					   :command-spec nil
-					   :reply-spec   ((:field-id-size          u32)
-									  (:method-id-size         u32)
-									  (:object-id-size         u32)
-									  (:reference-type-id-size u32)
-									  (:frame-id-size          u32)))
-		(:name         "suspend"
-					   :command-set   1
-					   :command      8
-					   :command-spec nil
-					   :reply-spec   nil)
-		(:name         "resume"
-					   :command-set   1
-					   :command      9
-					   :command-spec nil
-					   :reply-spec   nil)
-		(:name         "capabilities-new"
-					   :command-set   1
-					   :command      17
-					   :command-spec nil
-					   :reply-spec   ((:can-watch-field-modification      u8)
-									  (:can-watch-field-access            u8)
-									  (:can-get-bytecodes                 u8)
-									  (:can-get-synthetic-attribute       u8)
-									  (:can-get-owned-monitor-info        u8)
-									  (:can-get-current-contended-monitor u8)
-									  (:can-get-monitor-info              u8)
-									  (:can-redefine-class                u8)
-									  (:can-add-method                    u8)
-									  (:can-unrestrictedly-redefine-class u8)
-									  (:can-pop-frames                    u8)
-									  (:can-use-instance-filters          u8)
-									  (:can-get-source-debug-extension    u8)
-									  (:can-request-vm-death-event        u8)
-									  (:can-set-default-stratum           u8)))
-		(:name         "all-classes-with-generic"
-					   :command-set   1
-					   :command      20
-					   :command-spec nil
-					   :reply-spec   ((:classes       u32)
-									  (:class         repeat (:classes)
-													  (:ref-type-tag u8)
-													  (:type-id      vec (eval jdwp-reference-type-id-size))
-													  (:signature    struct jdwp-string-spec)
-													  (:generic-signature    struct jdwp-string-spec)
-													  (:status       u32))))
-		(:name         "signature"
-					   :command-set   2
-					   :command      1
-					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
-					   :reply-spec   ((:signature     struct jdwp-string-spec)))
-		(:name         "class-loader"
-					   :command-set   2
-					   :command      2
-					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
-					   :reply-spec   ((:class-loader  vec (eval jdwp-object-id-size))))
-		(:name         "fields"
-					   :command-set   2
-					   :command      4
-					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
-					   :reply-spec   ((:declared      u32)
-									  (:field         repeat (:declared)
-													  (:id        vec (eval jdwp-field-id-size))
-													  (:name      struct jdwp-string-spec)
-													  (:signature struct jdwp-string-spec)
-													  (:mod-bits  u32))))
-		(:name         "methods"
-					   :command-set   2
-					   :command      5
-					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
-					   :reply-spec   ((:methods       u32)
-									  (:method        repeat (:methods)
-													  (:method-id      vec (eval jdwp-method-id-size))
-													  (:name           struct jdwp-string-spec)
-													  (:signature      struct jdwp-string-spec)
-													  (:mod-bits       u32))))
-		(:name         "reference-get-values"
-					   :command-set   2
-					   :command      6
-					   :command-spec ((:ref-type     vec (eval jdwp-object-id-size))
-									  (:fields        u32)
-									  (:field         repeat (:fields)
-													  (:id vec (eval jdwp-field-id-size))))
-					   :reply-spec   ((:values        u32)
-									  (:value         repeat (:values)
-													  (:value struct jdwp-value-spec))))
-		(:name         "source-file"
-					   :command-set   2
-					   :command      7
-					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
-					   :reply-spec   ((:source-file   struct jdwp-string-spec)))
-		(:name         "interfaces"
-					   :command-set   2
-					   :command      10
-					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
-					   :reply-spec   ((:interfaces    u32)
-									  (:interface     repeat (:interfaces)
-													  (:type   vec (eval jdwp-reference-type-id-size)))))
-		(:name         "class-object"
-					   :command-set   2
-					   :command      11
-					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
-					   :reply-spec   ((:class-object  vec (eval jdwp-object-id-size))))
-		(:name         "signature-with-generic"
-					   :command-set   2
-					   :command      13
-					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
-					   :reply-spec   ((:signature     struct jdwp-string-spec)
-									  (:generic-signature struct jdwp-string-spec)))
-		(:name         "fields-with-generic"
-					   :command-set   2
-					   :command      14
-					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
-					   :reply-spec   ((:declared      u32)
-									  (:field         repeat (:declared)
-													  (:id        vec (eval jdwp-field-id-size))
-													  (:name      struct jdwp-string-spec)
-													  (:signature struct jdwp-string-spec)
-													  (:generic-signature struct jdwp-string-spec)
-													  (:mod-bits  u32))))
-		(:name         "superclass"
-					   :command-set   3
-					   :command      1
-					   :command-spec ((:class         vec (eval jdwp-reference-type-id-size)))
-					   :reply-spec   ((:superclass    vec (eval jdwp-reference-type-id-size))))
-		(:name         "class-invoke-method"
-					   :command-set   3
-					   :command      3
-					   :command-spec ((:class         vec (eval jdwp-reference-type-id-size))
-									  (:thread        vec (eval jdwp-object-id-size))
-									  (:method-id     vec (eval jdwp-method-id-size))
-									  (:arguments     u32)
-									  (:argument      repeat (:arguments)
-													  (:value struct jdwp-value-spec))
-									  (:options       u32))
-					   :reply-spec   ((:return-value     struct jdwp-value-spec)
-									  (:exception-type   u8)
-									  (:exception-object vec (eval jdwp-object-id-size))))
-		(:name         "line-table"
-					   :command-set   6
-					   :command      1
-					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size))
-									  (:method-id     vec (eval jdwp-method-id-size)))
-					   :reply-spec   ((:start         vec 8)
-									  (:end           vec 8)
-									  (:lines         u32)
-									  (:line          repeat (:lines)
-													  (:line-code-index vec 8)
-													  (:line-number     u32))))
-		(:name         "variable-table"
-					   :command-set   6
-					   :command      2
-					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size))
-									  (:method-id     vec (eval jdwp-method-id-size)))
-					   :reply-spec   ((:arg-cnt       u32)
-									  (:slots         u32)
-									  (:slot          repeat (:slots)
-													  (:code-index    vec 8)
-													  (:name          struct jdwp-string-spec)
-													  (:signature     struct jdwp-string-spec)
-													  (:length        u32)
-													  (:slot          u32))))
-		(:name         "variable-table-with-generic"
-					   :command-set   6
-					   :command      5
-					   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size))
-									  (:method-id     vec (eval jdwp-method-id-size)))
-					   :reply-spec   ((:arg-cnt       u32)
-									  (:slots         u32)
-									  (:slot          repeat (:slots)
-													  (:code-index    vec 8)
-													  (:name          struct jdwp-string-spec)
-													  (:signature     struct jdwp-string-spec)
-													  (:generic-signature     struct jdwp-string-spec)
-													  (:length        u32)
-													  (:slot          u32))))
-		(:name         "object-reference-type"
-					   :command-set   9
-					   :command      1
-					   :command-spec ((:object        vec (eval jdwp-object-id-size)))
-					   :reply-spec   ((:ref-type-tag  u8)
-									  (:type-id       vec (eval jdwp-object-id-size))))
-		(:name         "object-get-values"
-					   :command-set   9
-					   :command      2
-					   :command-spec ((:object        vec (eval jdwp-object-id-size))
-									  (:fields        u32)
-									  (:field         repeat (:fields)
-													  (:id vec (eval jdwp-field-id-size))))
-					   :reply-spec   ((:values        u32)
-									  (:value         repeat (:values)
-													  (:value struct jdwp-value-spec))))
-		(:name         "object-invoke-method"
-					   :command-set   9
-					   :command      6
-					   :command-spec ((:object        vec (eval jdwp-object-id-size))
-									  (:thread        vec (eval jdwp-object-id-size))
-									  (:class         vec (eval jdwp-reference-type-id-size))
-									  (:method-id     vec (eval jdwp-method-id-size))
-									  (:arguments     u32)
-									  (:argument      repeat (:arguments)
-													  (:value struct jdwp-value-spec))
-									  (:options       u32))
-					   :reply-spec   ((:return-value     struct jdwp-value-spec)
-									  (:exception-type   u8)
-									  (:exception-object vec (eval jdwp-object-id-size))))
-		(:name         "string-value"
-					   :command-set   10
-					   :command      1
-					   :command-spec ((:object        vec (eval jdwp-object-id-size)))
-					   :reply-spec   ((:value         struct jdwp-string-spec)))
-		(:name         "thread-name"
-					   :command-set   11
-					   :command      1
-					   :command-spec ((:thread        vec (eval jdwp-object-id-size)))
-					   :reply-spec   ((:thread-name   struct jdwp-string-spec)))
-		(:name         "thread-resume"
-					   :command-set   11
-					   :command      3
-					   :command-spec ((:thread        vec (eval jdwp-object-id-size)))
-					   :reply-spec   nil)
-		(:name         "thread-status"
-					   :command-set   11
-					   :command      4
-					   :command-spec ((:thread         vec (eval jdwp-object-id-size)))
-					   :reply-spec   ((:thread-status  u32)
-									  (:suspend-status u32)))
-		(:name         "thread-group"
-					   :command-set   11
-					   :command      5
-					   :command-spec ((:thread         vec (eval jdwp-object-id-size)))
-					   :reply-spec   ((:group          vec (eval jdwp-object-id-size))))
-		(:name         "frames"
-					   :command-set   11
-					   :command      6
-					   :command-spec ((:thread         vec (eval jdwp-object-id-size))
-									  (:start-frame    u32)
-									  (:length         u32))
-					   :reply-spec   ((:frames         u32)
-									  (:frame          repeat (:frames)
-													   (:id       vec (eval jdwp-frame-id-size))
-													   (:location struct jdwp-location-spec))))
-		(:name         "frame-count"
-					   :command-set   11
-					   :command      7
-					   :command-spec ((:thread         vec (eval jdwp-object-id-size)))
-					   :reply-spec   ((:frame-count    u32)))
-		(:name         "thread-group-name"
-					   :command-set   12
-					   :command      1
-					   :command-spec ((:group         vec (eval jdwp-object-id-size)))
-					   :reply-spec   ((:group-name    struct jdwp-string-spec)))
-		(:name         "thread-group-parent"
-					   :command-set   12
-					   :command      2
-					   :command-spec ((:group         vec (eval jdwp-object-id-size)))
-					   :reply-spec   ((:parent-group  vec (eval jdwp-object-id-size))))
-		(:name         "thread-group-children"
-					   :command-set   12
-					   :command      3
-					   :command-spec ((:group         vec (eval jdwp-object-id-size)))
-					   :reply-spec   ((:child-threads u32)
-									  (:child-thread  repeat (:child-threads)
-													  (:child-thread   vec (eval jdwp-object-id-size)))
-									  (:child-groups  u32)
-									  (:child-group   repeat (:child-groups)
-													  (:child-group    vec (eval jdwp-object-id-size)))))
-		(:name         "array-length"
-					   :command-set   13
-					   :command      1
-					   :command-spec ((:array-object  vec (eval jdwp-object-id-size)))
-					   :reply-spec   ((:array-length  u32)))
-		(:name         "array-get-values"
-					   :command-set   13
-					   :command      2
-					   :command-spec ((:array-object  vec (eval jdwp-object-id-size))
-									  (:first-index   u32)
-									  (:length        u32))
-					   :reply-spec   nil)
-		(:name         "set"
-					   :command-set   15
-					   :command      1
-					   :command-spec ((:event-kind     u8)
-									  (:suspend-policy u8)
-									  (:modifiers      u32)
-									  (:modifier       repeat (:modifiers)
-													   (:mod-kind    u8)
-													   (:u           union (:mod-kind)
-																	 (,jdwp-mod-kind-case-count     (:count    u32))
-																	 (,jdwp-mod-kind-class-match    (:class-pattern struct jdwp-string-spec))
-																	 (,jdwp-mod-kind-location-only  (:location struct jdwp-location-spec))
-																	 (,jdwp-mod-kind-exception-only (:exception vec (eval jdwp-reference-type-id-size))
-																									(:caught    u8)
-																									(:uncaught  u8))
-																	 (,jdwp-mod-kind-case-step      (:thread   vec (eval jdwp-object-id-size))
-																									(:size     u32)
-																									(:depth    u32)))))
-					   :reply-spec   ((:request-id    u32)))
-		(:name         "clear"
-					   :command-set   15
-					   :command      2
-					   :command-spec ((:event         u8)
-									  (:request-id    u32))
-					   :reply-spec   nil)
-		(:name         "stack-frame-get-values"
-					   :command-set   16
-					   :command      1
-					   :command-spec ((:thread        vec (eval jdwp-object-id-size))
-									  (:frame         vec (eval jdwp-frame-id-size))
-									  (:slots         u32)
-									  (:slot          repeat (:slots)
-													  (:slot    u32)
-													  (:sigbyte u8)))
-					   :reply-spec   ((:values        u32)
-									  (:value         repeat (:values)
-													  (:slot-value struct jdwp-value-spec))))
-		(:name         "stack-frame-this-object"
-					   :command-set   16
-					   :command      3
-					   :command-spec ((:thread        vec (eval jdwp-object-id-size))
-									  (:frame         vec (eval jdwp-frame-id-size)))
-					   :reply-spec   ((:object-this   struct jdwp-value-spec)))))
+(defconst jdwp-protocol
+  `((:name         "version"
+				   :command-set  1 
+				   :command      1
+				   :command-spec nil
+				   :reply-spec   ((:description   struct jdwp-string-spec)
+								  (:jdwp-major    u32)
+								  (:jdwp-minor    u32)
+								  (:vm-version    struct jdwp-string-spec)
+								  (:vm-name       struct jdwp-string-spec)))
+	(:name         "classes-by-signature"
+				   :command-set  1
+				   :command      2
+				   :command-spec ((:signature     struct jdwp-string-spec))
+				   :reply-spec   ((:classes       u32)
+								  (:class         repeat (:classes)
+												  (:ref-type-tag u8)
+												  (:type-id      vec (eval jdwp-reference-type-id-size))
+												  (:status       u32))))
+	(:name         "all-classes"
+				   :command-set  1
+				   :command      3
+				   :command-spec nil
+				   :reply-spec   ((:classes       u32)
+								  (:class         repeat (:classes)
+												  (:ref-type-tag u8)
+												  (:type-id      vec (eval jdwp-reference-type-id-size))
+												  (:signature    struct jdwp-string-spec)
+												  (:status       u32))))
+	(:name         "all-threads"
+				   :command-set  1
+				   :command      4
+				   :command-spec nil
+				   :reply-spec   ((:threads       u32)
+								  (:thread        repeat (:threads)
+												  (:id   vec (eval jdwp-object-id-size)))))
+	(:name         "top-level-thread-groups"
+				   :command-set  1
+				   :command      5
+				   :command-spec nil
+				   :reply-spec   ((:groups        u32)
+								  (:group         repeat (:group)
+												  (:id   vec (eval jdwp-object-id-size)))))
+	(:name         "dispose"
+				   :command-set  1
+				   :command      6
+				   :command-spec nil
+				   :reply-spec   nil)
+	(:name         "id-sizes"
+				   :command-set  1
+				   :command      7
+				   :command-spec nil
+				   :reply-spec   ((:field-id-size          u32)
+								  (:method-id-size         u32)
+								  (:object-id-size         u32)
+								  (:reference-type-id-size u32)
+								  (:frame-id-size          u32)))
+	(:name         "suspend"
+				   :command-set  1
+				   :command      8
+				   :command-spec nil
+				   :reply-spec   nil)
+	(:name         "resume"
+				   :command-set  1
+				   :command      9
+				   :command-spec nil
+				   :reply-spec   nil)
+	(:name         "capabilities-new"
+				   :command-set  1
+				   :command      17
+				   :command-spec nil
+				   :reply-spec   ((:can-watch-field-modification      u8)
+								  (:can-watch-field-access            u8)
+								  (:can-get-bytecodes                 u8)
+								  (:can-get-synthetic-attribute       u8)
+								  (:can-get-owned-monitor-info        u8)
+								  (:can-get-current-contended-monitor u8)
+								  (:can-get-monitor-info              u8)
+								  (:can-redefine-class                u8)
+								  (:can-add-method                    u8)
+								  (:can-unrestrictedly-redefine-class u8)
+								  (:can-pop-frames                    u8)
+								  (:can-use-instance-filters          u8)
+								  (:can-get-source-debug-extension    u8)
+								  (:can-request-vm-death-event        u8)
+								  (:can-set-default-stratum           u8)))
+	(:name         "all-classes-with-generic"
+				   :command-set  1
+				   :command      20
+				   :command-spec nil
+				   :reply-spec   ((:classes       u32)
+								  (:class         repeat (:classes)
+												  (:ref-type-tag u8)
+												  (:type-id      vec (eval jdwp-reference-type-id-size))
+												  (:signature    struct jdwp-string-spec)
+												  (:generic-signature    struct jdwp-string-spec)
+												  (:status       u32))))
+	(:name         "signature"
+				   :command-set  2
+				   :command      1
+				   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
+				   :reply-spec   ((:signature     struct jdwp-string-spec)))
+	(:name         "class-loader"
+				   :command-set  2
+				   :command      2
+				   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
+				   :reply-spec   ((:class-loader  vec (eval jdwp-object-id-size))))
+	(:name         "fields"
+				   :command-set  2
+				   :command      4
+				   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
+				   :reply-spec   ((:declared      u32)
+								  (:field         repeat (:declared)
+												  (:id        vec (eval jdwp-field-id-size))
+												  (:name      struct jdwp-string-spec)
+												  (:signature struct jdwp-string-spec)
+												  (:mod-bits  u32))))
+	(:name         "methods"
+				   :command-set  2
+				   :command      5
+				   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
+				   :reply-spec   ((:methods       u32)
+								  (:method        repeat (:methods)
+												  (:method-id      vec (eval jdwp-method-id-size))
+												  (:name           struct jdwp-string-spec)
+												  (:signature      struct jdwp-string-spec)
+												  (:mod-bits       u32))))
+	(:name         "reference-get-values"
+				   :command-set  2
+				   :command      6
+				   :command-spec ((:ref-type     vec (eval jdwp-object-id-size))
+								  (:fields        u32)
+								  (:field         repeat (:fields)
+												  (:id vec (eval jdwp-field-id-size))))
+				   :reply-spec   ((:values        u32)
+								  (:value         repeat (:values)
+												  (:value struct jdwp-value-spec))))
+	(:name         "source-file"
+				   :command-set  2
+				   :command      7
+				   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
+				   :reply-spec   ((:source-file   struct jdwp-string-spec)))
+	(:name         "interfaces"
+				   :command-set  2
+				   :command      10
+				   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
+				   :reply-spec   ((:interfaces    u32)
+								  (:interface     repeat (:interfaces)
+												  (:type   vec (eval jdwp-reference-type-id-size)))))
+	(:name         "class-object"
+				   :command-set  2
+				   :command      11
+				   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
+				   :reply-spec   ((:class-object  vec (eval jdwp-object-id-size))))
+	(:name         "signature-with-generic"
+				   :command-set  2
+				   :command      13
+				   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
+				   :reply-spec   ((:signature     struct jdwp-string-spec)
+								  (:generic-signature struct jdwp-string-spec)))
+	(:name         "fields-with-generic"
+				   :command-set  2
+				   :command      14
+				   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
+				   :reply-spec   ((:declared      u32)
+								  (:field         repeat (:declared)
+												  (:id        vec (eval jdwp-field-id-size))
+												  (:name      struct jdwp-string-spec)
+												  (:signature struct jdwp-string-spec)
+												  (:generic-signature struct jdwp-string-spec)
+												  (:mod-bits  u32))))
+	(:name         "superclass"
+				   :command-set  3
+				   :command      1
+				   :command-spec ((:class         vec (eval jdwp-reference-type-id-size)))
+				   :reply-spec   ((:superclass    vec (eval jdwp-reference-type-id-size))))
+	(:name         "class-invoke-method"
+				   :command-set  3
+				   :command      3
+				   :command-spec ((:class         vec (eval jdwp-reference-type-id-size))
+								  (:thread        vec (eval jdwp-object-id-size))
+								  (:method-id     vec (eval jdwp-method-id-size))
+								  (:arguments     u32)
+								  (:argument      repeat (:arguments)
+												  (:value struct jdwp-value-spec))
+								  (:options       u32))
+				   :reply-spec   ((:return-value     struct jdwp-value-spec)
+								  (:exception-type   u8)
+								  (:exception-object vec (eval jdwp-object-id-size))))
+	(:name         "line-table"
+				   :command-set  6
+				   :command      1
+				   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size))
+								  (:method-id     vec (eval jdwp-method-id-size)))
+				   :reply-spec   ((:start         vec 8)
+								  (:end           vec 8)
+								  (:lines         u32)
+								  (:line          repeat (:lines)
+												  (:line-code-index vec 8)
+												  (:line-number     u32))))
+	(:name         "variable-table"
+				   :command-set  6
+				   :command      2
+				   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size))
+								  (:method-id     vec (eval jdwp-method-id-size)))
+				   :reply-spec   ((:arg-cnt       u32)
+								  (:slots         u32)
+								  (:slot          repeat (:slots)
+												  (:code-index    vec 8)
+												  (:name          struct jdwp-string-spec)
+												  (:signature     struct jdwp-string-spec)
+												  (:length        u32)
+												  (:slot          u32))))
+	(:name         "variable-table-with-generic"
+				   :command-set  6
+				   :command      5
+				   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size))
+								  (:method-id     vec (eval jdwp-method-id-size)))
+				   :reply-spec   ((:arg-cnt       u32)
+								  (:slots         u32)
+								  (:slot          repeat (:slots)
+												  (:code-index    vec 8)
+												  (:name          struct jdwp-string-spec)
+												  (:signature     struct jdwp-string-spec)
+												  (:generic-signature     struct jdwp-string-spec)
+												  (:length        u32)
+												  (:slot          u32))))
+	(:name         "object-reference-type"
+				   :command-set  9
+				   :command      1
+				   :command-spec ((:object        vec (eval jdwp-object-id-size)))
+				   :reply-spec   ((:ref-type-tag  u8)
+								  (:type-id       vec (eval jdwp-object-id-size))))
+	(:name         "object-get-values"
+				   :command-set  9
+				   :command      2
+				   :command-spec ((:object        vec (eval jdwp-object-id-size))
+								  (:fields        u32)
+								  (:field         repeat (:fields)
+												  (:id vec (eval jdwp-field-id-size))))
+				   :reply-spec   ((:values        u32)
+								  (:value         repeat (:values)
+												  (:value struct jdwp-value-spec))))
+	(:name         "object-invoke-method"
+				   :command-set  9
+				   :command      6
+				   :command-spec ((:object        vec (eval jdwp-object-id-size))
+								  (:thread        vec (eval jdwp-object-id-size))
+								  (:class         vec (eval jdwp-reference-type-id-size))
+								  (:method-id     vec (eval jdwp-method-id-size))
+								  (:arguments     u32)
+								  (:argument      repeat (:arguments)
+												  (:value struct jdwp-value-spec))
+								  (:options       u32))
+				   :reply-spec   ((:return-value     struct jdwp-value-spec)
+								  (:exception-type   u8)
+								  (:exception-object vec (eval jdwp-object-id-size))))
+	(:name         "string-value"
+				   :command-set  10
+				   :command      1
+				   :command-spec ((:object        vec (eval jdwp-object-id-size)))
+				   :reply-spec   ((:value         struct jdwp-string-spec)))
+	(:name         "thread-name"
+				   :command-set  11
+				   :command      1
+				   :command-spec ((:thread        vec (eval jdwp-object-id-size)))
+				   :reply-spec   ((:thread-name   struct jdwp-string-spec)))
+	(:name         "thread-resume"
+				   :command-set  11
+				   :command      3
+				   :command-spec ((:thread        vec (eval jdwp-object-id-size)))
+				   :reply-spec   nil)
+	(:name         "thread-status"
+				   :command-set  11
+				   :command      4
+				   :command-spec ((:thread         vec (eval jdwp-object-id-size)))
+				   :reply-spec   ((:thread-status  u32)
+								  (:suspend-status u32)))
+	(:name         "thread-group"
+				   :command-set  11
+				   :command      5
+				   :command-spec ((:thread         vec (eval jdwp-object-id-size)))
+				   :reply-spec   ((:group          vec (eval jdwp-object-id-size))))
+	(:name         "frames"
+				   :command-set  11
+				   :command      6
+				   :command-spec ((:thread         vec (eval jdwp-object-id-size))
+								  (:start-frame    u32)
+								  (:length         u32))
+				   :reply-spec   ((:frames         u32)
+								  (:frame          repeat (:frames)
+												   (:id       vec (eval jdwp-frame-id-size))
+												   (:location struct jdwp-location-spec))))
+	(:name         "frame-count"
+				   :command-set  11
+				   :command      7
+				   :command-spec ((:thread         vec (eval jdwp-object-id-size)))
+				   :reply-spec   ((:frame-count    u32)))
+	(:name         "thread-group-name"
+				   :command-set  12
+				   :command      1
+				   :command-spec ((:group         vec (eval jdwp-object-id-size)))
+				   :reply-spec   ((:group-name    struct jdwp-string-spec)))
+	(:name         "thread-group-parent"
+				   :command-set  12
+				   :command      2
+				   :command-spec ((:group         vec (eval jdwp-object-id-size)))
+				   :reply-spec   ((:parent-group  vec (eval jdwp-object-id-size))))
+	(:name         "thread-group-children"
+				   :command-set  12
+				   :command      3
+				   :command-spec ((:group         vec (eval jdwp-object-id-size)))
+				   :reply-spec   ((:child-threads u32)
+								  (:child-thread  repeat (:child-threads)
+												  (:child-thread   vec (eval jdwp-object-id-size)))
+								  (:child-groups  u32)
+								  (:child-group   repeat (:child-groups)
+												  (:child-group    vec (eval jdwp-object-id-size)))))
+	(:name         "array-length"
+				   :command-set  13
+				   :command      1
+				   :command-spec ((:array-object  vec (eval jdwp-object-id-size)))
+				   :reply-spec   ((:array-length  u32)))
+	(:name         "array-get-values"
+				   :command-set  13
+				   :command      2
+				   :command-spec ((:array-object  vec (eval jdwp-object-id-size))
+								  (:first-index   u32)
+								  (:length        u32))
+				   :reply-spec   nil)
+	(:name         "set"
+				   :command-set  15
+				   :command      1
+				   :command-spec ((:event-kind     u8)
+								  (:suspend-policy u8)
+								  (:modifiers      u32)
+								  (:modifier       repeat (:modifiers)
+												   (:mod-kind    u8)
+												   (:u           union (:mod-kind)
+																 (,jdwp-mod-kind-case-count     (:count    u32))
+																 (,jdwp-mod-kind-class-match    (:class-pattern struct jdwp-string-spec))
+																 (,jdwp-mod-kind-location-only  (:location struct jdwp-location-spec))
+																 (,jdwp-mod-kind-exception-only (:exception vec (eval jdwp-reference-type-id-size))
+																								(:caught    u8)
+																								(:uncaught  u8))
+																 (,jdwp-mod-kind-case-step      (:thread   vec (eval jdwp-object-id-size))
+																								(:size     u32)
+																								(:depth    u32)))))
+				   :reply-spec   ((:request-id    u32)))
+	(:name         "clear"
+				   :command-set  15
+				   :command      2
+				   :command-spec ((:event         u8)
+								  (:request-id    u32))
+				   :reply-spec   nil)
+	(:name         "stack-frame-get-values"
+				   :command-set  16
+				   :command      1
+				   :command-spec ((:thread        vec (eval jdwp-object-id-size))
+								  (:frame         vec (eval jdwp-frame-id-size))
+								  (:slots         u32)
+								  (:slot          repeat (:slots)
+												  (:slot    u32)
+												  (:sigbyte u8)))
+				   :reply-spec   ((:values        u32)
+								  (:value         repeat (:values)
+												  (:slot-value struct jdwp-value-spec))))
+	(:name         "stack-frame-this-object"
+				   :command-set  16
+				   :command      3
+				   :command-spec ((:thread        vec (eval jdwp-object-id-size))
+								  (:frame         vec (eval jdwp-frame-id-size)))
+				   :reply-spec   ((:object-this   struct jdwp-value-spec)))))
 
 (defconst jdwp-handshake "JDWP-Handshake")
 
