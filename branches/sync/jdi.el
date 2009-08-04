@@ -125,30 +125,6 @@
   length
   slot)
 
-;;   name
-;;   signature
-;;   generic-signature
-;;   type
-;;   value
-;;   (string "null")
-
-;;   ;; this is only valid when this is top level (not contained in any other object)
-;;   slot
-
-;;   ;; for values that are inside method
-;;   code-index
-;;   code-index-length
-
-;;   ;; for values which are of type object
-;;   class	;; jdi-class
-
-;;   ;; for values which are of type array
-;;   array-length 
-
-;;   ;; for object/array, this is the list that are displayed when the tree is expanded
-;;   ;; list of jdi-values
-;;   values)
-
 (defstruct (jdi-field (:include jdi-mirror))
   id
   name
@@ -849,21 +825,21 @@ http://java.sun.com/j2se/1.5.0/docs/guide/jni/spec/types.html#wp428"
 
 (defalias 'jdi-value-get-reference-type 'jdi-object-get-reference-type)
 
-(defun jdi-value-array-display-string (value size)
+(defun jdi-array-display-string (array size)
   "for array of three dimension, return i[2][][]."
-  (let* ((class-name (jdi-class-name (jdi-value-get-reference-type value))) ;; this will be i[][][]
+  (let* ((class-name (jdi-class-name (jdi-object-get-reference-type array))) ;; this will be i[][][]
 		 (pos (string-match "\\]" class-name))) ;; just find the first closing bracket and insert the size before that
 	(format "%s%s%s"
 			(substring class-name 0 pos)
 			size
 			(substring class-name pos))))
 
-(defun jdi-value-get-array-length (value)
-  (jdi-debug "jdi-value-get-array-length:%s" (jdi-value-value value))
+(defun jdi-array-get-array-length (array)
+  (jdi-debug "jdi-array-get-array-length:%s" (jdi-object-id array))
   (let ((reply (jdwp-send-command 
-				(jdi-mirror-jdwp value) 
+				(jdi-mirror-jdwp array) 
 				"array-length" 
-				`((:array-object . ,(jdi-value-value value))))))
+				`((:array-object . ,(jdi-object-id array))))))
 	(bindat-get-field reply :array-length)))
 
 (defun jdi-format-string (str)
@@ -1069,29 +1045,29 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 		(setf (jdi-class-fields class) t)
 		nil))))
 
-(defun jdi-value-array-get-values (value)
-  (jdi-debug "jdi-value-get-array-values:value=%s" (jdi-value-value value))
+(defun jdi-array-get-values (array)
+  (jdi-debug "jdi-array-get-values:object-id=%s" (jdi-object-id array))
 
-  (unless (equal (jdi-value-value value) [0 0 0 0 0 0 0 0])
-	(let ((array-length (jdi-value-get-array-length value)))
+  (unless (equal (jdi-object-id array) [0 0 0 0 0 0 0 0])
+	(let ((array-length (jdi-array-get-array-length array)))
 	  (when (> array-length 0)
-		(let* ((reply (jdwp-send-command (jdi-mirror-jdwp value) "array-get-values"
-										 `((:array-object . ,(jdi-value-value value))
+		(let* ((reply (jdwp-send-command (jdi-mirror-jdwp array) "array-get-values"
+										 `((:array-object . ,(jdi-object-id array))
 										   (:first-index . 0)
 										   (:length . ,array-length))))
-			   (array (jdwp-unpack-arrayregion (jdi-mirror-jdwp value) reply)))
-		  (jdi-trace "got array-get-values:%s" array)
-		  (if (or (= (bindat-get-field array :type) jdwp-tag-object)
-				  (= (bindat-get-field array :type) jdwp-tag-array))
-			  (loop for value-reply in (bindat-get-field array :value)
+			   (reply-array (jdwp-unpack-arrayregion (jdi-mirror-jdwp array) reply)))
+		  (jdi-trace "got array-get-values:%s" reply-array)
+		  (if (or (= (bindat-get-field reply-array :type) jdwp-tag-object)
+				  (= (bindat-get-field reply-array :type) jdwp-tag-array))
+			  (loop for value-reply in (bindat-get-field reply-array :value)
 					for i from 0 to (- array-length 1)
-					collect (jdi-virtual-machine-get-value-create (jdi-mirror-virtual-machine value)
+					collect (jdi-virtual-machine-get-value-create (jdi-mirror-virtual-machine array)
 																  (bindat-get-field value-reply :value :type)
 																  (bindat-get-field value-reply :value :u :value)))
-			(loop for value-reply in (bindat-get-field array :value)
+			(loop for value-reply in (bindat-get-field reply-array :value)
 				  for i from 0 to (- array-length 1)
-				  collect (jdi-virtual-machine-get-value-create (jdi-mirror-virtual-machine value)
-																(bindat-get-field array :type)
+				  collect (jdi-virtual-machine-get-value-create (jdi-mirror-virtual-machine array)
+																(bindat-get-field reply-array :type)
 																(bindat-get-field value-reply :value)))))))))
 
 (defun jdi-handle-breakpoint-event (jdwp event)

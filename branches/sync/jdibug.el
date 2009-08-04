@@ -562,7 +562,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 			(list (jdibug-make-methods-node value)))))
 
 (defun jdibug-value-expander-array (value)
-  (let* ((values (jdi-value-array-get-values value))
+  (let* ((values (jdi-array-get-values value))
 		 (strings (mapcar 'jdibug-value-get-string values)))
 	(loop for v in values
 		  for s in strings
@@ -1205,7 +1205,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 (defun jdibug-value-get-string-array (value)
   (jdibug-debug "jdibug-value-get-string-array")
   (let ((length (jdi-value-get-array-length value)))
-	(jdi-value-array-display-string value length)))
+	(jdi-array-display-string value length)))
 
 (defun jdibug-value-get-string-string (value)
   (jdibug-debug "jdibug-value-get-string-string")
@@ -1301,8 +1301,8 @@ to populate the jdi-value-values of the jdi-value.")
 	  (let ((keyset-array (jdi-value-invoke-method keyset-value jdibug-active-thread "toArray" nil nil))
 			(values-array (jdi-value-invoke-method values-value jdibug-active-thread "toArray" nil nil)))
 		(when (and keyset-array values-array)
-		  (loop for v in (loop for key in (jdi-value-array-get-values keyset-array)
-							   for value in (jdi-value-array-get-values values-array)
+		  (loop for v in (loop for key in (jdi-array-get-values keyset-array)
+							   for value in (jdi-array-get-values values-array)
 							   append (list key value))
 				for s = (jdibug-value-get-string v)
 				for i from 0 by 1
