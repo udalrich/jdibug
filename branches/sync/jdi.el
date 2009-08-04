@@ -818,6 +818,7 @@ http://java.sun.com/j2se/1.5.0/docs/guide/jni/spec/types.html#wp428"
   (assert (equal (jdi-jni-to-print "[[I") (list "int[][]")))
   (assert (equal (jdi-jni-to-print "[[Ljava/lang/String;") (list "java.lang.String[][]")))
   (assert (equal (jdi-jni-to-print "[[Ljava/lang/String;" t) (list "String[][]")))
+  (assert (equal (jdi-jni-to-print "()J" t) (list "long")))
   (assert (equal (jdi-jni-to-print "(I)J") (list "long" "int")))
   (assert (equal (jdi-jni-to-print "(ILjava/lang/String;[I)J" t) (list "long" "int" "String" "int[]"))))
 
@@ -959,16 +960,6 @@ http://java.sun.com/j2se/1.5.0/docs/guide/jni/spec/types.html#wp428"
 			nil)
 		(setf (jdi-class-super class) (jdi-virtual-machine-get-class-create (jdi-mirror-virtual-machine class) (bindat-get-field reply :superclass)))
 		(jdi-class-super class)))))
-
-(defun jdi-method-invoke (method)
-  "Invoke a simple method (do not require arguments) in the class."
-  (jdi-debug "jdi-class-invoke-method:%s" (jdi-method-name method))
-  (jdwp-send-command (jdi-mirror-jdwp method) "class-invoke-method"
-					 `((:class . ,(jdi-class-id (jdi-method-class method)))
-					   (:thread . ,(jdi-virtual-machine-suspended-thread-id (jdi-mirror-virtual-machine method)))
-					   (:method-id . ,(jdi-method-id method))
-					   (:arguments . 0)
-					   (:options . ,jdwp-invoke-single-threaded))))
 
 (defun jdi-class-get-interfaces (class)
   "Gets the interfaces directly implemented by this class. 
@@ -1181,6 +1172,24 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 
 (defun jdi-method-static-p (method)
   (not (equal (logand (jdi-method-mod-bits method) jdi-access-static) 0)))
+
+(defun jdi-class-invoke-method (class thread method arguments options)
+  "Invoke the static method on the class on the thread, if method is a string, it will pick the first method that matches the method-name."
+  (jdi-debug "jdi-class-invoke-method")
+  (when (stringp method)
+	(setq method (find-if (lambda (obj)
+							(equal (jdi-method-name obj) method))
+						  (jdi-class-get-all-methods class))))
+  (when method
+	(let ((reply (jdwp-send-command (jdi-mirror-jdwp class) "class-invoke-method"
+									`((:class . ,(jdi-class-id class))
+									  (:thread . ,(jdi-thread-id thread))
+									  (:method-id . ,(jdi-method-id method))
+									  (:arguments . 0)
+									  (:options . ,jdwp-invoke-single-threaded)))))
+	  (jdi-virtual-machine-get-value-create (jdi-mirror-virtual-machine object)
+											(bindat-get-field reply :return-value :type)
+											(bindat-get-field reply :return-value :u :value)))))
 
 (defun jdi-object-invoke-method (object thread method arguments options)
   "Invoke the method on the value on the thread, if method is a string, it will pick the first method that matches the method-name."

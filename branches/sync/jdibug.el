@@ -1194,18 +1194,21 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (if (equal (jdi-object-id object) [0 0 0 0 0 0 0 0])
 	  "null"
 
-	(let* ((setter (find-if (lambda (custom)
-							  (jdi-object-instance-of-p object (jdi-class-name-to-class-signature (car custom))))
-							jdibug-object-custom-set-strings))
-		   (setter2 (if setter (cadr setter))))
-	  (jdibug-debug "jdibug-object-get-string: object-id=%s found-setter:%s" (jdi-object-id object) setter)
+	(let* ((pair (find-if (lambda (custom)
+							(jdi-object-instance-of-p object (jdi-class-name-to-class-signature (car custom))))
+						  jdibug-object-custom-set-strings))
+		   (setters (if pair (cdr pair))))
+	  (jdibug-debug "jdibug-object-get-string: object-id=%s found-setters:%s" (jdi-object-id object) setters)
 	  (format "%s (id=%s)"
-			  (cond ((stringp setter2)
-					 (jdibug-object-custom-set-string-with-method object jdibug-active-thread setter2))
-					((functionp setter2)
-					 (funcall setter2 object))
-					(t
-					 (jdi-class-name (jdi-object-get-reference-type object))))
+			  (if setters
+				  (mapconcat (lambda (setter)
+							   (cond ((stringp setter)
+									  (jdibug-object-custom-set-string-with-method object jdibug-active-thread setter))
+									 ((functionp setter)
+									  (funcall setter object))))
+							 setters
+							 ":")
+				(jdi-class-name (jdi-object-get-reference-type object)))
 			  (jdwp-vec-to-int (jdi-object-id object))))))
 
 (defun jdibug-array-get-string (array)
@@ -1268,19 +1271,17 @@ to populate the jdi-value-values of the jdi-value.")
   (let* ((class (jdi-object-get-reference-type object))
 		 (methods (jdi-class-get-all-methods class))
 		 (method (find-if (lambda (obj)
-							(and (string= (jdi-method-name obj) method-name)
-								 (string= (jdi-method-signature obj) "()Ljava/lang/String;")))
+							(let ((print (jdi-jni-to-print (jdi-method-signature obj))))
+							  (and (string= (jdi-method-name obj) method-name)
+								   (= (length print) 1)))) ;; doesn't take any argument
 						  methods)))
 	(if (null method)
 		(format "setter %s not found" method-name)
 
-	  (let ((result-value (jdi-object-invoke-method object thread method nil nil)))
-		(if (equal (jdi-object-id result-value) [0 0 0 0 0 0 0 0])
-			"null"
-
-		  (let ((reply (jdwp-send-command (jdi-mirror-jdwp object) "string-value" 
-										  `((:object . ,(jdi-object-id result-value))))))
-			(jdi-format-string (jdwp-get-string reply :value))))))))
+	  (let ((result-value (if (jdi-method-static-p method)
+							  (jdi-class-invoke-method (jdi-object-get-reference-type object) thread method nil nil)
+							(jdi-object-invoke-method object thread method nil nil))))
+		(jdibug-value-get-string result-value)))))
 
 (defun jdibug-object-custom-set-string-with-size (object)
   (jdi-debug "jdibug-object-custom-set-string-with-size")
