@@ -1199,19 +1199,29 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 							jdibug-object-custom-set-strings))
 		   (setter2 (if setter (cadr setter))))
 	  (jdibug-debug "jdibug-object-get-string: object-id=%s found-setter:%s" (jdi-object-id object) setter)
-	  (cond ((stringp setter2)
-			 (jdibug-object-custom-set-string-with-method object jdibug-active-thread setter2))
-			((functionp setter2)
-			 (funcall setter2 object))
-			(t
-			 (format "%s (id=%s)" 
-					 (jdi-class-name (jdi-object-get-reference-type object))
-					 (jdwp-vec-to-int (jdi-object-id object))))))))
+	  (format "%s (id=%s)"
+			  (cond ((stringp setter2)
+					 (jdibug-object-custom-set-string-with-method object jdibug-active-thread setter2))
+					((functionp setter2)
+					 (funcall setter2 object))
+					(t
+					 (jdi-class-name (jdi-object-get-reference-type object))))
+			  (jdwp-vec-to-int (jdi-object-id object))))))
 
 (defun jdibug-array-get-string (array)
   (jdibug-debug "jdibug-array-get-string")
   (let ((length (jdi-array-get-array-length array)))
-	(jdi-array-display-string array length)))
+	(jdibug-array-display-string array length)))
+
+(defun jdibug-array-display-string (array size)
+  "for array of three dimension, return i[2][][]."
+  (let* ((class-name (jdi-class-name (jdi-object-get-reference-type array))) ;; this will be i[][][]
+		 (pos (string-match "\\]" class-name))) ;; just find the first closing bracket and insert the size before that
+	(format "%s%s%s (id=%s)"
+			(substring class-name 0 pos)
+			size
+			(substring class-name pos)
+			(jdwp-vec-to-int (jdi-array-id array)))))
 
 (defun jdibug-string-get-string (string)
   (jdibug-debug "jdibug-string-get-string")

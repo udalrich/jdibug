@@ -832,15 +832,6 @@ http://java.sun.com/j2se/1.5.0/docs/guide/jni/spec/types.html#wp428"
 
 (defalias 'jdi-value-get-reference-type 'jdi-object-get-reference-type)
 
-(defun jdi-array-display-string (array size)
-  "for array of three dimension, return i[2][][]."
-  (let* ((class-name (jdi-class-name (jdi-object-get-reference-type array))) ;; this will be i[][][]
-		 (pos (string-match "\\]" class-name))) ;; just find the first closing bracket and insert the size before that
-	(format "%s%s%s"
-			(substring class-name 0 pos)
-			size
-			(substring class-name pos))))
-
 (defun jdi-array-get-array-length (array)
   (jdi-debug "jdi-array-get-array-length:%s" (jdi-object-id array))
   (let ((reply (jdwp-send-command 
