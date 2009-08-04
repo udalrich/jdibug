@@ -552,8 +552,8 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 			 (jdibug-value-expander-array value))))))
 
 (defun jdibug-value-expander-object (value)
-  (let* ((class (jdi-value-get-reference-type value))
-		 (fields (sort (copy-sequence (jdi-class-get-all-fields class)) 'jdibug-field-sorter))
+  (let* ((reference-type (jdi-value-get-reference-type value))
+		 (fields (sort (copy-sequence (jdi-reference-type-get-all-fields reference-type)) 'jdibug-field-sorter))
 		 (values (jdi-value-get-values value fields)))
 	(jdibug-debug "jdibug-value-expander got %s values" (length values))
 	(append (loop for v in values
@@ -704,9 +704,14 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (jdibug-debug "jdibug-make-thread-value")
   (let ((name (jdi-thread-get-name thread)))
 	(multiple-value-bind (status suspend-status) (jdi-thread-get-status thread)
-	  (format "%s (%s)" name (if (equal suspend-status jdwp-suspend-status-suspended)
-								 "Suspended"
-							   "Running")))))
+	  (format "%sThread [%s] (%s)" 
+			  (if (jdi-thread-get-daemon-p thread)
+				  "Daemon "
+				"")
+			  name 
+			  (if (equal suspend-status jdwp-suspend-status-suspended)
+				  "Suspended"
+				"Running")))))
 
 (defun jdibug-make-frames-node (tree)
   (jdibug-debug "jdibug-make-frames-node")

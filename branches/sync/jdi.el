@@ -29,9 +29,10 @@
   (objects (make-hash-table :test 'equal)) ;; hash table where key=object-id value=jdi-object
   )
 
-;; as java returns interfaces using all-classes command, this might represent an interface
-(defstruct (jdi-class (:include jdi-mirror))
-  id
+(defstruct (jdi-reference-type (:include jdi-mirror))
+  id)
+
+(defstruct (jdi-class (:include jdi-reference-type))
   ;; jni-style
   signature 
   generic-signature
@@ -46,6 +47,10 @@
   interfaces-count ;; we use this to see whether the interfaces field have been resolved or not
   ;; list of jdi-method
   methods)
+
+(defstruct (jdi-interface (:include jdi-reference-type)))
+
+(defstruct (jdi-array-type (:include jdi-reference-type)))
 
 (defstruct (jdi-method (:include jdi-mirror))
   id
@@ -326,6 +331,16 @@
   (jdi-debug "jdi-thread-get-system-thread-p:%s" (jdi-thread-id thread))
   (let ((group (jdi-thread-get-thread-group thread)))
 	(jdi-thread-group-get-system-thread-p group)))
+
+(defun jdi-thread-get-daemon-p (thread)
+  (jdi-debug "jdi-thread-get-daemon-p:%s" (jdi-thread-id thread))
+  (let* ((reference-type (jdi-object-get-reference-type thread))
+		 (field (jdi-reference-type-get-field-by-name reference-type "daemon")))
+	(if (null field)
+		(setq field (jdi-reference-type-get-field-by-name reference-type "isDaemon")))
+	(if field
+		(if (string= (car (jdi-jni-to-print (jdi-field-signature field))) "boolean")
+			(jdi-object-get-value thread field)))))
 
 (defun jdi-thread-group-get-system-thread-p (thread-group)
   (jdi-debug "jdi-thread-group-get-system-thread-p:%s" (jdi-thread-group-id thread-group))
@@ -863,12 +878,25 @@ http://java.sun.com/j2se/1.5.0/docs/guide/jni/spec/types.html#wp428"
 		  fields)
 	filtered))
 	
-(defun jdi-class-get-all-fields (class)
-  (jdi-debug "jdi-class-get-all-fields:%s" (jdi-class-id class))
-  (let ((supers (jdi-class-get-all-super class)))
-	(jdi-debug "jdi-class-get-all-fields:%s:%s" (jdi-class-id class) (loop for super in supers
-																		   collect (jdi-class-id super)))
-	(mappend 'jdi-class-get-fields (cons class supers))))
+(defun jdi-reference-type-get-all-fields (reference-type)
+  (jdi-debug "jdi-reference-type-get-all-fields:%s" (jdi-reference-type-id reference-type))
+  (cond ((jdi-class-p reference-type)
+		 (let ((supers (jdi-class-get-all-super reference-type)))
+		   (jdi-debug "jdi-reference-type-get-all-fields:%s:%s" (jdi-reference-type-id reference-type) (loop for super in supers
+																											 collect (jdi-reference-type-id super)))
+		   (mappend 'jdi-reference-type-get-fields (cons reference-type supers))))
+		(t (error "do not know how to get all fields for type:%s" (type-of reference-type)))))
+
+(defun jdi-reference-type-get-field-by-name (reference-type field)
+  (jdi-debug "jdi-reference-type-get-field-by-name:%s:%s" (jdi-reference-type-id reference-type) field)
+  (let ((all-fields (jdi-reference-type-get-all-fields reference-type)))
+	(find-if (lambda (obj)
+			   (string= (jdi-field-name obj) field))
+			 all-fields)))
+
+(defun jdi-object-get-value (object field)
+  (jdi-debug "jdi-object-get-value")
+  (car (jdi-object-get-values object (list field))))
 
 (defun jdi-object-get-values (object fields)
   (jdi-debug "jdi-object-get-values")
@@ -995,40 +1023,24 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 (defun jdi-field-mod-bits-string (field)
   (jdi-access-string (jdi-field-mod-bits field)))
 
-(defun jdi-class-get-fields (class)
-  "Get all the fields in this class only."
-  (jdi-debug "jdi-class-get-fields:%s:%s" (jdi-class-id class) (if (listp (jdi-class-fields class))
-																   (length (jdi-class-fields class))
-																 "0"))
-  (if (jdi-class-fields class)
-	  (if (equal (jdi-class-fields class) t)
-		  nil
-		(jdi-class-fields class))
-
-	(let ((reply (jdwp-send-command (jdi-mirror-jdwp class) "fields" `((:ref-type . ,(jdi-class-id class))))))
-	  (jdi-debug "jdi-class-get-fields: %s's fields:%s" (jdi-class-id class) (bindat-get-field reply :declared))
-	  (if (bindat-get-field reply :field)
-		  (progn
-			(setf (jdi-class-fields class)
-				  (loop for field in (bindat-get-field reply :field)
-						collect (make-jdi-field :virtual-machine (jdi-mirror-virtual-machine class)
-												:id (bindat-get-field field :id)
-												:name (jdwp-get-string field :name)
-												:signature (jdwp-get-string field :signature)
-												:generic-signature (jdwp-get-string field :generic-signature)
-												:mod-bits (bindat-get-field field :mod-bits))
-						do (jdi-debug "jdi-class-get-fields:%s id:%s name:%s signature:%s generic-signature:%s modbits:%s" 
-									  (jdi-class-id class)
-									  (bindat-get-field field :id) 
-									  (jdwp-get-string field :name) 
-									  (jdwp-get-string field :signature)
-									  (jdwp-get-string field :generic-signature)
-									  (bindat-get-field field :mod-bits))))
-			(jdi-debug "jdi-class-get-fields:saved %s fields" (length (jdi-class-fields class)))
-			(jdi-class-fields class))
-
-		(setf (jdi-class-fields class) t)
-		nil))))
+(defun jdi-reference-type-get-fields (reference-type)
+  "Get all the fields in this reference-type only."
+  (let ((reply (jdwp-send-command (jdi-mirror-jdwp reference-type) "fields" `((:ref-type . ,(jdi-reference-type-id reference-type))))))
+	(jdi-debug "jdi-reference-type-get-fields: %s's fields:%s" (jdi-reference-type-id reference-type) (bindat-get-field reply :declared))
+	(loop for field in (bindat-get-field reply :field)
+		  collect (make-jdi-field :virtual-machine (jdi-mirror-virtual-machine reference-type)
+								  :id (bindat-get-field field :id)
+								  :name (jdwp-get-string field :name)
+								  :signature (jdwp-get-string field :signature)
+								  :generic-signature (jdwp-get-string field :generic-signature)
+								  :mod-bits (bindat-get-field field :mod-bits))
+		  do (jdi-debug "jdi-reference-type-get-fields:%s id:%s name:%s signature:%s generic-signature:%s modbits:%s" 
+						(jdi-reference-type-id reference-type)
+						(bindat-get-field field :id) 
+						(jdwp-get-string field :name) 
+						(jdwp-get-string field :signature)
+						(jdwp-get-string field :generic-signature)
+						(bindat-get-field field :mod-bits)))))
 
 (defun jdi-array-get-values (array)
   (jdi-debug "jdi-array-get-values:object-id=%s" (jdi-object-id array))
