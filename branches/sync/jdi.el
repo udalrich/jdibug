@@ -340,7 +340,7 @@
 		(setq field (jdi-reference-type-get-field-by-name reference-type "isDaemon")))
 	(if field
 		(if (string= (car (jdi-jni-to-print (jdi-field-signature field))) "boolean")
-			(jdi-object-get-value thread field)))))
+			(not (= 0 (jdi-primitive-value-value (jdi-object-get-value thread field))))))))
 
 (defun jdi-thread-group-get-system-thread-p (thread-group)
   (jdi-debug "jdi-thread-group-get-system-thread-p:%s" (jdi-thread-group-id thread-group))
