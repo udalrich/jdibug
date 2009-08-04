@@ -130,6 +130,10 @@ jdibug-source-paths will be ignored if this is set to t."
 (defvar jdibug-active-thread nil
   "the thread that is suspended")
 
+(defvar jdibug-others-suspended nil
+  "When a breakpoint event happens and we are already on a breakpoint. The (thread . location) will be pushed into this list.
+When the user resume, we will switch to this thread and location.")
+
 (defvar jdibug-current-line-overlay nil)
 
 (defvar jdibug-threads-tree nil)
@@ -199,7 +203,8 @@ jdibug-source-paths will be ignored if this is set to t."
 		jdibug-breakpoints-buffer (get-buffer-create jdibug-breakpoints-buffer-name)
 
 		jdibug-active-frame       nil
-		jdibug-active-thread      nil)
+		jdibug-active-thread      nil
+		jdibug-others-suspended    nil)
 
   (with-current-buffer jdibug-breakpoints-buffer
 	(use-local-map jdibug-breakpoints-mode-map)
@@ -241,11 +246,11 @@ jdibug-source-paths will be ignored if this is set to t."
 			  (delete-overlay (jdibug-breakpoint-overlay bp))))
 		jdibug-breakpoints)
 
-  (and (timerp jdibug-locals-refresh-timer)
-	   (cancel-timer jdibug-locals-refresh-timer))
+  (and (timerp jdibug-refresh-locals-buffer-timer)
+	   (cancel-timer jdibug-refresh-locals-buffer-timer))
 
-  (and (timerp jdibug-frames-refresh-timer)
-	   (cancel-timer jdibug-frames-refresh-timer))
+  (and (timerp jdibug-refresh-frames-buffer-timer)
+	   (cancel-timer jdibug-refresh-frames-buffer-timer))
 
   (kill-buffer jdibug-locals-buffer)
   (kill-buffer jdibug-frames-buffer)
@@ -332,11 +337,13 @@ And position the point at the line number."
 (defun jdibug-handle-breakpoint (thread location)
   (jdibug-debug "jdibug-handle-breakpoint")
 
-  (unless jdibug-active-frame
-	(jdibug-goto-location location)
-	(setq jdibug-active-frame (car (jdi-thread-get-frames thread)))
-	(jdibug-refresh-locals-buffer)
-	(setq jdibug-active-thread thread))
+  (if (null jdibug-active-frame)
+	  (progn
+		(jdibug-goto-location location)
+		(setq jdibug-active-frame (car (jdi-thread-get-frames thread)))
+		(jdibug-refresh-locals-buffer)
+		(setq jdibug-active-thread thread))
+	(setq jdibug-others-suspended (append jdibug-others-suspended (list `(,thread . ,location)))))
 
   (jdibug-refresh-frames-buffer)
 
@@ -687,7 +694,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		`(push-button
 		  :value ,value
 		  :jdi-frame ,frame
-		  :button-face ,(if (equal (jdi-frame-id frame) active-frame-id 'jdibug-current-frame))
+		  :button-face ,(if (equal (jdi-frame-id frame) active-frame-id) 'jdibug-current-frame)
 		  :notify jdibug-frame-notify
 		  :format "%[%t%]\n")
 	  `(item 
@@ -1050,6 +1057,11 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	(run-hooks 'jdibug-resumed-hook)
 
 	(jdibug-refresh-frames-buffer)
+
+	(if jdibug-others-suspended
+		(let ((other (pop jdibug-others-suspended)))
+		  (jdibug-handle-breakpoint (car other) (cdr other))))
+
 	(message "JDIbug resumed")))
 
 (defun jdibug-connected-p ()
