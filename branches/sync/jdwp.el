@@ -1029,12 +1029,18 @@
 														(setf (jdwp-current-reply jdwp) nil))))
 							  command-data))))))
 
+(defun jdwp-accept-process-output (proc)
+  (if (= emacs-major-version 23)
+	  ;; major bug in emacs23, second parameter does not accept floating point!
+	  (accept-process-output proc 0 (floor (* jdwp-block-seconds 1000)) 1)
+	(accept-process-output proc jdwp-block-seconds 0 1)))
+
 (defun jdwp-receive-message (proc func)
   "Wait for message from proc, returns when func returns non-nil or timed out"
   (catch 'done
 	(let ((timeout (+ (float-time) jdwp-timeout)))
 	  (while t
-		(let ((result (accept-process-output proc jdwp-block-seconds 0 1)))
+		(let ((result (jdwp-accept-process-output proc)))
 		  (jdwp-debug "jdwp-receive-message:accept-process-output returned %s" result))
 		(let ((result (funcall func)))
 		  (if result
