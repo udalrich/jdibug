@@ -460,7 +460,7 @@ And position the point at the line number."
 
 (defun jdibug-expand-methods (tree)
   (let ((value (widget-get tree :jdi-value)))
-	(let ((class (jdi-value-get-class value)))
+	(let ((class (jdi-value-get-reference-type value)))
 	  (let ((methods (jdi-class-get-all-methods class)))
 		(mapcar (lambda (method) 
 				  (jdibug-make-method-node value method))
@@ -552,7 +552,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 			 (jdibug-value-expander-array value))))))
 
 (defun jdibug-value-expander-object (value)
-  (let* ((class (jdi-value-get-class value))
+  (let* ((class (jdi-value-get-reference-type value))
 		 (fields (sort (copy-sequence (jdi-class-get-all-fields class)) 'jdibug-field-sorter))
 		 (values (jdi-value-get-values value fields)))
 	(jdibug-debug "jdibug-value-expander got %s values" (length values))
@@ -680,7 +680,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (jdibug-debug "jdibug-make-frame-node:frame-id=%s" (jdi-frame-id frame))
   (let* ((location (jdi-frame-location frame))
 		 (declaring-type-name (jdi-class-name (jdi-location-class location)))
-		 (receiving-type-name (jdi-class-name (jdi-value-get-class (jdi-frame-get-this-object frame))))
+		 (receiving-type-name (jdi-class-name (jdi-value-get-reference-type (jdi-frame-get-this-object frame))))
 		 (value (format "%s.%s(%s) line: %s" 
 						(if (and receiving-type-name (not (string= declaring-type-name receiving-type-name)))
 							(format "%s(%s)" receiving-type-name declaring-type-name)
@@ -788,7 +788,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		 (value (widget-get tree :jdi-value)))
     (if (null value)
 		(message "not an object")
-	  (let ((class (jdi-value-get-class value)))
+	  (let ((class (jdi-value-get-reference-type value)))
 		(let ((methods (jdi-class-get-all-methods class)))
 		  (let ((tostringmethod (find-if (lambda (obj)
 										   (and (equal (jdi-method-name obj)
@@ -809,7 +809,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		 (value (widget-get tree :jdi-value)))
     (if (null value)
 		(message "not an object")
-	  (message "Class: %s" (jdi-class-signature (jdi-value-class value))))))
+	  (message "Class: %s" (jdi-class-signature (jdi-value-get-reference-type value))))))
 
 (defun jdibug-file-in-source-paths-p (file)
   (jdibug-debug "jdibug-file-in-source-paths-p:%s" file)
@@ -1199,7 +1199,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 			 (funcall setter2 value))
 			(t
 			 (format "%s (id=%s)" 
-					 (jdi-class-name (jdi-value-get-class value))
+					 (jdi-class-name (jdi-value-get-reference-type value))
 					 (jdwp-vec-to-int (jdi-value-value value))))))))
 
 (defun jdibug-value-get-string-array (value)
@@ -1263,7 +1263,7 @@ to populate the jdi-value-values of the jdi-value.")
 
 (defun jdibug-value-custom-set-string-with-method (value thread method-name)
   (jdibug-debug "jdibug-value-custom-set-string-with-method")
-  (let ((class (jdi-value-get-class value)))
+  (let ((class (jdi-value-get-reference-type value)))
 	(let ((methods (jdi-class-get-all-methods class)))
 	  (let ((method (find-if (lambda (obj)
 							   (and (string= (jdi-method-name obj) method-name)
@@ -1284,8 +1284,8 @@ to populate the jdi-value-values of the jdi-value.")
   (jdi-debug "jdibug-value-custom-set-string-with-size")
   (let ((result-value (jdi-value-invoke-method value jdibug-active-thread "size" nil nil)))
 	(if result-value
-		(format "%s[%s]" (jdi-class-name (jdi-value-get-class value)) (jdi-value-value result-value))
-	  (format "%s[nosize]" (jdi-class-name (jdi-value-get-class value))))))
+		(format "%s[%s]" (jdi-class-name (jdi-value-get-reference-type value)) (jdi-value-value result-value))
+	  (format "%s[nosize]" (jdi-class-name (jdi-value-get-reference-type value))))))
 
 (defun jdibug-value-custom-expand-collection (value)
   (jdi-debug "jdibug-value-custom-expand-collection")
@@ -1313,7 +1313,7 @@ to populate the jdi-value-values of the jdi-value.")
 
 (defun jdibug-value-object-get-fields (value)
   (jdibug-debug "jdibug-value-object-get-values")
-  (let ((class (jdi-value-get-class value)))
+  (let ((class (jdi-value-get-reference-type value)))
 	(let ((supers (jdi-class-get-all-super class)))
 	  (let ((interfaces (jdi-class-get-all-interfaces class)))
 		(let ((signatures (mapcar 'jdi-class-get-signature (cons class (append supers interfaces)))))

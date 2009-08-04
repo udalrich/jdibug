@@ -552,7 +552,7 @@
 													  (:generic-signature     struct jdwp-string-spec)
 													  (:length        u32)
 													  (:slot          u32))))
-		(:name         "reference-type"
+		(:name         "object-reference-type"
 					   :command-set   9
 					   :command      1
 					   :command-spec ((:object        vec (eval jdwp-object-id-size)))

@@ -86,8 +86,19 @@
   data
   )
 
-(defstruct (jdi-object (:include jdi-mirror)) ;; com.sun.jdi.ObjectReference
+;; com.sun.jdi.Value
+(defstruct (jdi-value (:include jdi-mirror))
+  type)
+
+(defstruct (jdi-primitive-value (:include jdi-value))
+  value)
+
+(defstruct (jdi-object (:include jdi-value)) ;; com.sun.jdi.ObjectReference
   id)
+
+(defstruct (jdi-string (:include jdi-object)))
+
+(defstruct (jdi-array (:include jdi-object)))
 
 (defstruct (jdi-thread (:include jdi-object))
   ; jdi-thread-group
@@ -114,13 +125,6 @@
   length
   slot)
 
-;; A value retrieved from the target VM. The first byte is a signature byte which is used to identify the type. See JDWP.Tag for the possible values of this byte. It is followed immediately by the value itself. This value can be an objectID (see Get ID Sizes) or a primitive value (1 to 8 bytes). More details about each value type can be found in the next table. 
-(defstruct (jdi-value (:include jdi-mirror))
-  type
-  value
-
-  ;; caching purpose only
-  class)
 ;;   name
 ;;   signature
 ;;   generic-signature
@@ -682,17 +686,60 @@
 				  data)))
 	  (loop for variable in variables
 			for value in (bindat-get-field reply :value)
-			collect (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine frame)
-									:type (bindat-get-field value :slot-value :type)
-									:value (bindat-get-field value :slot-value :u :value))))))
+			collect (jdi-virtual-machine-get-value-create (jdi-mirror-virtual-machine frame)
+														  (bindat-get-field value :slot-value :type)
+														  (bindat-get-field value :slot-value :u :value))))))
 
 (defun jdi-frame-get-this-object (frame)
   (jdi-debug "jdi-frame-get-this-object")
   (let ((reply (jdwp-send-command (jdi-mirror-jdwp frame) "stack-frame-this-object" `((:thread . ,(jdi-thread-id (jdi-frame-thread frame)))
 																					  (:frame  . ,(jdi-frame-id frame))))))
-	(make-jdi-value :virtual-machine (jdi-mirror-virtual-machine frame)
-					:type (bindat-get-field reply :object-this :type)
-					:value (bindat-get-field reply :object-this :u :value))))
+	(jdi-virtual-machine-get-value-create (jdi-mirror-virtual-machine frame)
+										  (bindat-get-field reply :object-this :type)
+										  (bindat-get-field reply :object-this :u :value))))
+
+(defun jdi-virtual-machine-get-value-create (vm type value)
+  (cond ((member type (list jdwp-tag-boolean 
+							jdwp-tag-byte
+							jdwp-tag-char
+							jdwp-tag-double
+							jdwp-tag-float
+							jdwp-tag-int
+							jdwp-tag-long
+							jdwp-tag-short
+							jdwp-tag-void))
+		 (make-jdi-primitive-value :virtual-machine vm
+								   :type type
+								   :value value))
+		((= type jdwp-tag-object)
+		 (jdi-virtual-machine-get-object-create vm (make-jdi-object 
+													:type type
+													:id value)))
+		((= type jdwp-tag-array)
+		 (jdi-virtual-machine-get-object-create vm (make-jdi-array
+													:type type
+													:id value)))
+		((= type jdwp-tag-string)
+		 (jdi-virtual-machine-get-object-create vm (make-jdi-string
+													:type type
+													:id value)))
+		((= type jdwp-tag-thread)
+		 (jdi-virtual-machine-get-object-create vm (make-jdi-thread
+													:type type
+													:id value)))
+		((= type jdwp-tag-thread-group)
+		 (jdi-virtual-machine-get-object-create vm (make-jdi-thread-group
+													:type type
+													:id value)))
+		((= type jdwp-tag-class-object)
+		 (jdi-virtual-machine-get-object-create vm (make-jdi-class-object
+													:type type
+													:id value)))
+		((= type jdwp-tag-class-loader)
+		 (jdi-virtual-machine-get-object-create vm (make-jdi-class-loader
+													:type type
+													:id value)))
+		(t (error "do not know how to create value of type:%s" type))))
 
 (defun jdi-value-object-p (value)
   (equal (jdi-value-type value) jdwp-tag-object))
@@ -791,25 +838,20 @@ http://java.sun.com/j2se/1.5.0/docs/guide/jni/spec/types.html#wp428"
   (assert (equal (jdi-jni-to-print "(I)J") (list "long" "int")))
   (assert (equal (jdi-jni-to-print "(ILjava/lang/String;[I)J" t) (list "long" "int" "String" "int[]"))))
 
-(defun jdi-value-get-class (value)
-  "populate the jdi-value-class field"
-  (jdi-debug "jdi-value-get-class:type=%s value=%s" (jdi-value-type value) (jdi-value-value value))
-  (if (equal (jdi-value-value value) [0 0 0 0 0 0 0 0])
+(defun jdi-object-get-reference-type (object)
+  (jdi-debug "jdi-object-get-reference-type")
+  (if (equal (jdi-object-id object) [0 0 0 0 0 0 0 0])
 	  nil
+	(let ((reply (jdwp-send-command (jdi-mirror-jdwp object) 
+									"object-reference-type" 
+									`((:object . ,(jdi-object-id object))))))
+	  (jdi-virtual-machine-get-class-create (jdi-mirror-virtual-machine object) (bindat-get-field reply :type-id)))))
 
-	(if (jdi-value-class value)
-		(jdi-value-class value)
-
-	  (let ((reply (jdwp-send-command (jdi-mirror-jdwp value) 
-									  "reference-type" 
-									  `((:object . ,(jdi-value-value value))))))
-		(jdi-debug "jdi-value-get-class:type-id=%s" (bindat-get-field reply :type-id))
-		(setf (jdi-value-class value) (jdi-virtual-machine-get-class-create (jdi-mirror-virtual-machine value) (bindat-get-field reply :type-id)))
-		(jdi-value-class value)))))
+(defalias 'jdi-value-get-reference-type 'jdi-object-get-reference-type)
 
 (defun jdi-value-array-display-string (value size)
   "for array of three dimension, return i[2][][]."
-  (let* ((class-name (jdi-class-name (jdi-value-get-class value))) ;; this will be i[][][]
+  (let* ((class-name (jdi-class-name (jdi-value-get-reference-type value))) ;; this will be i[][][]
 		 (pos (string-match "\\]" class-name))) ;; just find the first closing bracket and insert the size before that
 	(format "%s%s%s"
 			(substring class-name 0 pos)
@@ -863,22 +905,19 @@ http://java.sun.com/j2se/1.5.0/docs/guide/jni/spec/types.html#wp428"
 
 (defun jdi-value-get-all-fields (value)
   (jdi-debug "jdi-value-get-all-fields:%s" (jdi-value-value value))
-  (let ((class (jdi-value-get-class value)))
+  (let ((class (jdi-value-get-reference-type value)))
 	(let ((supers (jdi-class-get-all-super class)))
 	  (mappend 'jdi-class-get-fields (cons class supers)))))
 
-(defun jdi-value-get-values (value fields)
-  "Gets the value of multiple instance and/or static fields in this object. 
-The Fields must be valid for this ObjectReference; that is, they must be from the mirrored object's class or a superclass of that class."
-
-  (jdi-debug "jdi-value-get-values")
+(defun jdi-object-get-values (object fields)
+  (jdi-debug "jdi-object-get-values")
   (let ((static-fields (loop for field in fields
 							 if (jdi-field-static-p field) collect field))
 		(nonstatic-fields (loop for field in fields
 								unless (jdi-field-static-p field) collect field))
 		(results (make-hash-table)))
-	(let ((reply (jdwp-send-command (jdi-mirror-jdwp value) "object-get-values"
-									`((:object . ,(jdi-value-value value))
+	(let ((reply (jdwp-send-command (jdi-mirror-jdwp object) "object-get-values"
+									`((:object . ,(jdi-object-id object))
 									  (:fields . ,(length nonstatic-fields))
 									  ,(nconc (list :field)
 											  (mapcar (lambda (field)
@@ -886,14 +925,14 @@ The Fields must be valid for this ObjectReference; that is, they must be from th
 													  nonstatic-fields))))))
 	  (loop for field in nonstatic-fields
 			for value2 in (bindat-get-field reply :value)
-			do (puthash field (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
-											  :type (bindat-get-field value2 :value :type)
-											  :value (bindat-get-field value2 :value :u :value))
+			do (puthash field (jdi-virtual-machine-get-value-create (jdi-mirror-virtual-machine object)
+																	(bindat-get-field value2 :value :type)
+																	(bindat-get-field value2 :value :u :value))
 						results)
-			do (jdi-debug "jdi-value-get-values: nonstatic type=%s value=%s" (bindat-get-field value2 :value :type)
+			do (jdi-debug "jdi-object-get-values: nonstatic type=%s value=%s" (bindat-get-field value2 :value :type)
 						  (bindat-get-field value2 :value :u :type)))
-	  (let ((class (jdi-value-get-class value)))
-		(let ((reply (jdwp-send-command (jdi-mirror-jdwp value) "reference-get-values"
+	  (let ((class (jdi-object-get-reference-type object)))
+		(let ((reply (jdwp-send-command (jdi-mirror-jdwp object) "reference-get-values"
 										`((:ref-type . ,(jdi-class-id class))
 										  (:fields . ,(length static-fields))
 										  ,(nconc (list :field)
@@ -902,14 +941,16 @@ The Fields must be valid for this ObjectReference; that is, they must be from th
 														  static-fields))))))
 		  (loop for field in static-fields
 				for value2 in (bindat-get-field reply :value)
-				do (puthash field (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
-												  :type (bindat-get-field value2 :value :type)
-												  :value (bindat-get-field value2 :value :u :value))
+				do (puthash field (jdi-virtual-machine-get-value-create (jdi-mirror-virtual-machine object)
+																		(bindat-get-field value2 :value :type)
+																		(bindat-get-field value2 :value :u :value))
 							results)
-				do (jdi-debug "jdi-value-get-values: static type=%s value=%s" (bindat-get-field value2 :value :type)
+				do (jdi-debug "jdi-object-get-values: static type=%s value=%s" (bindat-get-field value2 :value :type)
 							  (bindat-get-field value2 :value :u :type)))
 		  (loop for field in fields
 				collect (gethash field results)))))))
+
+(defalias 'jdi-value-get-values 'jdi-object-get-values)
 
 (defun jdi-class-get-all-super (class &optional supers)
   (jdi-debug "jdi-class-get-all-super")
@@ -1044,14 +1085,14 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 				  (= (bindat-get-field array :type) jdwp-tag-array))
 			  (loop for value-reply in (bindat-get-field array :value)
 					for i from 0 to (- array-length 1)
-					collect (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
-											:type (bindat-get-field value-reply :value :type)
-											:value (bindat-get-field value-reply :value :u :value)))
+					collect (jdi-virtual-machine-get-value-create (jdi-mirror-virtual-machine value)
+																  (bindat-get-field value-reply :value :type)
+																  (bindat-get-field value-reply :value :u :value)))
 			(loop for value-reply in (bindat-get-field array :value)
 				  for i from 0 to (- array-length 1)
-				  collect (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
-										  :type (bindat-get-field array :type)
-										  :value (bindat-get-field value-reply :value)))))))))
+				  collect (jdi-virtual-machine-get-value-create (jdi-mirror-virtual-machine value)
+																(bindat-get-field array :type)
+																(bindat-get-field value-reply :value)))))))))
 
 (defun jdi-handle-breakpoint-event (jdwp event)
   (jdi-debug "jdi-handle-breakpoint-event")
@@ -1149,7 +1190,7 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 
 (defun jdi-value-instance-of-p (value signature)
   (jdi-debug "jdi-value-instance-of-p:signature=%s" signature)
-  (let* ((class (jdi-value-get-class value))
+  (let* ((class (jdi-value-get-reference-type value))
 		 (supers (jdi-class-get-all-super class))
 		 (interfaces (jdi-class-get-all-interfaces class))
 		 (signatures (mapcar 'jdi-class-get-signature (cons class (append supers interfaces)))))
@@ -1166,24 +1207,26 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 (defun jdi-method-static-p (method)
   (not (equal (logand (jdi-method-mod-bits method) jdi-access-static) 0)))
 
-(defun jdi-value-invoke-method (value thread method arguments options)
+(defun jdi-object-invoke-method (object thread method arguments options)
   "Invoke the method on the value on the thread, if method is a string, it will pick the first method that matches the method-name."
-  (jdi-debug "jdi-value-invoke-method")
+  (jdi-debug "jdi-object-invoke-method")
   (when (stringp method)
 	(setq method (find-if (lambda (obj)
 							(equal (jdi-method-name obj) method))
-						  (jdi-class-get-all-methods (jdi-value-get-class value)))))
+						  (jdi-class-get-all-methods (jdi-object-get-reference-type object)))))
   (when method
-	(let ((reply (jdwp-send-command (jdi-mirror-jdwp value) "object-invoke-method"
-									`((:object . ,(jdi-value-value value))
+	(let ((reply (jdwp-send-command (jdi-mirror-jdwp object) "object-invoke-method"
+									`((:object . ,(jdi-object-id object))
 									  (:thread . ,(jdi-thread-id thread))
-									  (:class . ,(jdi-class-id (jdi-value-get-class value)))
+									  (:class . ,(jdi-class-id (jdi-object-get-reference-type object)))
 									  (:method-id . ,(jdi-method-id method))
 									  (:arguments . 0)
 									  (:options . ,jdwp-invoke-single-threaded)))))
-	  (make-jdi-value :virtual-machine (jdi-mirror-virtual-machine value)
-					  :type (bindat-get-field reply :return-value :type)
-					  :value (bindat-get-field reply :return-value :u :value)))))
+	  (jdi-virtual-machine-get-value-create (jdi-mirror-virtual-machine object)
+											(bindat-get-field reply :return-value :type)
+											(bindat-get-field reply :return-value :u :value)))))
+
+(defalias 'jdi-value-invoke-method 'jdi-object-invoke-method)
 
 (defvar jdi-breakpoint-hooks nil
   "callback to be called when breakpoint is hit, called with (jdi-thread jdi-location)")
