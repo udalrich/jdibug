@@ -6,7 +6,7 @@
     "jdibug-ui"))
 
 (defconst jdibug-build-directory
-  "./build/")
+  "./")
 
 (defun jdibug-build ()
   (interactive)
@@ -45,21 +45,20 @@
 	(message "finished compilation")))
 				
 (defun jdibug-build-fixup-output ()
-  ;; remove requires stuff
-  (goto-char (point-min))
-  (while (re-search-forward "^(require 'jdwp).*\n" nil t)
-	(replace-match ""))
+  (mapc (lambda (re)
+		  (goto-char (point-min))
+		  (while (re-search-forward re nil t)
+			(replace-match "")))
+		'("^(require 'jdwp).*\n"
+		  "^(require 'jdi).*\n"
+		  "^(require 'elog).*\n"
+		  "^(require 'tree-mode).*\n"
+		  "^(provide 'tree-mode).*\n"
+		  "^(provide 'elog).*\n"
+		  "^(provide 'jdi).*\n"
+		  "^(provide 'jdwp).*\n"
+		  "^(provide 'jdibug-ui).*\n"))
 
-  (goto-char (point-min))
-  (while (re-search-forward "^(require 'jdi).*\n" nil t)
-	(replace-match ""))
-
-  (goto-char (point-min))
-  (while (re-search-forward "^(require 'elog).*\n" nil t)
-	(replace-match ""))
-
-  (goto-char (point-min))
-  (while (re-search-forward "^(require 'tree-mode).*\n" nil t)
-	(replace-match "")))
-
+  (goto-char (point-max))
+  (insert "(provide 'jdibug)\n"))
 
