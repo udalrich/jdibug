@@ -3,6 +3,11 @@
 
 (elog-make-logger jdi)
 
+(defvar jdi-unit-testing nil)
+
+(eval-when-compile 
+  (setq jdi-unit-testing t))
+
 (defstruct jdi-mirror
   virtual-machine)
 
@@ -168,9 +173,8 @@
 								   (:location .  ,location-data))))))
 	(make-jdi-event-request :virtual-machine (jdi-mirror-virtual-machine location) :data data)))
 
-(unless (fboundp 'mappend)
-  (defun mappend (fn &rest lsts)
-	(apply 'append (apply 'mapcar fn lsts))))
+(defun jdi-mappend (fn &rest lsts)
+  (apply 'append (apply 'mapcar fn lsts)))
 
 (defun jdi-event-request-manager-create-step (erm thread depth)
   (let ((data `((:event-kind     . ,jdwp-event-single-step)
@@ -406,7 +410,7 @@
 (defun jdi-class-get-all-methods (class)
   (jdi-debug "jdi-class-get-all-methods")
   (let ((supers (jdi-class-get-all-super class)))
-	(mappend 'jdi-class-get-methods (cons class supers))))
+	(jdi-mappend 'jdi-class-get-methods (cons class supers))))
 
 (defun jdi-class-get-methods (class)
   "returns a list of jdi-method in the class"
@@ -735,7 +739,7 @@
   (setq generic-signature (replace-regexp-in-string ":" "," generic-signature))
   generic-signature)
 
-(eval-when-compile
+(when jdi-unit-testing
   (assert (equal (jdi-generic-signature-to-print "<K:Ljava/lang/Object;V:Ljava/lang/Object;>Ljava/util/AbstractMap<TK;TV;>;Ljava/util/Map<TK;TV;>;Ljava/lang/Cloneable;Ljava/io/Serializable;") "K,V"))
   (assert (equal (jdi-generic-signature-to-print "<E:Ljava/lang/Object;>Ljava/util/AbstractList<TE;>;Ljava/util/List<TE;>;Ljava/util/RandomAccess;Ljava/lang/Cloneable;Ljava/io/Serializable;") "E")))
 
@@ -811,7 +815,7 @@ http://java.sun.com/j2se/1.5.0/docs/guide/jni/spec/types.html#wp428"
 			(setq result (cons lasttype (cdr result)))))))
 	(reverse result)))
 
-(eval-when-compile
+(when jdi-unit-testing
   (assert (equal (jdi-jni-to-print "ZBCSIJFD") (list "boolean" "byte" "char" "short" "int" "long" "float" "double")))
   (assert (equal (jdi-jni-to-print "Ljava/lang/String;") (list "java.lang.String")))
   (assert (equal (jdi-jni-to-print "[I") (list "int[]")))
@@ -876,7 +880,7 @@ http://java.sun.com/j2se/1.5.0/docs/guide/jni/spec/types.html#wp428"
 		 (let ((supers (jdi-class-get-all-super reference-type)))
 		   (jdi-debug "jdi-reference-type-get-all-fields:%s:%s" (jdi-reference-type-id reference-type) (loop for super in supers
 																											 collect (jdi-reference-type-id super)))
-		   (mappend 'jdi-reference-type-get-fields (cons reference-type supers))))
+		   (jdi-mappend 'jdi-reference-type-get-fields (cons reference-type supers))))
 		(t (error "do not know how to get all fields for type:%s" (type-of reference-type)))))
 
 (defun jdi-reference-type-get-field-by-name (reference-type field)
@@ -982,7 +986,7 @@ Only the interfaces that are declared with the 'implements' keyword in this clas
   "Gets the interfaces directly and indirectly implemented by this class. 
 Interfaces returned by interfaces()  are returned as well all superinterfaces."
   (jdi-debug "jdi-class-get-all-interfaces")
-  (mappend 'jdi-class-get-interfaces (cons class (jdi-class-get-all-super class))))
+  (jdi-mappend 'jdi-class-get-interfaces (cons class (jdi-class-get-all-super class))))
 
 (defun jdi-access-string (bits)
   (let ((str)
@@ -1187,7 +1191,7 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 									  (:method-id . ,(jdi-method-id method))
 									  (:arguments . 0)
 									  (:options . ,jdwp-invoke-single-threaded)))))
-	  (jdi-virtual-machine-get-value-create (jdi-mirror-virtual-machine object)
+	  (jdi-virtual-machine-get-value-create (jdi-mirror-virtual-machine class)
 											(bindat-get-field reply :return-value :type)
 											(bindat-get-field reply :return-value :u :value)))))
 

@@ -103,25 +103,42 @@
   layout  
   output)
 
-(defvar elog-appenders nil
-  "A list of elog-appender.")
+(eval-and-compile
+  (defvar elog-appenders nil
+	"A list of elog-appender.")
 
-(defvar elog-categories nil
-  "List of categories that we have so far.")
+  (defvar elog-categories nil
+	"List of categories that we have so far.")
 
-(defvar elog-priorities nil
-  "A list of priorities for logging, higher number means more important.")
+  (defvar elog-priorities nil
+	"A list of priorities for logging, higher number means more important.")
 
-(setq elog-priorities
-      '((trace . 0)
-		(debug . 1)
-		(info  . 2)
-		(warn  . 3)
-		(error . 4)
-		(fatal . 5)))
+  (setq elog-priorities
+		'((trace . 0)
+		  (debug . 1)
+		  (info  . 2)
+		  (warn  . 3)
+		  (error . 4)
+		  (fatal . 5)))
 
-(defun elog-priority-num (pri)
-  (cdr (assoc pri elog-priorities)))
+  (defun elog-priority-num (pri)
+	(cdr (assoc pri elog-priorities)))
+
+  (defun elog-get-appenders (priority category)
+	(loop for app in elog-appenders 
+		  when (and (or (null (elog-appender-category app)) (equal category (elog-appender-category app)))
+					(<= (elog-priority-num (elog-appender-priority app)) (elog-priority-num priority)))
+		  collect app))
+
+  (defun elog-update-flags ()
+	(loop for cat in elog-categories
+		  do 
+		  (loop for priority in elog-priorities
+				do
+				(let ((flag (intern (format "%s-%s-flag" cat (car priority)))))
+				  (if (elog-get-appenders (car priority) cat)
+					  (set flag t)
+					(set flag nil)))))))
 
 (defmacro elog-make-logger (category)
   (let ((macros
@@ -131,17 +148,13 @@
 					 `(defmacro ,(intern funcname) (fmt &rest objects)
 						`(elog-log ',',suffix ',',category ,fmt ,@objects))))
 				 elog-priorities)))
-    `(progn ,@macros (add-to-list 'elog-categories ',category) (elog-update-flags))))
+	(add-to-list 'elog-categories category) 
+	(elog-update-flags)
+    `(progn ,@macros)))
 
 (defun elog-set-appenders (appenders)
   (setq elog-appenders appenders)
   (elog-update-flags))
-
-(defun elog-get-appenders (priority category)
-  (loop for app in elog-appenders 
-		when (and (or (null (elog-appender-category app)) (equal category (elog-appender-category app)))
-				  (<= (elog-priority-num (elog-appender-priority app)) (elog-priority-num priority)))
-		collect app))
 
 (defun elog-appender-layout-apply (layout priority category fmt &rest objects)
   (let* ((msg layout)
@@ -174,16 +187,6 @@
 		 (if appenders
 			 (dolist (app appenders)
 			   (elog-appender-apply app ,priority ,category ,fmt ,@objects))))))
-
-(defun elog-update-flags ()
-  (loop for cat in elog-categories
-		do 
-		(loop for priority in elog-priorities
-			  do
-			  (let ((flag (intern (format "%s-%s-flag" cat (car priority)))))
-				(if (elog-get-appenders (car priority) cat)
-					(set flag t)
-				  (set flag nil))))))
 
 (defun elog-trim (obj max)
   (let ((str (if (stringp obj)

@@ -157,6 +157,49 @@ When the user resume, we will switch to this thread and location.")
 (defvar jdibug-refresh-frames-buffer-timer nil)
 (defvar jdibug-refresh-locals-buffer-timer nil)
 
+(defvar jdibug-breakpoints-mode-map nil
+  "Local keymap for breakpoints buffer.")
+
+(setq jdibug-breakpoints-mode-map (make-keymap))
+(suppress-keymap jdibug-breakpoints-mode-map t)
+(define-key jdibug-breakpoints-mode-map "e" 'jdibug-breakpoints-toggle)
+(define-key jdibug-breakpoints-mode-map "d" 'jdibug-breakpoints-delete)
+(define-key jdibug-breakpoints-mode-map "\C-m" 'jdibug-breakpoints-goto)
+(define-key jdibug-breakpoints-mode-map [mouse-1] 'jdibug-breakpoints-goto)
+
+;;; Customized display and expanders:
+(defvar jdibug-object-custom-set-strings nil
+  "a list of (class setter) where
+
+class is a string which hold the class name of the object to be matched.
+The matching will be done using something like instance of.
+
+setter is a function that is passed (jdi jdi-value) and is expected
+to populate the jdi-value-string of the jdi-value. If setter
+is a string, it will be the method that will be invoked on the java object
+and the value that is returned is shown.")
+
+(setq jdibug-object-custom-set-strings
+      '(("java.lang.Boolean"      "toString")
+		("java.lang.Number"       "toString")
+		("java.lang.StringBuffer" "toString")
+		("java.util.Date"         "toString")
+		("java.util.Collection"   jdibug-object-custom-set-string-with-size)
+		("java.util.Map"          jdibug-object-custom-set-string-with-size)))
+
+(defvar jdibug-object-custom-expanders nil
+  "a list of (instance expander-func) where
+
+instance is a string that is matched with jdi-object-instance-of-p with the 
+value
+
+expander-func is a function that is passed (jdi jdi-value) and is expected
+to populate the jdi-value-values of the jdi-value.")
+
+(setq jdibug-object-custom-expanders
+      '(("java.util.Collection" jdibug-value-custom-expand-collection)
+		("java.util.Map"        jdibug-value-custom-expand-map)))
+
 (defstruct jdibug-breakpoint
   source-file
   line-number
@@ -187,10 +230,6 @@ When the user resume, we will switch to this thread and location.")
 (add-hook 'jdi-class-prepare-hooks 'jdibug-handle-class-prepare)
 (add-hook 'jdi-thread-start-hooks 'jdibug-handle-thread-start)
 (add-hook 'jdi-thread-end-hooks 'jdibug-handle-thread-end)
-
-(unless (fboundp 'mappend)
-  (defun mappend (fn &rest lsts)
-	(apply 'append (apply 'mapcar fn lsts))))
 
 (defun jdibug-connect ()
   (interactive)
@@ -824,16 +863,20 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		(message "not an object")
 	  (message "Class: %s" (jdi-class-signature (jdi-value-get-reference-type value))))))
 
+(defun jdibug-get-source-paths ()
+  (if (and (boundp 'jde-sourcepath)
+		   (fboundp 'jde-normalize-path))
+	  (mapcar 
+	   (lambda (path)
+		 (jde-normalize-path path 'jde-sourcepath))
+	   jde-sourcepath)
+	jdibug-source-paths))
+
 (defun jdibug-file-in-source-paths-p (file)
   (jdibug-debug "jdibug-file-in-source-paths-p:%s" file)
   (let ((result (find-if (lambda (sp) 
 						   (string-match (expand-file-name sp) file))
-						 (if jdibug-use-jde-source-paths
-							 (mapcar 
-							  (lambda (path)
-								(jde-normalize-path path 'jde-sourcepath))
-							  jde-sourcepath)
-						   jdibug-source-paths))))
+						 (jdibug-get-source-paths))))
 	(jdi-debug (if result "found" "not found"))
 	result))
 		
@@ -842,12 +885,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (let ((buf source-file))
     (mapc (lambda (sp)
 			(setf buf (replace-regexp-in-string (expand-file-name sp) "" buf)))
-		  (if jdibug-use-jde-source-paths
-			  (mapcar 
-			   (lambda (path)
-				 (jde-normalize-path path 'jde-sourcepath))
-			   jde-sourcepath)
-			jdibug-source-paths))
+		  (jdibug-get-source-paths))
     (setf buf (replace-regexp-in-string "^/" "" buf))
     (setf buf (replace-regexp-in-string ".java$" "" buf))
     (setf buf (concat "L" buf ";"))
@@ -864,12 +902,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
     (mapc (lambda (sp)
 			(if (file-exists-p (concat (expand-file-name sp) "/" buf))
 				(setf buf (concat (expand-file-name sp) "/" buf))))
-		  (if jdibug-use-jde-source-paths
-			  (mapcar 
-			   (lambda (path)
-				 (jde-normalize-path path 'jde-sourcepath))
-			   jde-sourcepath)
-			jdibug-source-paths))
+		  (jdibug-get-source-paths))
     (jdibug-trace "jdi-class-signature-to-source : %s -> %s" class-signature buf)
     buf))
 
@@ -970,16 +1003,6 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 							  'jdibug-breakpoint-unresolved)
 							 ((equal (jdibug-breakpoint-status bp) 'disabled)
 							  'jdibug-breakpoint-disabled)))))))
-
-(defvar jdibug-breakpoints-mode-map nil
-  "Local keymap for breakpoints buffer.")
-
-(setq jdibug-breakpoints-mode-map (make-keymap))
-(suppress-keymap jdibug-breakpoints-mode-map t)
-(define-key jdibug-breakpoints-mode-map "e" 'jdibug-breakpoints-toggle)
-(define-key jdibug-breakpoints-mode-map "d" 'jdibug-breakpoints-delete)
-(define-key jdibug-breakpoints-mode-map "\C-m" 'jdibug-breakpoints-goto)
-(define-key jdibug-breakpoints-mode-map [mouse-1] 'jdibug-breakpoints-goto)
 
 (defun jdibug-breakpoints-toggle ()
   (interactive)
@@ -1232,39 +1255,6 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 
 	(jdibug-debug "jdibug-string-get-string:%s:%s" (jdwp-get-string reply :value) (jdi-format-string (jdwp-get-string reply :value)))
 	(jdi-format-string (jdwp-get-string reply :value))))
-
-;;; Customized display and expanders:
-(defvar jdibug-object-custom-set-strings nil
-  "a list of (class setter) where
-
-class is a string which hold the class name of the object to be matched.
-The matching will be done using something like instance of.
-
-setter is a function that is passed (jdi jdi-value) and is expected
-to populate the jdi-value-string of the jdi-value. If setter
-is a string, it will be the method that will be invoked on the java object
-and the value that is returned is shown.")
-
-(setq jdibug-object-custom-set-strings
-      '(("java.lang.Boolean"      "toString")
-		("java.lang.Number"       "toString")
-		("java.lang.StringBuffer" "toString")
-		("java.util.Date"         "toString")
-		("java.util.Collection"   jdibug-object-custom-set-string-with-size)
-		("java.util.Map"          jdibug-object-custom-set-string-with-size)))
-
-(defvar jdibug-object-custom-expanders nil
-  "a list of (instance expander-func) where
-
-instance is a string that is matched with jdi-object-instance-of-p with the 
-value
-
-expander-func is a function that is passed (jdi jdi-value) and is expected
-to populate the jdi-value-values of the jdi-value.")
-
-(setq jdibug-object-custom-expanders
-      '(("java.util.Collection" jdibug-value-custom-expand-collection)
-		("java.util.Map"        jdibug-value-custom-expand-map)))
 
 (defun jdibug-object-custom-set-string-with-method (object thread method-name)
   (jdibug-debug "jdibug-object-custom-set-string-with-method")
