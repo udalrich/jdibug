@@ -150,7 +150,7 @@
 				 elog-priorities)))
 	(add-to-list 'elog-categories category) 
 	(elog-update-flags)
-    `(progn ,@macros)))
+    `(progn ,@macros (add-to-list 'elog-categories ',category) (elog-update-flags))))
 
 (defun elog-set-appenders (appenders)
   (setq elog-appenders appenders)
