@@ -302,6 +302,16 @@
   '((:type    u8)
 	(:length  u32)))
 
+;; declare the dynamic variables for our unpacker
+(defmacro jdwp-with-size (jdwp &rest body)
+  (declare (indent defun))
+  `(let ((jdwp-field-id-size          (jdwp-field-id-size          ,jdwp))
+		 (jdwp-method-id-size         (jdwp-method-id-size         ,jdwp))
+		 (jdwp-object-id-size         (jdwp-object-id-size         ,jdwp))
+		 (jdwp-reference-type-id-size (jdwp-reference-type-id-size ,jdwp))
+		 (jdwp-frame-id-size          (jdwp-frame-id-size          ,jdwp)))
+     ,@body))
+
 (defun jdwp-unpack-arrayregion (jdwp packet)
   (jdwp-trace "jdwp-unpack-arrayregion:%s" (jdwp-string-to-hex packet))
   (jdwp-with-size 
@@ -803,16 +813,6 @@
   (let ((jdwp (process-get proc 'jdwp)))
     (jdwp-debug "jdwp-process-sentinel:%s" string)
 	(run-hook-with-args 'jdwp-event-hooks jdwp jdwp-event-vm-death)))
-
-;; declare the dynamic variables for our unpacker
-(defmacro jdwp-with-size (jdwp &rest body)
-  (declare (indent defun))
-  `(let ((jdwp-field-id-size          (jdwp-field-id-size          ,jdwp))
-		 (jdwp-method-id-size         (jdwp-method-id-size         ,jdwp))
-		 (jdwp-object-id-size         (jdwp-object-id-size         ,jdwp))
-		 (jdwp-reference-type-id-size (jdwp-reference-type-id-size ,jdwp))
-		 (jdwp-frame-id-size          (jdwp-frame-id-size          ,jdwp)))
-     ,@body))
 
 (defun jdwp-process-reply (jdwp packet command-data)
   (jdwp-debug "jdwp-process-reply")
