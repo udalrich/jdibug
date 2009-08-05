@@ -234,6 +234,9 @@ to populate the jdi-value-values of the jdi-value.")
 (defun jdibug-connect ()
   (interactive)
 
+  ;; (unless (byte-code-function-p (symbol-function 'jdibug-connect))
+  ;; 	(error "You must byte-compile jdibug before using it."))
+
   (jdibug-debug "jdibug-connect")
 
   (jdibug-message "JDIbug connecting... ")
@@ -1318,8 +1321,6 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 			  (throw 'done next-change)))
 		  (goto-char next-change))))))
 
-(provide 'jdibug)
-
 (defun jdibug-signal-hook (error-symbol data)
   (jdibug-error "jdibug-signal-hook:%s:%s\n%s\n" error-symbol data
 				(with-output-to-string (backtrace))))
@@ -1331,3 +1332,5 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 										   (apply function args)
 										 (setq signal-hook-function nil)))
 		 function args))
+
+(provide 'jdibug-ui)
