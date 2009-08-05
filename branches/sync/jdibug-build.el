@@ -3,18 +3,18 @@
 	"elog"
 	"jdwp"
     "jdi"
-    "jdibug"))
+    "jdibug-ui"))
 
 (defconst jdibug-build-directory
   "./build/")
 
 (defun jdibug-build ()
   (interactive)
-  (when (get-buffer "jdibug-dist.el")
+  (when (get-buffer "jdibug.el")
     (save-excursion
-      (set-buffer "jdibug-dist.el")
+      (set-buffer "jdibug.el")
       (set-buffer-modified-p nil)
-      (kill-buffer "jdibug-dist.el")))
+      (kill-buffer "jdibug.el")))
   (save-some-buffers)
   (unless (file-exists-p jdibug-build-directory)
     (make-directory jdibug-build-directory))
@@ -22,7 +22,7 @@
 		bufname
 		buf
 		filename
-		(outfile (concat jdibug-build-directory "jdibug-dist.el"))
+		(outfile (concat jdibug-build-directory "jdibug.el"))
 		output)
 	(save-excursion
 	  (setq output (find-file outfile))
@@ -39,7 +39,7 @@
 	(if (get-buffer "*Compile-Log*")
 		(kill-buffer "*Compile-Log*"))
 	(byte-compile-file outfile)
-	(pop-to-buffer "jdibug-dist.el")
+	(pop-to-buffer "jdibug.el")
 	(toggle-read-only 1)
 	(pop-to-buffer "*Compile-Log*")
 	(message "finished compilation")))
