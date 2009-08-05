@@ -3,7 +3,7 @@ EMACS23=d:/emacs-23.1/bin/emacs.exe
 BUILD=-batch -q -l jdibug-build.el -f jdibug-build
 
 all:
-	rm -rf build
+	rm -rf jdibug.el
 #	$(EMACS22) $(BUILD)
 	$(EMACS23) $(BUILD)
 
