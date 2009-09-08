@@ -738,7 +738,9 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		 (declaring-type-name (jdi-class-name (jdi-location-class location)))
 		 (receiving-type-name (jdi-class-name (jdi-value-get-reference-type (jdi-frame-get-this-object frame))))
 		 (value (format "%s.%s(%s) line: %s" 
-						(if (and receiving-type-name (not (string= declaring-type-name receiving-type-name)))
+						(if (and receiving-type-name 
+								 (not (string= receiving-type-name "null"))
+								 (not (string= declaring-type-name receiving-type-name)))
 							(format "%s(%s)" receiving-type-name declaring-type-name)
 						  declaring-type-name)
 						(jdi-method-get-name (jdi-location-method location))
