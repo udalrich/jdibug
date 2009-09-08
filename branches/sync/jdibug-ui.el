@@ -675,30 +675,31 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		(jdibug-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-locals-buffer-now)))
 
 (defun jdibug-refresh-locals-buffer-now ()
-  (when (null (catch 'jdwp-input-pending
-				(with-current-buffer jdibug-locals-buffer
-				  (let ((inhibit-read-only t))
-					(erase-buffer))
-
-				  (jdibug-debug "jdibug-refresh-locals-buffer-now:active-thread=%s active-frame=%s" 
-								(if jdibug-active-thread "yes" "no")
-								(if jdibug-active-frame "yes" "no"))
-				  (if (null jdibug-active-thread)
-					  (insert "Not suspended")
-
-					(let* ((variables (sort (copy-sequence (jdi-frame-get-visible-variables jdibug-active-frame)) 'jdibug-variable-sorter))
-						   (values (jdi-frame-get-values jdibug-active-frame variables)))
+  (when (or (jdwp-accepting-process-output-p)
+			(null (catch 'jdwp-input-pending
+					(let ((jdwp-throw-on-input-pending t))
 					  (with-current-buffer jdibug-locals-buffer
 						(let ((inhibit-read-only t))
 						  (erase-buffer))
-						(setq jdibug-locals-tree
-							  (tree-mode-insert (jdibug-make-locals-tree variables values)))
-						(widget-put jdibug-locals-tree :jdibug-opened-path (tree-mode-opened-tree jdibug-locals-tree))
-						(jdi-info "current opened tree path:%s" (tree-mode-opened-tree jdibug-locals-tree))
-						(local-set-key "s" 'jdibug-node-tostring)
-						(local-set-key "c" 'jdibug-node-classname))))
-				  t)))
-	(jdibug-debug "jdibug-refresh-frames-buffer-now:input-pending")
+
+						(jdibug-debug "jdibug-refresh-locals-buffer-now:active-thread=%s active-frame=%s" 
+									  (if jdibug-active-thread "yes" "no")
+									  (if jdibug-active-frame "yes" "no"))
+						(if (null jdibug-active-thread)
+							(insert "Not suspended")
+
+						  (let* ((variables (sort (copy-sequence (jdi-frame-get-visible-variables jdibug-active-frame)) 'jdibug-variable-sorter))
+								 (values (jdi-frame-get-values jdibug-active-frame variables)))
+							(with-current-buffer jdibug-locals-buffer
+							  (let ((inhibit-read-only t))
+								(erase-buffer))
+							  (setq jdibug-locals-tree
+									(tree-mode-insert (jdibug-make-locals-tree variables values)))
+							  (widget-put jdibug-locals-tree :jdibug-opened-path (tree-mode-opened-tree jdibug-locals-tree))
+							  (jdi-info "current opened tree path:%s" (tree-mode-opened-tree jdibug-locals-tree))
+							  (local-set-key "s" 'jdibug-node-tostring)
+							  (local-set-key "c" 'jdibug-node-classname))))
+						t)))))
 	(jdibug-refresh-locals-buffer)))
 
 (defun jdibug-frame-notify (button &rest ignore)
@@ -813,23 +814,24 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 
 (defun jdibug-refresh-frames-buffer-now ()
   (jdibug-debug "jdibug-refresh-frames-buffer-now")
-  (when (null (catch 'jdwp-input-pending
-				(with-current-buffer jdibug-frames-buffer
-				  ;; 	(if (jdibug-frames-tree jdibug-this)
-				  ;; 		(tree-mode-reflesh-tree (jdibug-frames-tree jdibug-this))
-				  (let ((inhibit-read-only t))
-					(erase-buffer))
-				  (setq jdibug-frames-tree
-						(tree-mode-insert (jdibug-make-frames-tree)))
-				  (tree-mode)
-				  (let ((active-frame-point (jdibug-point-of-active-frame)))
-					(when active-frame-point 
-					  (goto-char active-frame-point)
-					  (set-window-point (get-buffer-window jdibug-frames-buffer t) (point))
-					  (forward-line -1)
-					  (set-window-start (get-buffer-window jdibug-frames-buffer t) (point))))
-				  t)))
-	(jdibug-debug "jdibug-refresh-frames-buffer-now:input-pending")
+  (when (or (jdwp-accepting-process-output-p)
+			(null (catch 'jdwp-input-pending
+					(let ((jdwp-throw-on-input-pending t))
+					  (with-current-buffer jdibug-frames-buffer
+						;; 	(if (jdibug-frames-tree jdibug-this)
+						;; 		(tree-mode-reflesh-tree (jdibug-frames-tree jdibug-this))
+						(let ((inhibit-read-only t))
+						  (erase-buffer))
+						(setq jdibug-frames-tree
+							  (tree-mode-insert (jdibug-make-frames-tree)))
+						(tree-mode)
+						(let ((active-frame-point (jdibug-point-of-active-frame)))
+						  (when active-frame-point 
+							(goto-char active-frame-point)
+							(set-window-point (get-buffer-window jdibug-frames-buffer t) (point))
+							(forward-line -1)
+							(set-window-start (get-buffer-window jdibug-frames-buffer t) (point))))
+						t)))))
 	(jdibug-refresh-frames-buffer)))
 
 (defun jdibug-node-tostring ()
