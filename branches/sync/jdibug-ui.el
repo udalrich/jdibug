@@ -752,26 +752,22 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   
 (defun jdibug-make-thread-value (thread)
   (jdibug-debug "jdibug-make-thread-value")
-  (let ((name (jdi-thread-get-name thread)))
-	(multiple-value-bind (status suspend-status) (jdi-thread-get-status thread)
-	  (format "%sThread [%s] (%s)" 
-			  (if (jdi-thread-get-daemon-p thread)
-				  "Daemon "
-				"")
-			  name 
-			  (if (equal suspend-status jdwp-suspend-status-suspended)
-				  "Suspended"
-				"Running")))))
+  (format "%sThread [%s] (%s)" 
+		  (if (jdi-thread-get-daemon-p thread)
+			  "Daemon "
+			"")
+		  (jdi-thread-get-name thread)
+		  (if (jdi-thread-running-p thread)
+			  "Running"
+			"Suspended")))
 
 (defun jdibug-make-frames-node (tree)
   (jdibug-debug "jdibug-make-frames-node")
   (let ((thread (widget-get tree :jdi-thread)))
-	(let ((suspended (jdi-thread-get-suspended-p thread)))
-	  (jdibug-debug "jdibug-make-frames-node:suspended=%s" suspended)
-	  (if suspended
-		  (let ((frames (jdi-thread-get-frames thread)))
-			(jdibug-debug "jdibug-make-frames-node: number of frames = %s" (length frames))
-			(mapcar 'jdibug-make-frame-node frames))))))
+	(when (not (jdi-thread-running-p thread))
+	  (let ((frames (jdi-thread-get-frames thread)))
+		(jdibug-debug "jdibug-make-frames-node: number of frames = %s" (length frames))
+		(mapcar 'jdibug-make-frame-node frames)))))
 
 (defun jdibug-make-thread-tree (thread)
   (jdibug-debug "jdibug-make-thread-tree")

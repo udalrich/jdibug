@@ -35,7 +35,8 @@
   )
 
 (defstruct (jdi-reference-type (:include jdi-mirror))
-  id)
+  id
+  fields-cache)
 
 (defstruct (jdi-class (:include jdi-reference-type))
   ;; jni-style
@@ -115,9 +116,11 @@
 (defstruct (jdi-class-loader (:include jdi-object)))
 
 (defstruct (jdi-thread (:include jdi-object))
-  ; jdi-thread-group
-  thread-group
-  system-thread-p
+  (running-p t)
+
+  thread-group-cache
+  daemon-p-cache
+  system-thread-p-cache
   )
 
 (defstruct (jdi-thread-group (:include jdi-object))
@@ -320,31 +323,47 @@
 	(values (bindat-get-field reply :thread-status)
 			(bindat-get-field reply :suspend-status))))
 
+;; a symbol that we use to mean that we have resolved
+;; the value and the result is nil
+(defvar jdi-cache-nil nil)
+
+(defmacro jdi-with-cache (acc obj form)
+  `(cond ((null (,acc ,obj))
+		  (setf (,acc ,obj)
+				,form)
+		  (if (,acc ,obj)
+			  (,acc ,obj)
+			(setf (,acc ,obj) 'jdi-cache-nil)
+			nil))
+		 ((equal (,acc ,obj) 'jdi-cache-nil)
+		  nil)
+		 (t (,acc ,obj))))
+
 (defun jdi-thread-get-thread-group (thread)
   (jdi-debug "jdi-thread-get-thread-group:%s" (jdi-thread-id thread))
-  (if (jdi-thread-thread-group thread)
-	  (jdi-thread-thread-group thread)
-
-	(let ((reply (jdwp-send-command (jdi-mirror-jdwp thread) "thread-group" `((:thread . ,(jdi-thread-id thread))))))
-	  (jdi-debug "jdi-thread-get-thread-group:group=%s" (bindat-get-field reply :group))
-	  (setf (jdi-thread-thread-group thread) (jdi-virtual-machine-get-object-create 
-											  (jdi-mirror-virtual-machine thread)
-											  (make-jdi-thread-group :id (bindat-get-field reply :group)))))))
+  (jdi-with-cache jdi-thread-thread-group-cache thread
+				  (let ((reply (jdwp-send-command (jdi-mirror-jdwp thread) "thread-group" `((:thread . ,(jdi-thread-id thread))))))
+					(jdi-debug "jdi-thread-get-thread-group:group=%s" (bindat-get-field reply :group))
+					(jdi-virtual-machine-get-object-create 
+					 (jdi-mirror-virtual-machine thread)
+					 (make-jdi-thread-group :id (bindat-get-field reply :group))))))
 
 (defun jdi-thread-get-system-thread-p (thread)
   (jdi-debug "jdi-thread-get-system-thread-p:%s" (jdi-thread-id thread))
-  (let ((group (jdi-thread-get-thread-group thread)))
-	(jdi-thread-group-get-system-thread-p group)))
+  (jdi-with-cache jdi-thread-system-thread-p-cache thread
+				  (let ((group (jdi-thread-get-thread-group thread)))
+					(jdi-thread-group-get-system-thread-p group))))
 
 (defun jdi-thread-get-daemon-p (thread)
   (jdi-debug "jdi-thread-get-daemon-p:%s" (jdi-thread-id thread))
-  (let* ((reference-type (jdi-object-get-reference-type thread))
-		 (field (jdi-reference-type-get-field-by-name reference-type "daemon")))
-	(if (null field)
-		(setq field (jdi-reference-type-get-field-by-name reference-type "isDaemon")))
-	(if field
-		(if (string= (car (jdi-jni-to-print (jdi-field-signature field))) "boolean")
-			(not (= 0 (jdi-primitive-value-value (jdi-object-get-value thread field))))))))
+  (jdi-with-cache jdi-thread-daemon-p-cache thread
+				  (let* ((reference-type (jdi-object-get-reference-type thread))
+						 (field (jdi-reference-type-get-field-by-name reference-type "daemon")))
+					(if (null field)
+						(setq field (jdi-reference-type-get-field-by-name reference-type "isDaemon")))
+					(if field
+						(if (string= (car (jdi-jni-to-print (jdi-field-signature field))) "boolean")
+							(not (= 0 (jdi-primitive-value-value (jdi-object-get-value thread field)))))))))
 
 (defun jdi-thread-group-get-system-thread-p (thread-group)
   (jdi-debug "jdi-thread-group-get-system-thread-p:%s" (jdi-thread-group-id thread-group))
@@ -604,10 +623,12 @@
 
 (defun jdi-thread-resume (thread)
   (jdi-debug "jdi-thread-resume")
+  (setf (jdi-thread-running-p thread) t)
   (jdwp-send-command (jdi-mirror-jdwp thread) "thread-resume" `((:thread . ,(jdi-thread-id thread)))))
 
 (defun jdi-thread-send-step (thread depth)
   (jdi-debug "jdi-thread-send-step:depth=%s" depth)
+  (setf (jdi-thread-running-p thread) t)
   (let* ((vm (jdi-mirror-virtual-machine thread))
 		 (erm (jdi-virtual-machine-event-request-manager vm))
 		 (er (jdi-event-request-manager-create-step erm thread depth)))
@@ -1011,22 +1032,23 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 
 (defun jdi-reference-type-get-fields (reference-type)
   "Get all the fields in this reference-type only."
-  (let ((reply (jdwp-send-command (jdi-mirror-jdwp reference-type) "fields" `((:ref-type . ,(jdi-reference-type-id reference-type))))))
-	(jdi-debug "jdi-reference-type-get-fields: %s's fields:%s" (jdi-reference-type-id reference-type) (bindat-get-field reply :declared))
-	(loop for field in (bindat-get-field reply :field)
-		  collect (make-jdi-field :virtual-machine (jdi-mirror-virtual-machine reference-type)
-								  :id (bindat-get-field field :id)
-								  :name (jdwp-get-string field :name)
-								  :signature (jdwp-get-string field :signature)
-								  :generic-signature (jdwp-get-string field :generic-signature)
-								  :mod-bits (bindat-get-field field :mod-bits))
-		  do (jdi-debug "jdi-reference-type-get-fields:%s id:%s name:%s signature:%s generic-signature:%s modbits:%s" 
-						(jdi-reference-type-id reference-type)
-						(bindat-get-field field :id) 
-						(jdwp-get-string field :name) 
-						(jdwp-get-string field :signature)
-						(jdwp-get-string field :generic-signature)
-						(bindat-get-field field :mod-bits)))))
+  (jdi-with-cache jdi-reference-type-fields-cache reference-type
+				  (let ((reply (jdwp-send-command (jdi-mirror-jdwp reference-type) "fields" `((:ref-type . ,(jdi-reference-type-id reference-type))))))
+					(jdi-debug "jdi-reference-type-get-fields: %s's fields:%s" (jdi-reference-type-id reference-type) (bindat-get-field reply :declared))
+					(loop for field in (bindat-get-field reply :field)
+						  collect (make-jdi-field :virtual-machine (jdi-mirror-virtual-machine reference-type)
+												  :id (bindat-get-field field :id)
+												  :name (jdwp-get-string field :name)
+												  :signature (jdwp-get-string field :signature)
+												  :generic-signature (jdwp-get-string field :generic-signature)
+												  :mod-bits (bindat-get-field field :mod-bits))
+						  do (jdi-debug "jdi-reference-type-get-fields:%s id:%s name:%s signature:%s generic-signature:%s modbits:%s" 
+										(jdi-reference-type-id reference-type)
+										(bindat-get-field field :id) 
+										(jdwp-get-string field :name) 
+										(jdwp-get-string field :signature)
+										(jdwp-get-string field :generic-signature)
+										(bindat-get-field field :mod-bits))))))
 
 (defun jdi-array-get-values (array)
   (jdi-debug "jdi-array-get-values:object-id=%s" (jdi-object-id array))
@@ -1075,6 +1097,7 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 								:thread thread
 								:location location)))
 
+	(setf (jdi-thread-running-p thread) nil)
 	(setf (jdi-virtual-machine-suspended-frames vm) (nreverse (cons frame (jdi-virtual-machine-suspended-frames vm))))
 
 	(setf (jdi-virtual-machine-suspended-thread-id vm) (bindat-get-field event :u :thread))
@@ -1100,6 +1123,8 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 		 (frame (make-jdi-frame :virtual-machine vm
 								:thread thread
 								:location location)))
+
+	(setf (jdi-thread-running-p thread) nil)
 
 	(setf (jdi-virtual-machine-suspended-frames vm) (nreverse (cons frame (jdi-virtual-machine-suspended-frames vm))))
 
