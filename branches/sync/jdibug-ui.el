@@ -710,9 +710,14 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 				 (jdi-class-name (jdi-location-class (jdi-frame-location frame)))
 				 (jdi-method-name (jdi-location-method (jdi-frame-location frame)))
 				 (jdi-location-line-number (jdi-frame-location frame)))
-	(let ((frame-index (position frame frames))
+	(let ((frame-index (position frame frames :test (lambda (f1 f2)
+													  (equal (jdi-frame-id f1) (jdi-frame-id f2)))))
 		  (thread (jdi-frame-thread frame)))
 	  (jdibug-debug "looking at frame-id:%s frame-index:%s" (jdi-frame-id frame) frame-index)
+	  (if jdibug-debug-flag
+		  (loop for frame in frames
+				do
+				(jdibug-debug "existing frame-id:%s" (jdi-frame-id frame))))
 
 ;;	  (jdibug-refresh-locals-buffer (jdi-frame-thread frame) (jdi-frame-location frame)))
 	  ;; we need to resolve again and get the frame id from the index
