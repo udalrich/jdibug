@@ -1182,15 +1182,17 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 	(jdi-debug "jdi-class-name-to-class-signature:%s:%s" class-name buf)
 	buf))
 
-(defun jdi-object-instance-of-p (object signature)
-  (jdi-debug "jdi-object-instance-of-p:signature=%s" signature)
-  (let* ((class (jdi-object-get-reference-type object))
-		 (supers (jdi-class-get-all-super class))
+(defun jdi-class-instance-of-p (class signature)
+  (jdi-debug "jdi-class-instance-of-p:signature=%s" signature)
+  (let* ((supers (jdi-class-get-all-super class))
 		 (interfaces (jdi-class-get-all-interfaces class))
 		 (signatures (mapcar 'jdi-class-get-signature (cons class (append supers interfaces)))))
-	(jdi-debug "jdi-object-instance-of-p:all-signatures=%s" signatures)
+	(jdi-debug "jdi-class-instance-of-p:all-signatures=%s" signatures)
 	(member signature signatures)))
 
+(defun jdi-object-instance-of-p (object signature)
+  (jdi-debug "jdi-object-instance-of-p:signature=%s" signature)
+  (jdi-class-instance-of-p (jdi-object-get-reference-type object) signature))
 
 (defun jdi-value-extract-generic-class-name (generic-signature)
   (string-match "<L.*/\\(.*\\);>" generic-signature)

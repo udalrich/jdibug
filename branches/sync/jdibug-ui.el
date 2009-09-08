@@ -1216,8 +1216,9 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (if (equal (jdi-object-id object) [0 0 0 0 0 0 0 0])
 	  "null"
 
-	(let* ((pair (find-if (lambda (custom)
-							(jdi-object-instance-of-p object (jdi-class-name-to-class-signature (car custom))))
+	(let* ((class (jdi-object-get-reference-type object))
+		   (pair (find-if (lambda (custom)
+							(jdi-class-instance-of-p class (jdi-class-name-to-class-signature (car custom))))
 						  jdibug-object-custom-set-strings))
 		   (setters (if pair (cdr pair))))
 	  (jdibug-debug "jdibug-object-get-string: object-id=%s found-setters:%s" (jdi-object-id object) setters)
@@ -1230,7 +1231,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 									  (funcall setter object))))
 							 setters
 							 ":")
-				(jdi-class-name (jdi-object-get-reference-type object)))
+				(jdi-class-name class))
 			  (jdwp-vec-to-int (jdi-object-id object))))))
 
 (defun jdibug-array-get-string (array)
