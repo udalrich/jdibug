@@ -40,7 +40,7 @@
 ;; Then just go into any line in a java source code and do
 ;; C-c C-c C-b to break at that line.
 ;; Just run your application until you hit the breakpoint
-;; after that stuffs are pretty much self explanatory 
+;; after that stuffs are pretty much self explanatory
 ;;
 ;; The rest of the functions are almost similiar to that of jdb and jdebug
 
@@ -69,7 +69,7 @@ need not be refreshed."
   :type 'float)
 
 (defcustom jdibug-use-jde-source-paths t
-  "Set to t to use the jde-sourcepath as the source paths. 
+  "Set to t to use the jde-sourcepath as the source paths.
 jdibug-source-paths will be ignored if this is set to t."
   :group 'jdibug
   :type 'boolean)
@@ -190,7 +190,7 @@ and the value that is returned is shown.")
 (defvar jdibug-object-custom-expanders nil
   "a list of (instance expander-func) where
 
-instance is a string that is matched with jdi-object-instance-of-p with the 
+instance is a string that is matched with jdi-object-instance-of-p with the
 value
 
 expander-func is a function that is passed (jdi jdi-value) and is expected
@@ -208,7 +208,7 @@ to populate the jdi-value-values of the jdi-value.")
 
   ;; list jdi-event-request, this is a list because we might be installing 2 breakpoints for a single vm
   ;; because it have two class loaders, or we have two different vm!
-  event-requests 
+  event-requests
 )
 
 (defun jdibug-breakpoint-short-source-file (bp)
@@ -222,8 +222,9 @@ to populate the jdi-value-values of the jdi-value.")
   (if append
 	  (setf jdibug-current-message (concat jdibug-current-message message))
 	(setf jdibug-current-message message))
+  (jdibug-info jdibug-current-message)
   (message jdibug-current-message))
-  
+
 (add-hook 'jdi-breakpoint-hooks 'jdibug-handle-breakpoint)
 (add-hook 'jdi-step-hooks 'jdibug-handle-step)
 (add-hook 'jdi-detached-hooks 'jdibug-handle-detach)
@@ -254,7 +255,7 @@ to populate the jdi-value-values of the jdi-value.")
 	(use-local-map jdibug-breakpoints-mode-map)
 	(toggle-read-only 1))
 
-  (setq jdibug-virtual-machines 
+  (setq jdibug-virtual-machines
 		(mapcar (lambda (connect-host-and-port)
 				  (let* ((host (nth 0 (split-string connect-host-and-port ":")))
 						 (port (string-to-number (nth 1 (split-string connect-host-and-port ":"))))
@@ -279,13 +280,13 @@ to populate the jdi-value-values of the jdi-value.")
 
 		(run-hooks 'jdibug-connected-hook)
 		(jdibug-refresh-frames-buffer))))
-  
+
 (defun jdibug-disconnect ()
   (interactive)
   (jdibug-trace "jdibug-disconnect")
   (if jdibug-current-line-overlay
 	  (delete-overlay jdibug-current-line-overlay))
-  (mapc (lambda (bp) 
+  (mapc (lambda (bp)
 		  (if (jdibug-breakpoint-overlay bp)
 			  (delete-overlay (jdibug-breakpoint-overlay bp))))
 		jdibug-breakpoints)
@@ -308,8 +309,8 @@ to populate the jdi-value-values of the jdi-value.")
 
   (jdibug-message "JDIbug disconnecting... ")
   (mapc (lambda (vm)
-		  (jdibug-message (format "%s:%s" 
-								  (jdi-virtual-machine-host vm) 
+		  (jdibug-message (format "%s:%s"
+								  (jdi-virtual-machine-host vm)
 								  (jdi-virtual-machine-port vm)) t)
 		  (jdi-virtual-machine-disconnect vm)
 		  (jdibug-message "(disconnected) " t))
@@ -324,7 +325,7 @@ to populate the jdi-value-values of the jdi-value.")
 
 (defun jdibug-find-buffer (file-name)
   "Return the buffer that is viewing this file."
-  (catch 'found 
+  (catch 'found
 	(dolist (buf (buffer-list))
 	  (if (equal file-name (buffer-file-name buf))
 		  (throw 'found buf)))))
@@ -412,7 +413,7 @@ And position the point at the line number."
   (jdibug-goto-location (jdi-frame-location frame))
   (jdibug-refresh-frames-buffer)
   (jdibug-refresh-locals-buffer))
-  
+
 (defun jdibug-handle-class-prepare (class thread)
   (jdibug-debug "jdibug-handle-class-prepare")
   (dolist (bp jdibug-breakpoints)
@@ -430,7 +431,7 @@ And position the point at the line number."
   (interactive)
   (if jdibug-current-line-overlay
 	  (delete-overlay jdibug-current-line-overlay))
-  (mapc (lambda (bp) 
+  (mapc (lambda (bp)
 		  (if (jdibug-breakpoint-overlay bp)
 			  (delete-overlay (jdibug-breakpoint-overlay bp))))
 		jdibug-breakpoints)
@@ -504,15 +505,15 @@ And position the point at the line number."
 		  :jdi-method ,method
 		  :dynargs jdibug-expand-method-node
 		  :expander jdibug-expand-method-node)
-	  `(item 
-		:value 
+	  `(item
+		:value
 		,display))))
 
 (defun jdibug-expand-methods (tree)
   (let ((value (widget-get tree :jdi-value)))
 	(let ((class (jdi-value-get-reference-type value)))
 	  (let ((methods (jdi-class-get-all-methods class)))
-		(mapcar (lambda (method) 
+		(mapcar (lambda (method)
 				  (jdibug-make-method-node value method))
 				(sort (remove-duplicates methods
 										 :test (lambda (obj1 obj2)
@@ -588,7 +589,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (let ((value (widget-get tree :jdi-value)))
 	(jdibug-debug "jdibug-value-expander:type=%s" (jdi-value-type value))
 
-	;; call the custom expander here, so that the custom expander can 
+	;; call the custom expander here, so that the custom expander can
 	;; make a ArrayList look like an array by changing the value-type
 	(let* ((expander (find-if (lambda (custom)
 								(jdi-object-instance-of-p value (jdi-class-name-to-class-signature (car custom))))
@@ -620,9 +621,9 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		  collect (jdibug-make-tree-from-value (format "[%s]" i) v s))))
 
 (defun jdibug-make-tree-from-field-value (field value)
-  (let ((display (format "%s%s: %s" 
+  (let ((display (format "%s%s: %s"
 						 (if (or (jdi-field-static-p field) (jdi-field-final-p field))
-							 (format "(%s%s) " 
+							 (format "(%s%s) "
 									 (if (jdi-field-static-p field) "S" "")
 									 (if (jdi-field-final-p field) "F" ""))
 						   "")
@@ -638,8 +639,8 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		  :jdi-value ,value
 		  :expander jdibug-value-expander
 		  :dynargs jdibug-value-expander)
-	  `(item 
-		:value 
+	  `(item
+		:value
 		,display))))
 
 (defun jdibug-make-tree-from-variable-value (variable value string)
@@ -656,8 +657,8 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		:jdi-value ,value
 		:expander jdibug-value-expander
 		:dynargs jdibug-value-expander)
-    `(item 
-      :value 
+    `(item
+      :value
       ,(format "%s: %s" name string))))
 
 (defun jdibug-variable-sorter (o1 o2)
@@ -671,7 +672,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 (defun jdibug-refresh-locals-buffer ()
   (if (timerp jdibug-refresh-locals-buffer-timer)
 	  (cancel-timer jdibug-refresh-locals-buffer-timer))
-  (setq jdibug-refresh-locals-buffer-timer 
+  (setq jdibug-refresh-locals-buffer-timer
 		(jdibug-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-locals-buffer-now)))
 
 (defun jdibug-refresh-locals-buffer-now ()
@@ -682,7 +683,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 						(let ((inhibit-read-only t))
 						  (erase-buffer))
 
-						(jdibug-debug "jdibug-refresh-locals-buffer-now:active-thread=%s active-frame=%s" 
+						(jdibug-debug "jdibug-refresh-locals-buffer-now:active-thread=%s active-frame=%s"
 									  (if jdibug-active-thread "yes" "no")
 									  (if jdibug-active-frame "yes" "no"))
 						(if (null jdibug-active-thread)
@@ -737,8 +738,8 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (let* ((location (jdi-frame-location frame))
 		 (declaring-type-name (jdi-class-name (jdi-location-class location)))
 		 (receiving-type-name (jdi-class-name (jdi-value-get-reference-type (jdi-frame-get-this-object frame))))
-		 (value (format "%s.%s(%s) line: %s" 
-						(if (and receiving-type-name 
+		 (value (format "%s.%s(%s) line: %s"
+						(if (and receiving-type-name
 								 (not (string= receiving-type-name "null"))
 								 (not (string= declaring-type-name receiving-type-name)))
 							(format "%s(%s)" receiving-type-name declaring-type-name)
@@ -755,12 +756,12 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		  :button-face ,(if (equal (jdi-frame-id frame) active-frame-id) 'jdibug-current-frame)
 		  :notify jdibug-frame-notify
 		  :format "%[%t%]\n")
-	  `(item 
+	  `(item
 		:value ,value))))
-  
+
 (defun jdibug-make-thread-value (thread)
   (jdibug-debug "jdibug-make-thread-value")
-  (format "%sThread [%s] (%s)" 
+  (format "%sThread [%s] (%s)"
 		  (if (jdi-thread-get-daemon-p thread)
 			  "Daemon "
 			"")
@@ -791,7 +792,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 
 (defun jdibug-make-threads-tree (tree)
   (jdibug-debug "jdibug-make-threads-tree")
-  (mapcar 'jdibug-make-thread-tree 
+  (mapcar 'jdibug-make-thread-tree
 		  (loop for thread in (jdi-virtual-machine-get-threads (widget-get tree :jdi-virtual-machine))
 				unless (jdi-thread-get-system-thread-p thread) collect thread)))
 
@@ -816,7 +817,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 (defun jdibug-refresh-frames-buffer ()
   (if (timerp jdibug-refresh-frames-buffer-timer)
 	  (cancel-timer jdibug-refresh-frames-buffer-timer))
-  (setq jdibug-refresh-frames-buffer-timer 
+  (setq jdibug-refresh-frames-buffer-timer
 		(jdibug-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-frames-buffer-now)))
 
 (defun jdibug-refresh-frames-buffer-now ()
@@ -833,7 +834,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 							  (tree-mode-insert (jdibug-make-frames-tree)))
 						(tree-mode)
 						(let ((active-frame-point (jdibug-point-of-active-frame)))
-						  (when active-frame-point 
+						  (when active-frame-point
 							(goto-char active-frame-point)
 							(set-window-point (get-buffer-window jdibug-frames-buffer t) (point))
 							(forward-line -1)
@@ -872,22 +873,23 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	  (message "Class: %s" (jdi-class-signature (jdi-value-get-reference-type value))))))
 
 (defun jdibug-get-source-paths ()
-  (if (and (boundp 'jde-sourcepath)
+  (if (and jdibug-use-jde-source-paths
+		   (boundp 'jde-sourcepath)
 		   (fboundp 'jde-normalize-path))
-	  (mapcar 
+	  (mapcar
 	   (lambda (path)
-		 (jde-normalize-path path 'jde-sourcepath))
+		 (jdibug-normalize-path path 'jde-sourcepath t))
 	   jde-sourcepath)
 	jdibug-source-paths))
 
 (defun jdibug-file-in-source-paths-p (file)
   (jdibug-debug "jdibug-file-in-source-paths-p:%s" file)
-  (let ((result (find-if (lambda (sp) 
+  (let ((result (find-if (lambda (sp)
 						   (string-match (expand-file-name sp) file))
 						 (jdibug-get-source-paths))))
 	(jdi-debug (if result "found" "not found"))
 	result))
-		
+
 (defun jdibug-source-file-to-class-signature (source-file)
   "Converts a source file to a JNI class name."
   (let ((buf source-file))
@@ -925,11 +927,11 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	(dolist (vm jdibug-virtual-machines)
 	  (if (not (jdibug-file-in-source-paths-p source-file))
 		  (progn
-			(jdibug-message "file is not in source path" t)
+			(jdibug-message (format "file %s is not in source path" source-file) t)
 			t)
 
-		(let ((result (jdi-virtual-machine-set-breakpoint 
-					   vm 
+		(let ((result (jdi-virtual-machine-set-breakpoint
+					   vm
 					   (jdibug-source-file-to-class-signature source-file)
 					   line-number)))
 		  (if (null result)
@@ -972,7 +974,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		 (line-number (if (string-match jdibug-break-on-class-regexp current-line-text)
 						  nil
 						(line-number-at-pos)))
-		 (bp (find-if (lambda (bp) 
+		 (bp (find-if (lambda (bp)
 						(and (equal (jdibug-breakpoint-source-file bp) source-file)
 							 (equal (jdibug-breakpoint-line-number bp) line-number)))
 					  jdibug-breakpoints)))
@@ -981,7 +983,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		   (jdibug-disable-breakpoint bp))
 		  ((and bp (equal (jdibug-breakpoint-status bp) 'disabled))
 		   (jdibug-remove-breakpoint bp))
-		  (t 
+		  (t
 		   (jdibug-set-breakpoint (make-jdibug-breakpoint :source-file source-file :line-number line-number))))))
 
 (defun jdibug-get-class-line-number ()
@@ -1056,7 +1058,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 								 (cond ((equal (jdibug-breakpoint-status bp) 'enabled) " E")
 									   ((equal (jdibug-breakpoint-status bp) 'unresolved) " P")
 									   (t "  "))
-								 (jdibug-breakpoint-short-source-file bp) 
+								 (jdibug-breakpoint-short-source-file bp)
 								 (or (jdibug-breakpoint-line-number bp)
 									 "class"))))
 				(insert (propertize str 'breakpoint bp))))))
@@ -1070,7 +1072,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
       (message "JDIbug Can not step. Not suspended.")
 	(let ((active-thread jdibug-active-thread))
 	  ;; we can not clear the active-thread after calling send-step
-	  ;; because the send-step command is going to trigger the 
+	  ;; because the send-step command is going to trigger the
 	  ;; handle-step command first, and then return here
 	  ;; and we will be clearing it again
 	  (setq jdibug-active-thread nil)
@@ -1112,7 +1114,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (interactive)
   (jdibug-debug "jdibug-connected-p")
   (let ((connected 0))
-	(mapc (lambda (vm) 
+	(mapc (lambda (vm)
 			(let ((proc (jdwp-process (jdi-virtual-machine-jdwp vm))))
 			  (if (and proc
 					   (equal (process-status proc) 'open))
@@ -1173,20 +1175,24 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 
 (defun jdibug-value-get-string (value)
   "[ASYNC] get a string to be displayed for a value"
-  (jdibug-debug "jdibug-value-get-string:type=%s" 
+  (jdibug-debug "jdibug-value-get-string:type=%s"
 				(jdi-value-type value))
 
-  (cond ((or (equal (jdi-value-type value) jdwp-tag-int)
-			 (equal (jdi-value-type value) jdwp-tag-byte)
+  (cond ((or (equal (jdi-value-type value) jdwp-tag-byte)
 			 (equal (jdi-value-type value) jdwp-tag-char)
 			 (equal (jdi-value-type value) jdwp-tag-short))
 		 (format "%d" (jdi-primitive-value-value value)))
 
-		((equal (jdi-value-type value) jdwp-tag-long)
+		((or (equal (jdi-value-type value) jdwp-tag-long)
+			 (equal (jdi-value-type value) jdwp-tag-int))
+		 ;; TODO: This will fail for large values (greater than about
+		 ;; 24 bits) since emacs integers only have 24-28 bits.  Doing
+		 ;; this right will require writing something like
+		 ;; number-to-string that works on at least 8 bytes
 		 (format "%d" (jdwp-vec-to-int (jdi-primitive-value-value value))))
 
 		((equal (jdi-value-type value) jdwp-tag-float)
-		 (format "%f" (jdwp-vec-to-float (jdi-primitive-value-value value))))
+		 (jdibug-float-to-string (jdwp-vec-to-float (jdi-primitive-value-value value))))
 
 		((equal (jdi-value-type value) jdwp-tag-boolean)
 		 (if (= 0 (jdi-primitive-value-value value)) "false" "true"))
@@ -1216,9 +1222,17 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   		((equal (jdi-value-type value) jdwp-tag-array)
   		 (jdibug-array-get-string value))
 
-		(t 
+		(t
 		 (jdi-error "fixme: do not know how to print value of type:%s" (jdi-value-type value))
 		 "...")))
+
+(defun jdibug-float-to-string (float)
+  "Convert a FLOAT converted by jdwp to a string for display.
+The value is probably a number, but it could be a constant for
+special cases like infinity."
+  (if (numberp float)
+	  (format "%g" float)
+	(format "%s" float)))
 
 (defun jdibug-object-get-string (object)
   (jdibug-debug "jdibug-object-get-string:object-id=%s" (jdi-object-id object))
@@ -1308,7 +1322,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 							   append (list key value))
 				for s = (jdibug-value-get-string v)
 				for i from 0 by 1
-				collect (jdibug-make-tree-from-value (format "[%s%s]" 
+				collect (jdibug-make-tree-from-value (format "[%s%s]"
 															 (if (= 0 (mod i 2)) "k" "v")
 															 (/ i 2))
 													 v s)))))))
@@ -1334,9 +1348,19 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 (defun jdibug-run-with-timer (secs repeat function &rest args)
   (apply 'run-with-timer secs repeat (lambda (function &rest args)
 									   (setq signal-hook-function 'jdibug-signal-hook)
-									   (unwind-protect 
+									   (unwind-protect
 										   (apply function args)
 										 (setq signal-hook-function nil)))
 		 function args))
+
+(defun jdibug-normalize-path (path symbol cygwin-p)
+  "Process PATH and SYMBOL like `jde-normalize-path'.  If CYGWIN-P, leave the result in cygwin form."
+  ;; If we want to leave paths in cygwin form, bind the converter to a
+  ;; function that does nothing
+  (let ((jde-cygwin-path-converter
+		 (if cygwin-p
+			 (list (lambda (path) path))
+		   jde-cygwin-path-converter)))
+	(jde-normalize-path path symbol)))
 
 (provide 'jdibug-ui)

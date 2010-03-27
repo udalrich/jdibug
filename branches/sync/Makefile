@@ -5,5 +5,8 @@ BUILD=-batch -q -l jdibug-build.el -f jdibug-build
 all:
 	rm -rf jdibug.el
 #	$(EMACS22) $(BUILD)
-	$(EMACS23) $(BUILD)
+#	$(EMACS23) $(BUILD)
+	emacs $(BUILD)
+
+# EOF
 

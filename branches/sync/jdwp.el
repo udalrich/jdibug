@@ -49,22 +49,22 @@
 
 (defstruct jdwp
   ;; the elisp process that connects to the debuggee
-  process		   
+  process
 
   ;; the state of our process
   handshaked-p
 
   ;; the last used command id that we sent to the server
-  (current-id            -1) 
+  (current-id            -1)
 
   ;; place where you can store anything
-  plist				 
+  plist
 
   current-reply
 
   ;; VM specific sizes that need to be set before any communication happens
-  (field-id-size          4) 
-  (method-id-size         4) 
+  (field-id-size          4)
+  (method-id-size         4)
   (object-id-size         4)
   (reference-type-id-size 4)
   (frame-id-size          4)
@@ -314,30 +314,40 @@
 
 (defun jdwp-unpack-arrayregion (jdwp packet)
   (jdwp-trace "jdwp-unpack-arrayregion:%s" (jdwp-string-to-hex packet))
-  (jdwp-with-size 
+  (jdwp-with-size
     jdwp
 	(let* ((header (bindat-unpack jdwp-arrayregion-header-spec packet))
 		   (type   (bindat-get-field header :type))
 		   (length (bindat-get-field header :length))
 		   repeater spec unpacked)
-	  (setq repeater 
+	  (setq repeater
 			(case type
+			  ; object
 			  (76 '(:value struct jdwp-value-spec))
+			  ; array
 			  (91 '(:value struct jdwp-value-spec))
+			  ; byte
 			  (66 '(:value u8))
+			  ; char
 			  (67 '(:value u16))
-			  (70 '(:value u32))
+			  ; float
+			  (70 '(:value vec 4))
+			  ; double
 			  (68 '(:value vec 8))
-			  (73 '(:value u32))
+			  ; int.  u32 will overflow.  Can we use vec 4?
+			  (73 '(:value vec 4))
+			  ; long
 			  (74 '(:value vec 8))
+			  ; short
 			  (83 '(:value u16))
+			  ; boolean
 			  (90 '(:value u8))))
 	  (setq spec `((:type u8) (:length u32) (:value repeat (:length) ,repeater)))
 	  (bindat-unpack spec packet))))
 
 (defconst jdwp-protocol
   `((:name         "version"
-				   :command-set  1 
+				   :command-set  1
 				   :command      1
 				   :command-spec nil
 				   :reply-spec   ((:description   struct jdwp-string-spec)
@@ -816,7 +826,7 @@
 
 (defun jdwp-process-reply (jdwp packet command-data)
   (jdwp-debug "jdwp-process-reply")
-  (jdwp-with-size 
+  (jdwp-with-size
     jdwp
     (let* ((id           (jdwp-packet-id packet))
 		   (error        (jdwp-packet-reply-error packet))
@@ -829,8 +839,8 @@
 			(error "%s" error))
 		(if reply-spec
 			(let ((reply-data   (bindat-unpack reply-spec (jdwp-packet-data packet))))
-			  (jdwp-info "jdwp-process-reply:id:%5s command:[%20s] time:%-6s len:%5s error:%1d" 
-						 id 
+			  (jdwp-info "jdwp-process-reply:id:%5s command:[%20s] time:%-6s len:%5s error:%1d"
+						 id
 						 (getf protocol :name)
 						 (float-time (time-subtract (current-time) (cdr (assoc :sent-time command-data))))
 						 (jdwp-packet-length packet)
@@ -850,7 +860,7 @@
 
 (defun jdwp-process-command (jdwp packet)
   (jdwp-debug "jdwp-process-command")
-  (jdwp-with-size 
+  (jdwp-with-size
     jdwp
     (let ((command-set    (jdwp-packet-command-command-set packet))
 		  (command       (jdwp-packet-command-command packet))
@@ -936,15 +946,35 @@
   (let* ((int (jdwp-vec-to-int vec))
 		 (high (+ (* (elt vec 0) 256)
 				  (elt vec 1)))
-		 (sign (lsh high -15))
-		 (exponent (- (logand (lsh high -7)
-							  #xff)
-					  127))
+		 (sign (if (= 1 (lsh high -15)) -1 1))
+		 (exponent (logand (lsh high -7) #xff))
 		 (mantissa (logand int #x7fffff))
 		 result)
-    (setq result (+ 1.0 (/ (float mantissa) #x7fffff)))
-    (setq result (* result (expt 2 exponent)))
-    result))
+	(jdwp-info "jdwp-vec-to-float vec=%s exponent=%d mantissa=%d" vec exponent mantissa)
+	(case exponent
+	  (0
+	   ;; Subnormal
+	   (setq result (/ (float mantissa) #x7fffff)
+			 exponent -126)
+	   (jdwp-debug "Converting %s %f %f" sign result exponent)
+	   ;; Need to use a floating point in expt to avoid integer overflow
+	   (setq result (* sign result (expt 2.0 exponent))))
+
+	  (#xff
+	   ;; NaN or infinity
+	   (if (= 0 mantissa)
+		   (if (> sign 0) '+infinity '-infinity)
+		 'NaN))
+
+	  (otherwise
+	   ;; Normalized number
+	   (setq result (+ 1.0 (/ (float mantissa) #x7fffff))
+			 exponent (- exponent 127))
+	   (jdwp-debug "Converting %s %f %f" sign result exponent)
+	   ;; Need to use a floating point in expt to avoid integer overflow
+	   (setq result (* sign result (expt 2.0 exponent)))
+	   (jdwp-debug " to %f" result)
+	   result))))
 
 (eval-when (eval)
   (when (featurep 'elunit)
@@ -987,51 +1017,77 @@
   (process-send-string (jdwp-process jdwp) string))
 
 (defvar jdwp-sending-command nil)
+(defvar jdwp-after-send-command-actions nil
+  "Actions to perform after a send-command completes.  This
+allows us to delay handling asynchronous events from the JVM
+while we are sending a command.  The value should be a list of
+conses.  The car should be the function.  The cdr is passed to
+the function as arguments.")
+
 (defun jdwp-send-command (jdwp name data)
   (if jdwp-sending-command
 	  (error "jdwp-sending-command:%s:%s" name jdwp-sending-command))
-  (let ((jdwp-sending-command name))
-	(jdwp-with-size 
-	  jdwp
-	  (if (null (jdwp-process jdwp))
-		  (jdwp-trace "jdwp is not connected")
 
-		(let* ((protocol     (jdwp-get-protocol name))
-			   (reply-spec   (getf protocol :reply-spec))
-			   (command-spec (getf protocol :command-spec))
-			   (command-set   (getf protocol :command-set))
-			   (command      (getf protocol :command))
-			   (outdata      (jdwp-bindat-pack command-spec data))
-			   (id           (jdwp-get-next-id jdwp))
-			   (command-data `((:name        . ,name)
-							   (:length      . ,(+ 11 (length outdata)))
-							   (:id          . ,id)
-							   (:flags       . 0)
-							   (:command-set  . ,command-set)
-							   (:command     . ,command)
-							   (:sent-time   . ,(if jdwp-info-flag (current-time) 0))))
-			   (command-packed (concat (jdwp-bindat-pack jdwp-command-spec command-data) outdata)))
-		  (jdwp-info "sending command [%-20s] id:%-4d len:%-4d data:%s" 
-					 name 
-					 id 
-					 (+ 11 (length outdata)) 
-					 (let ((outstr (jdwp-string-to-hex outdata)))
-					   (if (> (length outstr) 100)
-						   (substring outstr 0 100)
-						 outstr)))
-		  (jdwp-debug "data:%s" data)
-		  (let ((inhibit-eol-conversion t))
-			(setf (jdwp-current-reply jdwp) nil)
-			(jdwp-debug "command-packed:%s" (jdwp-string-to-hex command-packed))
-			(jdwp-process-send-string jdwp command-packed)
-			(jdwp-process-reply jdwp 
-								(jdwp-receive-message (jdwp-process jdwp)
-													  (lambda ()
-														(if (and (jdwp-current-reply jdwp)
-																 (= (jdwp-packet-id (jdwp-current-reply jdwp)) id))
-															(jdwp-current-reply jdwp)
-														  (setf (jdwp-current-reply jdwp) nil))))
-								command-data)))))))
+  (prog1
+	  (let ((jdwp-sending-command name))
+		(jdwp-with-size
+		  jdwp
+		  (if (null (jdwp-process jdwp))
+			  (jdwp-trace "jdwp is not connected")
+
+			(let* ((protocol     (jdwp-get-protocol name))
+				   (reply-spec   (getf protocol :reply-spec))
+				   (command-spec (getf protocol :command-spec))
+				   (command-set   (getf protocol :command-set))
+				   (command      (getf protocol :command))
+				   (outdata      (jdwp-bindat-pack command-spec data))
+				   (id           (jdwp-get-next-id jdwp))
+				   (command-data `((:name        . ,name)
+								   (:length      . ,(+ 11 (length outdata)))
+								   (:id          . ,id)
+								   (:flags       . 0)
+								   (:command-set  . ,command-set)
+								   (:command     . ,command)
+								   (:sent-time   . ,(if jdwp-info-flag (current-time) 0))))
+				   (command-packed (concat (jdwp-bindat-pack jdwp-command-spec command-data) outdata)))
+			  (jdwp-info "sending command [%-20s] id:%-4d len:%-4d data:%s"
+						 name
+						 id
+						 (+ 11 (length outdata))
+						 (let ((outstr (jdwp-string-to-hex outdata)))
+						   (if (> (length outstr) 100)
+							   (substring outstr 0 100)
+							 outstr)))
+			  (jdwp-debug "data:%s" data)
+			  (let ((inhibit-eol-conversion t))
+				(setf (jdwp-current-reply jdwp) nil)
+				(jdwp-debug "command-packed:%s" (jdwp-string-to-hex command-packed))
+				(jdwp-process-send-string jdwp command-packed)
+				(jdwp-process-reply jdwp
+									(jdwp-receive-message (jdwp-process jdwp)
+														  (lambda ()
+															(if (and (jdwp-current-reply jdwp)
+																	 (= (jdwp-packet-id (jdwp-current-reply jdwp)) id))
+																(jdwp-current-reply jdwp)
+															  (setf (jdwp-current-reply jdwp) nil))))
+									command-data))))))
+	;; Apply any delayed calls
+	(jdwp-run-after-send-command-actions)))
+
+(defun jdwp-run-after-send-command-actions nil
+  "Run the after-send actions.  Be careful that if an action adds
+to the list we do not rerun the action."
+
+  (when jdwp-after-send-command-actions
+	  (let ((pair (car jdwp-after-send-command-actions)))
+		(setq jdwp-after-send-command-actions
+			  (cdr jdwp-after-send-command-actions))
+		(jdwp-debug "executing delayed %s" pair)
+		(funcall (car pair) (cdr pair)))
+	  ;; recurse to handle the rest of the list, which could have
+	  ;; grown while we were running
+	  (jdwp-run-after-send-command-actions)))
+
 
 (defvar jdwp-accepting-process-output nil)
 (defun jdwp-accepting-process-output-p ()
@@ -1085,7 +1141,7 @@
   (let ((data `((:event-kind     . 1)
 				(:suspend-policy . ,jdwp-suspend-policy-event-thread)
 				(:modifiers      . 2)
-				(:modifier       
+				(:modifier
 				 ((:mod-kind . 10)
 				  (:thread   . ,thread)
 				  (:size     . 1)
@@ -1125,7 +1181,7 @@ This method does not consume the packet, the caller can know by checking jdwp-pa
 										  :command     (bindat-get-field unpacked :command)
 										  :command-set (bindat-get-field unpacked :command-set)
 										  :data        (substring string jdwp-packet-header-size))))))))))
-				
+
 (defun jdwp-signal-hook (error-symbol data)
   (jdwp-error "jdwp-signal-hook:%s:%s\n%s\n" error-symbol data
 				(with-output-to-string (backtrace))))
@@ -1133,7 +1189,7 @@ This method does not consume the packet, the caller can know by checking jdwp-pa
 (defun jdwp-run-with-timer (secs repeat function &rest args)
   (apply 'run-with-timer secs repeat (lambda (function &rest args)
 									   (setq signal-hook-function 'jdwp-signal-hook)
-									   (unwind-protect 
+									   (unwind-protect
 										   (apply function args)
 										 (setq signal-hook-function nil)))
 		 function args))
