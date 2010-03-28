@@ -287,7 +287,7 @@
 			(,jdwp-tag-object       (:value vec (eval jdwp-object-id-size)))
 			(,jdwp-tag-float        (:value vec 4))
 			(,jdwp-tag-double       (:value vec 8))
-			(,jdwp-tag-int          (:value u32))
+			(,jdwp-tag-int          (:value vec 4))
 			(,jdwp-tag-long         (:value vec 8))
 			(,jdwp-tag-short        (:value u16))
 			(,jdwp-tag-void)
@@ -845,7 +845,7 @@
 						 (float-time (time-subtract (current-time) (cdr (assoc :sent-time command-data))))
 						 (jdwp-packet-length packet)
 						 error)
-			  (jdwp-trace "reply-data:%s" (elog-trim reply-data 100))
+			  (jdwp-info "reply-data:%s" (elog-trim reply-data 100))
 			  reply-data)
 		  ;; special case for array, we return the string so the caller can call unpack-arrayregion
 		  (jdwp-packet-data packet))))))
@@ -1182,9 +1182,15 @@ This method does not consume the packet, the caller can know by checking jdwp-pa
 										  :command-set (bindat-get-field unpacked :command-set)
 										  :data        (substring string jdwp-packet-header-size))))))))))
 
+(defvar jdwp-signal-count 0)
 (defun jdwp-signal-hook (error-symbol data)
-  (jdwp-error "jdwp-signal-hook:%s:%s\n%s\n" error-symbol data
-				(with-output-to-string (backtrace))))
+  (jdwp-info "debug-on-error=%s jdwp-signal-count=%s" debug-on-error jdwp-signal-count)
+  (setq jdwp-signal-count (1+ jdwp-signal-count))
+  (if (< jdwp-signal-count 5)
+	  (jdwp-error "jdwp-signal-hook:%s:%s\n%s\n" error-symbol data
+				  (with-output-to-string (backtrace))))
+  (jdwp-error "jdwp-signal-hook:%s:%s (backtrace suppressed)"
+			  error-symbol data))
 
 (defun jdwp-run-with-timer (secs repeat function &rest args)
   (apply 'run-with-timer secs repeat (lambda (function &rest args)

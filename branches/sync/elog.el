@@ -33,8 +33,11 @@
 ;;
 ;;     foo-trace, foo-debug, foo-info, foo-warn, foo-error and foo-fatal
 ;;
-;; its up to you to make sure they do not clash with any functions in your module
-;; each of the above functions have the same signature as the 'message' function
+;; its up to you to make sure they do not clash with any functions in
+;; your module each of the above functions have the same signature as
+;; the 'message' function.  Note that `message' is actually a bad
+;; function to use here, since the first argument might have percent
+;; signs in it.  elog-safe-message is a better alternative.
 
 ;; To configure what log goes where, create another file (I call this elog-conf.el)
 ;; and load it from your .emacs file after you require elog.el, this is totally
@@ -42,18 +45,18 @@
 ;; call the elog-set-appenders function, like this:
 ;;
 ;; (elog-set-appenders
-;;  (list 
+;;  (list
 ;;   (make-elog-appender :category 'foo
 ;; 					     :priority 'trace
-;; 					     :layout "%H:%M:%S [%p] %c : %m%n" 
+;; 					     :layout "%H:%M:%S [%p] %c : %m%n"
 ;; 					     :output " foo-log")
 ;;   (make-elog-appender :category 'bar
 ;; 					     :priority 'error
-;; 					     :layout "%H:%M:%S [%p] %c : %m%n" 
+;; 					     :layout "%H:%M:%S [%p] %c : %m%n"
 ;; 					     :output " bar-log")
 ;;   (make-elog-appender :priority 'error
-;; 					     :layout "%H:%M:%S [%p] %c : %m%n" 
-;; 					     :output 'message)))
+;; 					     :layout "%H:%M:%S [%p] %c : %m%n"
+;; 					     :output 'elog-safe-message)))
 ;;
 ;; :category specifies the module that you pass to elog-make-logger
 ;; :priority specifies that anything above and including this priority
@@ -70,7 +73,7 @@
 ;; :output   can either be a string or a function
 ;;           if its a string, its the name of the buffer that will be created
 ;;               and output to.
-;;           if its a function, it must conform to the same signature as 
+;;           if its a function, it must conform to the same signature as
 ;;               the message function.
 ;;
 ;; The above sample, will log everything from the foo module into the foo-log
@@ -100,9 +103,9 @@
 (require 'cl)
 
 (defstruct elog-appender
-  category 
+  category
   priority
-  layout  
+  layout
   output)
 
 (eval-and-compile
@@ -127,14 +130,14 @@
 	(cdr (assoc pri elog-priorities)))
 
   (defun elog-get-appenders (priority category)
-	(loop for app in elog-appenders 
+	(loop for app in elog-appenders
 		  when (and (or (null (elog-appender-category app)) (equal category (elog-appender-category app)))
 					(<= (elog-priority-num (elog-appender-priority app)) (elog-priority-num priority)))
 		  collect app))
 
   (defun elog-update-flags ()
 	(loop for cat in elog-categories
-		  do 
+		  do
 		  (loop for priority in elog-priorities
 				do
 				(let ((flag (intern (format "%s-%s-flag" cat (car priority)))))
@@ -144,13 +147,13 @@
 
 (defmacro elog-make-logger (category)
   (let ((macros
-		 (mapcar (lambda (pri) 
+		 (mapcar (lambda (pri)
 				   (let* ((suffix (car pri))
 						  (funcname (concat (symbol-name category) "-" (symbol-name suffix))))
 					 `(defmacro ,(intern funcname) (fmt &rest objects)
 						`(elog-log ',',suffix ',',category ,fmt ,@objects))))
 				 elog-priorities)))
-	(add-to-list 'elog-categories category) 
+	(add-to-list 'elog-categories category)
 	(elog-update-flags)
     `(progn ,@macros (add-to-list 'elog-categories ',category) (elog-update-flags))))
 
@@ -197,6 +200,11 @@
 	(if (> (length str) max)
 		(substring str 0 (- max 3))
 	  str)))
+
+(defun elog-safe-message (string &rest args)
+  "Send STRING to message without causing problems if it contains
+percent signs.  The remainder of the args are ignored."
+  (message "%s" string))
 
 (provide 'elog)
 

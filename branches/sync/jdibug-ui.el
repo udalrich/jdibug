@@ -242,6 +242,8 @@ to populate the jdi-value-values of the jdi-value.")
 
   (jdibug-message "JDIbug connecting... ")
 
+	(jdibug-debug "setting jdibug-active-thread to nil in jdibug-connect")
+
   (setq jdibug-threads-buffer     (get-buffer-create jdibug-threads-buffer-name)
 		jdibug-locals-buffer      (get-buffer-create jdibug-locals-buffer-name)
 		jdibug-frames-buffer      (get-buffer-create jdibug-frames-buffer-name)
@@ -387,6 +389,9 @@ And position the point at the line number."
 		(jdibug-goto-location location)
 		(setq jdibug-active-frame (car (jdi-thread-get-frames thread)))
 		(jdibug-refresh-locals-buffer)
+	(jdibug-debug "setting jdibug-active-thread to %s in jdibug-handle-breakpoint"
+			   thread)
+
 		(setq jdibug-active-thread thread))
 	(setq jdibug-others-suspended (append jdibug-others-suspended (list `(,thread . ,location)))))
 
@@ -396,6 +401,9 @@ And position the point at the line number."
 
 (defun jdibug-handle-step (thread location)
   (jdibug-debug "jdibug-handle-step")
+
+	(jdibug-debug "setting jdibug-active-thread to %s in jdibug-handle-step"
+			   thread)
 
   (setq jdibug-active-thread thread)
 
@@ -823,6 +831,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 (defun jdibug-refresh-frames-buffer-now ()
   (jdibug-debug "jdibug-refresh-frames-buffer-now")
   (when (or (jdwp-accepting-process-output-p)
+			jdwp-sending-command
 			(null (catch 'jdwp-input-pending
 					(let ((jdwp-throw-on-input-pending t))
 					  (with-current-buffer jdibug-frames-buffer
@@ -1075,6 +1084,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	  ;; because the send-step command is going to trigger the
 	  ;; handle-step command first, and then return here
 	  ;; and we will be clearing it again
+	(jdibug-debug "setting jdibug-active-thread to nil in jdibug-send-step")
 	  (setq jdibug-active-thread nil)
 	  (setq jdibug-active-frame nil)
 	  (jdi-thread-send-step active-thread depth)
@@ -1189,6 +1199,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		 ;; 24 bits) since emacs integers only have 24-28 bits.  Doing
 		 ;; this right will require writing something like
 		 ;; number-to-string that works on at least 8 bytes
+		 (jdibug-debug "value=%s value-value=%s" value (jdi-primitive-value-value value))
 		 (format "%d" (jdwp-vec-to-int (jdi-primitive-value-value value))))
 
 		((equal (jdi-value-type value) jdwp-tag-float)
@@ -1341,9 +1352,14 @@ special cases like infinity."
 			  (throw 'done next-change)))
 		  (goto-char next-change))))))
 
+(defvar jdibug-signal-count 0)
 (defun jdibug-signal-hook (error-symbol data)
-  (jdibug-error "jdibug-signal-hook:%s:%s\n%s\n" error-symbol data
-				(with-output-to-string (backtrace))))
+  (setq jdibug-signal-count (1+ jdibug-signal-count))
+  (if (< jdibug-signal-count 5)
+	  (jdibug-error "jdibug-signal-hook:%s:%s\n%s\n" error-symbol data
+					(with-output-to-string (backtrace)))
+	(jdibug-error "jdibug-signal-hook:%s:%s (backtrace suppressed)"
+				  error-symbol data)))
 
 (defun jdibug-run-with-timer (secs repeat function &rest args)
   (apply 'run-with-timer secs repeat (lambda (function &rest args)
