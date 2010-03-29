@@ -1149,7 +1149,7 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
   ())
 
 (defun jdi-handle-thread-start (jdwp event)
-  (jdi-debug "jdi-handle-thread-start")
+  (jdi-debug "jdi-handle-thread-start %s" event)
   (let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
 		 (thread (jdi-virtual-machine-get-object-create vm (make-jdi-thread
 															:id (bindat-get-field event :u :thread)))))
@@ -1171,10 +1171,29 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 
 (defun jdi-handle-vm-start (jdwp event)
   (jdi-trace "jdi-handle-vm-start %s" event)
-  (let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
-		 (thread (jdi-virtual-machine-get-object-create vm (make-jdi-thread :id (bindat-get-field event :u :thread)))))
-	(jdi-debug "thread %s" thread)
-	(setq jdibug-active-thread thread)))
+  (let ((vm (jdwp-get jdwp 'jdi-virtual-machine)))
+	(if vm
+		(let ((thread
+			  (jdi-virtual-machine-get-object-create vm
+													 (make-jdi-thread :id (bindat-get-field event :u :thread)))))
+		  (jdi-debug "thread %s" thread)
+		  (jdi-debug "setting jdibug-active-thread to %s in jdi-handle-vm-start"
+					 thread)
+		  (setq jdibug-active-thread thread))
+	  ;; vm isn't initialized yet, so save this and run it later
+	  (add-to-list 'jdi-deferred-vm-start-events (list jdwp event))
+	  (add-hook 'jdibug-connected-hook 'jdi-deferred-vm-start)
+	  )))
+
+(defvar jdi-deferred-vm-start-events nil)
+(defun jdi-deferred-vm-start nil
+  "Sometime the vm-start event is received before we are fully connected.
+This handles the event later, once we are connected."
+  (jdi-trace "jdi-deferred-vm-start")
+  (while jdi-deferred-vm-start-events
+	(let ((args (car jdi-deferred-vm-start-events)))
+	  (setq jdi-deferred-vm-start-events (cdr jdi-deferred-vm-start-events))
+	  (apply 'jdi-handle-vm-start args))))
 
 (defun jdi-class-name-to-class-signature (class-name)
   "Converts a.b.c class name to JNI class signature."
@@ -1271,7 +1290,7 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
   ;; If we are currenting sending a command, any handler that tries to
   ;; send a command will cause an error since we don't support nested
   ;; commands
-  (jdi-debug "sending-command=%s" jdwp-sending-command)
+  (jdi-debug "sending-command=%s, event=%s" jdwp-sending-command event)
   (if jdwp-sending-command
 	  (add-to-list 'jdwp-after-send-command-actions
 				   (cons (lambda (args) (jdi-handle-event (car args) (cdr args)))

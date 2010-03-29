@@ -3,7 +3,7 @@
 ;; Copyright (C) 2008 Phuah Yee Keat
 
 ;; Author: Phuah Yee Keat <ykphuah@gmail.com>
-;; Maintainer: Phuah Yee Keat <ykphuah@gmail.com>
+;; Maintainer: Troy Daniels <udalrich.schermer@gmail.com>
 ;; Created: 20 May 2008
 ;; Keywords: lisp tools
 
