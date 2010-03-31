@@ -317,9 +317,18 @@
   (jdi-debug "jdi-thread-get-name")
   (jdwp-get-string (jdwp-send-command (jdi-mirror-jdwp thread) "thread-name" `((:thread . ,(jdi-thread-id thread)))) :thread-name))
 
+(defun jdi-thread-update-status (thread)
+  "Query the virtual machine to get an up to date status on the thread since the cached value can get stale"
+  (jdi-debug "jdi-thread-update-status")
+  (multiple-value-bind (status suspend-status) (jdi-thread-get-status thread)
+	(jdi-debug "thread status=%s suspend-status=%s jdwp-susp=%s " status suspend-status jdwp-suspend-status-suspended)
+	(setf (jdi-thread-running-p thread) (not (= suspend-status jdwp-suspend-status-suspended)))))
+
+
 (defun jdi-thread-get-status (thread)
   (jdi-debug "jdi-thread-get-status")
   (let ((reply (jdwp-send-command (jdi-mirror-jdwp thread) "thread-status" `((:thread . ,(jdi-thread-id thread))))))
+	(jdi-trace "reply=%s" reply)
 	(values (bindat-get-field reply :thread-status)
 			(bindat-get-field reply :suspend-status))))
 
@@ -1177,8 +1186,8 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 			  (jdi-virtual-machine-get-object-create vm
 													 (make-jdi-thread :id (bindat-get-field event :u :thread)))))
 		  (jdi-debug "thread %s" thread)
-		  (jdi-debug "setting jdibug-active-thread to %s in jdi-handle-vm-start"
-					 thread)
+;; 		  (jdi-debug "setting jdibug-active-thread to %s in jdi-handle-vm-start"
+;; 					 thread)
 		  (setq jdibug-active-thread thread))
 	  ;; vm isn't initialized yet, so save this and run it later
 	  (add-to-list 'jdi-deferred-vm-start-events (list jdwp event))

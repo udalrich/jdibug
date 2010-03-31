@@ -242,7 +242,7 @@ to populate the jdi-value-values of the jdi-value.")
 
   (jdibug-message "JDIbug connecting... ")
 
-	(jdibug-debug "setting jdibug-active-thread to nil in jdibug-connect")
+	(jdibug-debug "setting jdibug-active-thread to;;  nil in jdibug-connect")
 
   (setq jdibug-threads-buffer     (get-buffer-create jdibug-threads-buffer-name)
 		jdibug-locals-buffer      (get-buffer-create jdibug-locals-buffer-name)
@@ -389,8 +389,8 @@ And position the point at the line number."
 		(jdibug-goto-location location)
 		(setq jdibug-active-frame (car (jdi-thread-get-frames thread)))
 		(jdibug-refresh-locals-buffer)
-	(jdibug-debug "setting jdibug-active-thread to %s in jdibug-handle-breakpoint"
-			   thread)
+;; 	(jdibug-debug "setting jdibug-active-thread to %s in jdibug-handle-breakpoint"
+;; 			   thread)
 
 		(setq jdibug-active-thread thread))
 	(setq jdibug-others-suspended (append jdibug-others-suspended (list `(,thread . ,location)))))
@@ -402,8 +402,8 @@ And position the point at the line number."
 (defun jdibug-handle-step (thread location)
   (jdibug-debug "jdibug-handle-step")
 
-	(jdibug-debug "setting jdibug-active-thread to %s in jdibug-handle-step"
-			   thread)
+;; 	(jdibug-debug "setting jdibug-active-thread to %s in jdibug-handle-step"
+;; 			   thread)
 
   (setq jdibug-active-thread thread)
 
@@ -769,14 +769,16 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 
 (defun jdibug-make-thread-value (thread)
   (jdibug-debug "jdibug-make-thread-value")
-  (format "%sThread [%s] (%s)"
+  (format "%sThread [%s] (%s) %s"
 		  (if (jdi-thread-get-daemon-p thread)
 			  "Daemon "
 			"")
 		  (jdi-thread-get-name thread)
 		  (if (jdi-thread-running-p thread)
 			  "Running"
-			"Suspended")))
+			"Suspended")
+		  (if (eq jdibug-active-thread thread)
+			  "(Current)" "")))
 
 (defun jdibug-make-frames-node (tree)
   (jdibug-debug "jdibug-make-frames-node")
@@ -791,33 +793,26 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (let ((value (jdibug-make-thread-value thread))
 		widget)
 	(jdibug-debug "jdibug-make-thread-tree:value=%s" value)
+	(jdi-thread-update-status thread)
 	(setq widget `(tree-widget
 				   :node (push-button
 						  :tag ,value
 						  :jdi-thread ,thread
 						  :notify jdibug-thread-notify
- 						  :format "%[%t%]"
+ 						  :format "%[%t%]\n"
 						  )
 				   :open t
 				   :jdi-thread ,thread
 				   :args nil
 				   :expander jdibug-make-frames-node
 				   :dynargs jdibug-make-frames-node))))
-;;	(widget-apply widget :expander)
-;; 	widget))
-;; 	`(tree-widget
-;; 	  :value ,value
-;; 	  :open t
-;; 	  :jdi-thread ,thread
-;; 	  :args nil
-;; 	  :expander jdibug-make-frames-node
-;; 	  :dynargs jdibug-make-frames-node)))
 
 (defun jdibug-thread-notify (button &rest ignore)
-  (jdibug-trace "jdibug-thread-notify button=%s ignore=%s" button ignore)
+  (jdibug-trace "jdibug-thread-notify" )
   (let ((thread (widget-get button :jdi-thread)))
 	(setq jdibug-active-thread thread
-		  jdibug-active-frame nil)))
+		  jdibug-active-frame nil)
+	(jdibug-refresh-frames-buffer)))
 
 (defun jdibug-make-threads-tree (tree)
   (jdibug-debug "jdibug-make-threads-tree")
@@ -839,8 +834,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   `(tree-widget
 	:node (push-button
 		   :tag "Debuggees"
-		   :format "%[%t%]\n"
-		   :notify missing-function)
+		   :format "%[%t%]\n")
 	:open t
 	:args ,(mapcar 'jdibug-make-virtual-machine-tree jdibug-virtual-machines)))
 
@@ -863,7 +857,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 						  (erase-buffer))
 						(setq jdibug-frames-tree
 							  (tree-mode-insert (jdibug-make-frames-tree)))
-						(jdibug-debug "jdibug-frames-tree=%s" jdibug-frames-tree)
+;						(jdibug-debug "jdibug-frames-tree=%s" jdibug-frames-tree)
 						(tree-mode)
 						(let ((active-frame-point (jdibug-point-of-active-frame)))
 						  (when active-frame-point
@@ -1107,7 +1101,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	  ;; because the send-step command is going to trigger the
 	  ;; handle-step command first, and then return here
 	  ;; and we will be clearing it again
-	(jdibug-debug "setting jdibug-active-thread to nil in jdibug-send-step")
+;; 	(jdibug-debug "setting jdibug-active-thread to nil in jdibug-send-step")
 	  (setq jdibug-active-thread nil)
 	  (setq jdibug-active-frame nil)
 	  (jdi-thread-send-step active-thread depth)

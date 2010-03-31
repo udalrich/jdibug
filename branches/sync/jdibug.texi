@@ -207,6 +207,10 @@ Please note that the current execution point does not change when you
 switch between the frames, so if you do @code{jdibug-step-over}, the
 stepping will go back to the original execution point.
 
+Threads are also clickable.  This does not update the locals browser,
+but does change which thread will be affected with subsequent commands
+like @code{jdibug-resume} or @code{jdibug-step-into}.
+
 @node Breakpoints Buffer
 @chapter Breakpoints Buffer
 The breakpoints buffer shows a list of the current active and disabled
