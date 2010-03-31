@@ -1188,9 +1188,12 @@ This method does not consume the packet, the caller can know by checking jdwp-pa
   (setq jdwp-signal-count (1+ jdwp-signal-count))
   (if (< jdwp-signal-count 5)
 	  (jdwp-error "jdwp-signal-hook:%s:%s\n%s\n" error-symbol data
-				  (with-output-to-string (backtrace))))
-  (jdwp-error "jdwp-signal-hook:%s:%s (backtrace suppressed)"
-			  error-symbol data))
+				  (with-output-to-string (backtrace)))
+	(if (< jdwp-signal-count 50)
+		(jdwp-error "jdwp-signal-hook:%s:%s (backtrace suppressed)"
+					error-symbol data)
+	  (let ((signal-hook-function nil)) (error error-symbol data)))))
+
 
 (defun jdwp-run-with-timer (secs repeat function &rest args)
   (apply 'run-with-timer secs repeat (lambda (function &rest args)

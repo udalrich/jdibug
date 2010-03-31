@@ -781,22 +781,43 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 (defun jdibug-make-frames-node (tree)
   (jdibug-debug "jdibug-make-frames-node")
   (let ((thread (widget-get tree :jdi-thread)))
-	(when (not (jdi-thread-running-p thread))
+	(when (and thread (not (jdi-thread-running-p thread)))
 	  (let ((frames (jdi-thread-get-frames thread)))
 		(jdibug-debug "jdibug-make-frames-node: number of frames = %s" (length frames))
 		(mapcar 'jdibug-make-frame-node frames)))))
 
 (defun jdibug-make-thread-tree (thread)
   (jdibug-debug "jdibug-make-thread-tree")
-  (let ((value (jdibug-make-thread-value thread)))
+  (let ((value (jdibug-make-thread-value thread))
+		widget)
 	(jdibug-debug "jdibug-make-thread-tree:value=%s" value)
-	`(tree-widget
-	  :value ,value
-	  :open t
-	  :jdi-thread ,thread
-	  :args nil
-	  :expander jdibug-make-frames-node
-	  :dynargs jdibug-make-frames-node)))
+	(setq widget `(tree-widget
+				   :node (push-button
+						  :tag ,value
+						  :jdi-thread ,thread
+						  :notify jdibug-thread-notify
+ 						  :format "%[%t%]"
+						  )
+				   :open t
+				   :jdi-thread ,thread
+				   :args nil
+				   :expander jdibug-make-frames-node
+				   :dynargs jdibug-make-frames-node))))
+;;	(widget-apply widget :expander)
+;; 	widget))
+;; 	`(tree-widget
+;; 	  :value ,value
+;; 	  :open t
+;; 	  :jdi-thread ,thread
+;; 	  :args nil
+;; 	  :expander jdibug-make-frames-node
+;; 	  :dynargs jdibug-make-frames-node)))
+
+(defun jdibug-thread-notify (button &rest ignore)
+  (jdibug-trace "jdibug-thread-notify button=%s ignore=%s" button ignore)
+  (let ((thread (widget-get button :jdi-thread)))
+	(setq jdibug-active-thread thread
+		  jdibug-active-frame nil)))
 
 (defun jdibug-make-threads-tree (tree)
   (jdibug-debug "jdibug-make-threads-tree")
@@ -818,7 +839,8 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   `(tree-widget
 	:node (push-button
 		   :tag "Debuggees"
-		   :format "%[%t%]\n")
+		   :format "%[%t%]\n"
+		   :notify missing-function)
 	:open t
 	:args ,(mapcar 'jdibug-make-virtual-machine-tree jdibug-virtual-machines)))
 
@@ -841,6 +863,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 						  (erase-buffer))
 						(setq jdibug-frames-tree
 							  (tree-mode-insert (jdibug-make-frames-tree)))
+						(jdibug-debug "jdibug-frames-tree=%s" jdibug-frames-tree)
 						(tree-mode)
 						(let ((active-frame-point (jdibug-point-of-active-frame)))
 						  (when active-frame-point
@@ -1358,8 +1381,11 @@ special cases like infinity."
   (if (< jdibug-signal-count 5)
 	  (jdibug-error "jdibug-signal-hook:%s:%s\n%s\n" error-symbol data
 					(with-output-to-string (backtrace)))
-	(jdibug-error "jdibug-signal-hook:%s:%s (backtrace suppressed)"
-				  error-symbol data)))
+	(if (< jdibug-signal-count 50)
+		(jdibug-error "jdibug-signal-hook:%s:%s (backtrace suppressed)"
+				  error-symbol data)
+	  (let ((signal-hook-function nil))
+			(error error-symbol data)))))
 
 (defun jdibug-run-with-timer (secs repeat function &rest args)
   (apply 'run-with-timer secs repeat (lambda (function &rest args)
