@@ -976,6 +976,26 @@
 	   (jdwp-debug " to %f" result)
 	   result))))
 
+(defun jdwp-vec-to-double (vec)
+  (jdwp-debug "jdwp-vec-to-double %s" vec)
+  (let* ((int-high (jdwp-vec-to-int (subseq vec 0 4)))
+		 (int-low (jdwp-vec-to-int (subseq vec 4 8)))
+		 (high (+ (* (elt vec 0) 256)
+				  (elt vec 1)))
+		 (sign (if (= 1 (lsh high -15)) -1 1))
+		 (exponent (- (logand (lsh high -4)
+							  #x7ff)
+					  1023))
+		 (mantissa-high (logand int-high #xfffff))
+		 (mantissa-low int-low)
+		 result)
+    (setq result (+ 1.0 (* (float mantissa-high) (expt 2.0 -20)) (* (float mantissa-low) (expt 2.0 -52))))
+	(jdwp-debug "Converting %s %f %f" sign result exponent)
+	; Need to use a floating point in expt to avoid integer overflow
+    (setq result (* sign result (expt 2.0 exponent)))
+	(jdwp-debug " to %f" result)
+    result))
+
 (eval-when (eval)
   (when (featurep 'elunit)
 	(defsuite jdwp-suite nil

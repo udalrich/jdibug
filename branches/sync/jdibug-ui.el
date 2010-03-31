@@ -448,6 +448,7 @@ And position the point at the line number."
 	(run-hooks 'jdibug-detached-hook)))
 
 (defun jdibug-handle-thread-start (thread)
+  (jdi-thread-resume thread)
   (jdibug-refresh-frames-buffer))
 
 (defun jdibug-handle-thread-end (thread)
@@ -1221,6 +1222,9 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 
 		((equal (jdi-value-type value) jdwp-tag-float)
 		 (jdibug-float-to-string (jdwp-vec-to-float (jdi-primitive-value-value value))))
+
+		((equal (jdi-value-type value) jdwp-tag-double)
+		 (jdibug-float-to-string (jdwp-vec-to-double (jdi-primitive-value-value value))))
 
 		((equal (jdi-value-type value) jdwp-tag-boolean)
 		 (if (= 0 (jdi-primitive-value-value value)) "false" "true"))
