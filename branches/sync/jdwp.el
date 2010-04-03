@@ -978,28 +978,41 @@
 
 (defun jdwp-vec-to-double (vec)
   (jdwp-debug "jdwp-vec-to-double %s" vec)
-  (let* ((int-high (jdwp-vec-to-int (subseq vec 0 4)))
-		 (int-low (jdwp-vec-to-int (subseq vec 4 8)))
-		 (high (+ (* (elt vec 0) 256)
-				  (elt vec 1)))
-		 (sign (if (= 1 (lsh high -15)) -1 1))
-		 (exponent (- (logand (lsh high -4)
-							  #x7ff)
-					  1023))
-		 (mantissa-high (logand int-high #xfffff))
-		 (mantissa-low int-low)
+  (let* ((short-high (jdwp-vec-to-int (subseq vec 0 2)))
+		 (sign (if (= 1 (lsh short-high -15)) -1 1))
+		 (exponent (logand (lsh short-high -4) #x7ff))
+		 ;; bits 52-33 (20 bits)
+		 (mantissa-high (logand (jdwp-vec-to-int (subseq vec 1 4)) #xfffff))
+		 ;; bits 32-17 (16 bits)
+		 (mantissa-mid (jdwp-vec-to-int (subseq vec 4 6)))
+		 ;; bits 16-1  (16 bits)
+		 (mantissa-low (jdwp-vec-to-int (subseq vec 6)))
 		 result)
-    (setq result (+ 1.0 (* (float mantissa-high) (expt 2.0 -20)) (* (float mantissa-low) (expt 2.0 -52))))
-	(jdwp-debug "Converting %s %f %f" sign result exponent)
-	; Need to use a floating point in expt to avoid integer overflow
-    (setq result (* sign result (expt 2.0 exponent)))
-	(jdwp-debug " to %f" result)
-    result))
+	(case exponent
+	  (0 ;; subnormal
+	   (setq result ( + (* mantissa-high (expt 2.0 -20))
+						(* mantissa-mid (expt 2.0 -36))
+						(* mantissa-low (expt 2.0 -52))))
+	   ;; Need to use a floating point in expt to avoid integer overflow
+	   (* sign result (expt 2.0 -1022)))
+	  (#x7ff ;; infinite or nan
+	   (if (and (= 0 mantissa-low) (= 0 mantissa-mid) (= 0 mantissa-high))
+		   (if (> sign 0) '+infinity '-infinity)
+		 'NaN))
+	  (otherwise
+	   (setq result (+ 1.0 (* mantissa-high (expt 2.0 -20))
+					   (* mantissa-mid (expt 2.0 -36))
+					   (* mantissa-low (expt 2.0 -52))))
+	   (jdwp-debug "Converting %s %f %f" sign result exponent)
+										; Need to use a floating point in expt to avoid integer overflow
+	   (setq result (* sign result (expt 2.0 (- exponent 1023))))
+	   (jdwp-debug " to %f" result)
+	   result))))
 
 (eval-when (eval)
   (when (featurep 'elunit)
 	(defsuite jdwp-suite nil
-	  :teardown-hook (lambda () (message "done testing")))
+	  :teardown-hooks (lambda () (message "done testing")))
 
 	(deftest jdwp-test-vec-to-float jdwp-suite
 	  "Testing function jdwp-vec-to-float"

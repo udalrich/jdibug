@@ -21,8 +21,9 @@
 				 ([#xFF #xDD #xAA #x88 #x66 #x44 #x22 #x00] .
 				  -8.33290984853887157956504130131e307)
 				 ([0 0 0 0 0 0 0 0] . 0.0)
-				 ([#x7f #xf0 0 0  0 0 0 0] . '+infinity)
-				 ([#xff #xf0 0 0  0 0 0 0] . '-infinity)))
+				 ([#x7f #xf0 0 0  0 0 0 1] . NaN)
+				 ([#x7f #xf0 0 0  0 0 0 0] . +infinity)
+				 ([#xff #xf0 0 0  0 0 0 0] . -infinity)))
 		vec actual expected)
 	(mapc (lambda (pair)
 			(setq vec (car pair) expected (cdr pair))
