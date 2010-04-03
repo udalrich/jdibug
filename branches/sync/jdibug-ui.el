@@ -1329,10 +1329,12 @@ special cases like infinity."
 		(jdibug-value-get-string result-value)))))
 
 (defun jdibug-object-custom-set-string-with-size (object)
-  (jdi-debug "jdibug-object-custom-set-string-with-size")
+  (jdibug-debug "jdibug-object-custom-set-string-with-size")
   (let ((result-value (jdi-object-invoke-method object jdibug-active-thread "size" nil nil)))
 	(if result-value
-		(format "%s[%s]" (jdi-class-name (jdi-object-get-reference-type object)) (jdi-primitive-value-value result-value))
+		(format "%s[%s]"
+				(jdi-class-name (jdi-object-get-reference-type object))
+				(jdwp-vec-to-int (jdi-primitive-value-value result-value)))
 	  (format "%s[nosize]" (jdi-class-name (jdi-object-get-reference-type object))))))
 
 (defun jdibug-value-custom-expand-collection (value)

@@ -869,11 +869,15 @@ http://java.sun.com/j2se/1.5.0/docs/guide/jni/spec/types.html#wp428"
 
 (defun jdi-array-get-array-length (array)
   (jdi-debug "jdi-array-get-array-length:%s" (jdi-object-id array))
-  (let ((reply (jdwp-send-command
+  (let* ((reply (jdwp-send-command
 				(jdi-mirror-jdwp array)
 				"array-length"
-				`((:array-object . ,(jdi-object-id array))))))
-	(bindat-get-field reply :array-length)))
+				`((:array-object . ,(jdi-object-id array)))))
+		 (field (bindat-get-field reply :array-length)))
+	(if (vectorp field)
+		(jdwp-vec-to-int field)
+	  field)))
+
 
 (defun jdi-format-string (str)
   "Truncate and escape the string to be displayed."
