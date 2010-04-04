@@ -21,6 +21,9 @@ breakpoints in any of the files in any of the debuggee.
 Clicking on a thread in the frames display makes that thread active
 for future commands like step and resume.
 
+** Menu of commands
+A menu of the commonly used commands has been added.
+
 * 0.2 (2009-05-07)
 
 ** Supports relative paths in jde-source-paths
