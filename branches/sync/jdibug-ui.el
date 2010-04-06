@@ -349,6 +349,7 @@ And position the point at the line number."
   (let* ((buffer-name (jdibug-find-buffer file-name))
 		 (win (if buffer-name (get-buffer-window buffer-name t) nil))
 		 (frame (if win (window-frame win) nil)))
+	(jdibug-debug "buffer-name=%s win=%s frame=%s" buffer-name win frame)
 	(if win
 		;; file is already open in a buffer, just show it
 		(progn
@@ -904,10 +905,12 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (if (and jdibug-use-jde-source-paths
 		   (boundp 'jde-sourcepath)
 		   (fboundp 'jde-normalize-path))
-	  (mapcar
-	   (lambda (path)
-		 (jdibug-normalize-path path 'jde-sourcepath t))
-	   jde-sourcepath)
+	  (if (fboundp 'jde-expand-wildcards-and-normalize)
+		  (jde-expand-wildcards-and-normalize jde-sourcepath 'jde-sourcepath)
+		(mapcar
+		 (lambda (path)
+		   (jdibug-normalize-path path 'jde-sourcepath t))
+		 jde-sourcepath))
 	jdibug-source-paths))
 
 (defun jdibug-file-in-source-paths-p (file)
@@ -1218,7 +1221,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		 ;; 24 bits) since emacs integers only have 24-28 bits.  Doing
 		 ;; this right will require writing something like
 		 ;; number-to-string that works on at least 8 bytes
-		 (jdibug-debug "value=%s value-value=%s" value (jdi-primitive-value-value value))
+;; 		 (jdibug-debug "value=%s value-value=%s" value (jdi-primitive-value-value value))
 		 (format "%d" (jdwp-vec-to-int (jdi-primitive-value-value value))))
 
 		((equal (jdi-value-type value) jdwp-tag-float)
