@@ -53,15 +53,21 @@
 		 :active jdibug-active-thread
 		 :help "Resume execution of the current thread."]
 
+		["Resume All Threads"
+		 jdibug-resume-all
+		 :active (jdibug-connected-p)
+		 :help "Resume execution of the current thread."]
+
 		"-"
 
 		["Connect"
 		 jdibug-connect
+		 :active (not (jdibug-connected-p))
 		 :help "Connect to a running process."]
 
 		["Disconnect"
 		 jdibug-disconnect
-		 :active jdibug-virtual-machines
+		 :active (jdibug-connected-p)
 		 :help "Disconnect from all running processes."]
 
 		"-"

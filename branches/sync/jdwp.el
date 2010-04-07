@@ -1115,7 +1115,7 @@ to the list we do not rerun the action."
 	  (let ((pair (car jdwp-after-send-command-actions)))
 		(setq jdwp-after-send-command-actions
 			  (cdr jdwp-after-send-command-actions))
-		(jdwp-debug "executing delayed %s" pair)
+		(jdwp-debug "executing delayed %s" (car pair))
 		(funcall (car pair) (cdr pair)))
 	  ;; recurse to handle the rest of the list, which could have
 	  ;; grown while we were running

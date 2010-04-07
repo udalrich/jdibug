@@ -240,48 +240,51 @@ to populate the jdi-value-values of the jdi-value.")
 
   (jdibug-debug "jdibug-connect")
 
-  (jdibug-message "JDIbug connecting... ")
+  (if (jdibug-connected-p)
+	  (message "JDIbug already connected")
+
+	(jdibug-message "JDIbug connecting... ")
 
 	(jdibug-debug "setting jdibug-active-thread to;;  nil in jdibug-connect")
 
-  (setq jdibug-threads-buffer     (get-buffer-create jdibug-threads-buffer-name)
-		jdibug-locals-buffer      (get-buffer-create jdibug-locals-buffer-name)
-		jdibug-frames-buffer      (get-buffer-create jdibug-frames-buffer-name)
-		jdibug-breakpoints-buffer (get-buffer-create jdibug-breakpoints-buffer-name)
+	(setq jdibug-threads-buffer     (get-buffer-create jdibug-threads-buffer-name)
+		  jdibug-locals-buffer      (get-buffer-create jdibug-locals-buffer-name)
+		  jdibug-frames-buffer      (get-buffer-create jdibug-frames-buffer-name)
+		  jdibug-breakpoints-buffer (get-buffer-create jdibug-breakpoints-buffer-name)
 
-		jdibug-active-frame       nil
-		jdibug-active-thread      nil
-		jdibug-others-suspended    nil)
+		  jdibug-active-frame       nil
+		  jdibug-active-thread      nil
+		  jdibug-others-suspended    nil)
 
-  (with-current-buffer jdibug-breakpoints-buffer
-	(use-local-map jdibug-breakpoints-mode-map)
-	(toggle-read-only 1))
+	(with-current-buffer jdibug-breakpoints-buffer
+	  (use-local-map jdibug-breakpoints-mode-map)
+	  (toggle-read-only 1))
 
-  (setq jdibug-virtual-machines
-		(mapcar (lambda (connect-host-and-port)
-				  (let* ((host (nth 0 (split-string connect-host-and-port ":")))
-						 (port (string-to-number (nth 1 (split-string connect-host-and-port ":"))))
-						 (jdwp (make-jdwp))
-						 (vm (make-jdi-virtual-machine :host host :port port :jdwp jdwp)))
-					(jdibug-message (format "%s:%s" host port) t)
-					(condition-case err
-						(progn
-						  (jdi-virtual-machine-connect vm)
-						  (jdibug-message "(connected)" t)
-						  vm)
-					  (file-error (jdibug-message "(failed)" t) nil))))
-				jdibug-connect-hosts))
+	(setq jdibug-virtual-machines
+		  (mapcar (lambda (connect-host-and-port)
+					(let* ((host (nth 0 (split-string connect-host-and-port ":")))
+						   (port (string-to-number (nth 1 (split-string connect-host-and-port ":"))))
+						   (jdwp (make-jdwp))
+						   (vm (make-jdi-virtual-machine :host host :port port :jdwp jdwp)))
+					  (jdibug-message (format "%s:%s" host port) t)
+					  (condition-case err
+						  (progn
+							(jdi-virtual-machine-connect vm)
+							(jdibug-message "(connected)" t)
+							vm)
+						(file-error (jdibug-message "(failed)" t) nil))))
+				  jdibug-connect-hosts))
 
-  (if (find-if 'identity jdibug-virtual-machines)
-	  (let* ((bps jdibug-breakpoints)
-			 (signatures (loop for bp in bps
-							   collect (jdibug-source-file-to-class-signature
-										(jdibug-breakpoint-source-file bp)))))
-		(setq jdibug-breakpoints nil)
-		(mapc 'jdibug-set-breakpoint bps)
+	(if (find-if 'identity jdibug-virtual-machines)
+		(let* ((bps jdibug-breakpoints)
+			   (signatures (loop for bp in bps
+								 collect (jdibug-source-file-to-class-signature
+										  (jdibug-breakpoint-source-file bp)))))
+		  (setq jdibug-breakpoints nil)
+		  (mapc 'jdibug-set-breakpoint bps)
 
-		(run-hooks 'jdibug-connected-hook)
-		(jdibug-refresh-frames-buffer))))
+		  (run-hooks 'jdibug-connected-hook)
+		  (jdibug-refresh-frames-buffer)))))
 
 (defun jdibug-disconnect ()
   (interactive)
@@ -1125,6 +1128,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (jdibug-send-step jdwp-step-depth-out))
 
 (defun jdibug-resume ()
+  "Resume the current thread, as specified by `jdibug-active-thread'"
   (interactive)
   (if jdibug-current-line-overlay
       (delete-overlay jdibug-current-line-overlay))
@@ -1141,6 +1145,23 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		  (jdibug-handle-breakpoint (car other) (cdr other))))
 
 	(message "JDIbug resumed")))
+
+(defun jdibug-resume-all ()
+  "Resume all threads in all JVMs"
+  (interactive)
+  (if jdibug-current-line-overlay
+      (delete-overlay jdibug-current-line-overlay))
+  (mapc (lambda (vm)
+		  (jdi-resume vm))
+		jdibug-virtual-machines)
+  (setq jdibug-active-thread nil
+		jdibug-active-frame nil
+		jdibug-others-suspended nil)
+  (run-hooks 'jdibug-resumed-hook)
+
+  (jdibug-refresh-frames-buffer)
+
+  (message "JDIbug resumed all threads"))
 
 (defun jdibug-connected-p ()
   (interactive)
@@ -1195,7 +1216,9 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 (add-hook 'jdibug-connected-hook 'jdibug-debug-view)
 (add-hook 'jdibug-detached-hook 'jdibug-undebug-view)
 
-;; Until when we have our own minor mode, we put it into jde-mode-map
+;; Until when we have our own minor mode, we put it into jde-mode-map.
+;; Ideally, we should use java-mode, but then we run into conflicts
+;; with C-c C-c where we lose.
 (when (boundp 'jde-mode-map)
   (define-key jde-mode-map [?\C-c ?\C-c ?\C-c] 'jdibug-connect)
   (define-key jde-mode-map [?\C-c ?\C-c ?\C-d] 'jdibug-disconnect)
@@ -1203,7 +1226,8 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (define-key jde-mode-map [?\C-c ?\C-c ?\C-n] 'jdibug-step-over)
   (define-key jde-mode-map [?\C-c ?\C-c ?\C-i] 'jdibug-step-into)
   (define-key jde-mode-map [?\C-c ?\C-c ?\C-o] 'jdibug-step-out)
-  (define-key jde-mode-map [?\C-c ?\C-c ?\C-r] 'jdibug-resume))
+  (define-key jde-mode-map [?\C-c ?\C-c ?\C-r] 'jdibug-resume)
+  (define-key jde-mode-map [?\C-c ?\C-c ?\C-a] 'jdibug-resume-all))
 
 (defun jdibug-value-get-string (value)
   "[ASYNC] get a string to be displayed for a value"

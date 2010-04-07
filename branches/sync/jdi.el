@@ -635,6 +635,12 @@
   (setf (jdi-thread-running-p thread) t)
   (jdwp-send-command (jdi-mirror-jdwp thread) "thread-resume" `((:thread . ,(jdi-thread-id thread)))))
 
+(defun jdi-resume (vm)
+  (jdi-debug "jdi-resume")
+  ;; We should update jdi-thread-running-p, but I don't think we have
+  ;; a good way of getting all thread threads in the vm
+  (jdwp-send-command (jdi-virtual-machine-jdwp vm) "resume" nil))
+
 (defun jdi-thread-send-step (thread depth)
   (jdi-debug "jdi-thread-send-step:depth=%s" depth)
   (setf (jdi-thread-running-p thread) t)
