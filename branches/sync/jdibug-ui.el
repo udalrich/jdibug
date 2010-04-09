@@ -154,6 +154,7 @@ When the user resume, we will switch to this thread and location.")
 (defvar jdibug-frames-buffer nil)
 (defvar jdibug-frames-tree nil)
 
+(defvar jdibug-refresh-threads-buffer-timer nil)
 (defvar jdibug-refresh-frames-buffer-timer nil)
 (defvar jdibug-refresh-locals-buffer-timer nil)
 
@@ -245,7 +246,7 @@ to populate the jdi-value-values of the jdi-value.")
 
 	(jdibug-message "JDIbug connecting... ")
 
-	(jdibug-debug "setting jdibug-active-thread to;;  nil in jdibug-connect")
+	(jdibug-debug "setting jdibug-active-thread to nil in jdibug-connect")
 
 	(setq jdibug-threads-buffer     (get-buffer-create jdibug-threads-buffer-name)
 		  jdibug-locals-buffer      (get-buffer-create jdibug-locals-buffer-name)
@@ -284,7 +285,8 @@ to populate the jdi-value-values of the jdi-value.")
 		  (mapc 'jdibug-set-breakpoint bps)
 
 		  (run-hooks 'jdibug-connected-hook)
-		  (jdibug-refresh-frames-buffer)))))
+		  (jdibug-refresh-frames-buffer)
+		  (jdibug-refresh-threads-buffer)))))
 
 (defun jdibug-disconnect ()
   (interactive)
@@ -293,7 +295,8 @@ to populate the jdi-value-values of the jdi-value.")
 	  (delete-overlay jdibug-current-line-overlay))
   (mapc (lambda (bp)
 		  (if (jdibug-breakpoint-overlay bp)
-			  (delete-overlay (jdibug-breakpoint-overlay bp))))
+			  (delete-overlay (jdibug-breakpoint-overlay bp)))
+		  (setf (jdibug-breakpoint-status bp) 'unresolved))
 		jdibug-breakpoints)
 
   (and (timerp jdibug-refresh-locals-buffer-timer)
@@ -302,13 +305,21 @@ to populate the jdi-value-values of the jdi-value.")
   (and (timerp jdibug-refresh-frames-buffer-timer)
 	   (cancel-timer jdibug-refresh-frames-buffer-timer))
 
+  (and (timerp jdibug-refresh-threads-buffer-timer)
+	   (cancel-timer jdibug-refresh-threads-buffer-timer))
+
   (kill-buffer jdibug-locals-buffer)
   (kill-buffer jdibug-frames-buffer)
+  (kill-buffer jdibug-threads-buffer)
+
   (setq jdibug-locals-tree    nil
 		jdibug-locals-buffer  nil
 
 		jdibug-frames-tree    nil
 		jdibug-frames-buffer  nil
+
+		jdibug-threads-buffer nil
+		jdibug-threads-tree   nil
 
 		jdibug-active-thread  nil
 		jdibug-active-frame   nil)
@@ -401,6 +412,7 @@ And position the point at the line number."
 	(setq jdibug-others-suspended (append jdibug-others-suspended (list `(,thread . ,location)))))
 
   (jdibug-refresh-frames-buffer)
+  (jdibug-refresh-threads-buffer)
 
   (run-hooks 'jdibug-breakpoint-hit-hook))
 
@@ -415,6 +427,7 @@ And position the point at the line number."
   (jdibug-goto-location location)
 
   (jdibug-refresh-frames-buffer)
+  (jdibug-refresh-threads-buffer)
 
   (unless jdibug-active-frame
 	(setq jdibug-active-frame (car (jdi-thread-get-frames jdibug-active-thread)))
@@ -454,10 +467,12 @@ And position the point at the line number."
 
 (defun jdibug-handle-thread-start (thread)
   (jdi-thread-resume thread)
-  (jdibug-refresh-frames-buffer))
+  (jdibug-refresh-frames-buffer)
+  (jdibug-refresh-threads-buffer))
 
 (defun jdibug-handle-thread-end (thread)
-  (jdibug-refresh-frames-buffer))
+  (jdibug-refresh-frames-buffer)
+  (jdibug-refresh-threads-buffer))
 
 (defun jdibug-highlight-current-line (line-number)
   (jdibug-debug "jdibug-highlight-current-line:%d:current-buffer=%s" line-number (current-buffer))
@@ -704,16 +719,17 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 							(insert "Not suspended")
 
 						  (let* ((variables (sort (copy-sequence (jdi-frame-get-visible-variables jdibug-active-frame)) 'jdibug-variable-sorter))
-								 (values (jdi-frame-get-values jdibug-active-frame variables)))
+								 (values (jdi-frame-get-values jdibug-active-frame variables))
+								 (tree (jdibug-make-locals-tree variables values)))
 							(with-current-buffer jdibug-locals-buffer
 							  (let ((inhibit-read-only t))
 								(erase-buffer))
-							  (setq jdibug-locals-tree
-									(tree-mode-insert (jdibug-make-locals-tree variables values)))
+							  (setq jdibug-locals-tree (tree-mode-insert tree))
 							  (widget-put jdibug-locals-tree :jdibug-opened-path (tree-mode-opened-tree jdibug-locals-tree))
 							  (jdi-info "current opened tree path:%s" (tree-mode-opened-tree jdibug-locals-tree))
 							  (local-set-key "s" 'jdibug-node-tostring)
-							  (local-set-key "c" 'jdibug-node-classname))))
+							  (local-set-key "c" 'jdibug-node-classname)
+							  (message "Locals updated"))))
 						t)))))
 	(jdibug-refresh-locals-buffer)))
 
@@ -794,9 +810,13 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		(jdibug-debug "jdibug-make-frames-node: number of frames = %s" (length frames))
 		(mapcar 'jdibug-make-frame-node frames)))))
 
-(defun jdibug-make-thread-tree (thread)
+(defun jdibug-make-thread-tree (thread mode)
   (jdibug-debug "jdibug-make-thread-tree")
   (let ((value (jdibug-make-thread-value thread))
+		(dynargs (case mode
+				   (frames (function jdibug-make-frames-node))
+				   (thread-group (function jdibug-make-thread-detail-node))
+				   (t (error "Unknown mode for thread tree: %s" mode))))
 		widget)
 	(jdibug-debug "jdibug-make-thread-tree:value=%s" value)
 	(jdi-thread-update-status thread)
@@ -807,11 +827,11 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 						  :notify jdibug-thread-notify
  						  :format "%[%t%]\n"
 						  )
-				   :open t
+				   :open ,(eq mode 'frames)
 				   :jdi-thread ,thread
 				   :args nil
-				   :expander jdibug-make-frames-node
-				   :dynargs jdibug-make-frames-node))))
+				   :expander ,dynargs
+				   :dynargs ,dynargs))))
 
 (defun jdibug-thread-notify (button &rest ignore)
   (jdibug-trace "jdibug-thread-notify" )
@@ -822,18 +842,28 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 
 (defun jdibug-make-threads-tree (tree)
   (jdibug-debug "jdibug-make-threads-tree")
-  (mapcar 'jdibug-make-thread-tree
-		  (loop for thread in (jdi-virtual-machine-get-threads (widget-get tree :jdi-virtual-machine))
-				unless (jdi-thread-get-system-thread-p thread) collect thread)))
+  (let ((mode (widget-get tree :jdi-mode)))
+	(jdibug-debug "mode=%s" mode)
+	(mapcar (lambda (thread)
+			  (jdibug-make-thread-tree thread mode))
+			(loop for thread in (jdi-virtual-machine-get-threads (widget-get tree :jdi-virtual-machine))
+				  unless (and (eq mode 'frames)
+							  (jdi-thread-get-system-thread-p thread))
+				  collect thread))))
 
-(defun jdibug-make-virtual-machine-tree (vm)
+(defun jdibug-make-virtual-machine-tree (vm which)
+  (let ((dynargs (case which
+				   (frames (function jdibug-make-threads-tree))
+				   (thread-group (function jdibug-make-thread-groups-tree))
+				   (t (error "Unknown mode for virtual machine tree: %s" which)))))
   `(tree-widget
     :value ,(format "%s [%s:%s]" (jdi-virtual-machine-name vm) (jdi-virtual-machine-host vm) (jdi-virtual-machine-port vm))
     :open t
 	:args nil
 	:jdi-virtual-machine ,vm
-	:dynargs jdibug-make-threads-tree
-	:expander jdibug-make-threads-tree))
+	:jdi-mode ,which
+	:dynargs ,dynargs
+	:expander ,dynargs)))
 
 (defun jdibug-make-frames-tree ()
   (jdibug-debug "jdibug-make-frames-tree")
@@ -842,7 +872,10 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		   :tag "Debuggees"
 		   :format "%[%t%]\n")
 	:open t
-	:args ,(mapcar 'jdibug-make-virtual-machine-tree jdibug-virtual-machines)))
+	:args ,(mapcar
+			(lambda (vm)
+			  (jdibug-make-virtual-machine-tree vm 'frames))
+			jdibug-virtual-machines)))
 
 (defun jdibug-refresh-frames-buffer ()
   (if (timerp jdibug-refresh-frames-buffer-timer)
@@ -1432,5 +1465,107 @@ special cases like infinity."
 			 (list (lambda (path) path))
 		   jde-cygwin-path-converter)))
 	(jde-normalize-path path symbol)))
+
+(defun jdibug-refresh-threads-buffer ()
+  (if (timerp jdibug-refresh-threads-buffer-timer)
+	  (cancel-timer jdibug-refresh-threads-buffer-timer))
+  (setq jdibug-refresh-threads-buffer-timer
+		(jdibug-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-threads-buffer-now)))
+
+(defun jdibug-refresh-threads-buffer-now ()
+  (jdibug-debug "jdibug-refresh-threads-buffer-now")
+  (when (or (jdwp-accepting-process-output-p)
+			jdwp-sending-command
+			(null (catch 'jdwp-input-pending
+					(let ((jdwp-throw-on-input-pending t)
+						  (tree  (jdibug-make-top-level-thread-groups-tree)))
+					  (with-current-buffer jdibug-threads-buffer
+						;; 	(if (jdibug-threads-tree jdibug-this)
+						;; 		(tree-mode-reflesh-tree (jdibug-threads-tree jdibug-this))
+						(let ((inhibit-read-only t))
+						  (erase-buffer))
+						(setq jdibug-threads-tree (tree-mode-insert tree))
+;						(jdibug-debug "jdibug-threads-tree=%s" jdibug-threads-tree)
+						(tree-mode)
+						(let ((active-frame-point (jdibug-point-of-active-frame)))
+						  (when active-frame-point
+							(goto-char active-frame-point)
+							(set-window-point (get-buffer-window jdibug-threads-buffer t) (point))
+							(forward-line -1)
+							(set-window-start (get-buffer-window jdibug-threads-buffer t) (point))))
+						t)))))
+	(jdibug-refresh-threads-buffer)))
+
+(defun jdibug-make-top-level-thread-groups-tree ()
+  (jdibug-debug "jdibug-make-thread-groups-tree")
+  `(tree-widget
+	:node (push-button
+		   :tag "Debuggees"
+		   :format "%[%t%]\n")
+	:open t
+	:args ,(mapcar (lambda (vm)
+					 (jdibug-make-virtual-machine-tree vm 'thread-group))
+				   jdibug-virtual-machines)))
+
+(defun jdibug-make-thread-groups-tree (tree)
+  "Create an list of child nodes for TREE.  This will contain 0+
+trees representing the child thread groups of the thread-group
+for TREE."
+  (jdibug-debug "jdibug-make-thread-groups-tree")
+  (mapcar 'jdibug-make-thread-group-tree
+		  (jdi-virtual-machine-get-top-level-thread-groups (widget-get tree :jdi-virtual-machine))))
+
+(defun jdibug-make-thread-group-tree (thread-group)
+  (jdibug-debug "jdibug-make-thread-group-tree")
+  (let ((value (jdibug-make-thread-group-value thread-group))
+		widget)
+	(jdibug-debug "jdibug-make-thread-group-tree:value=%s" value)
+	`(tree-widget
+	  :node (push-button
+			 :tag ,value
+			 :jdi-thread-group ,thread-group
+			 :notify jdibug-thread-group-notify
+			 :format "%[%t%]\n"
+			 )
+	  :open t
+	  :jdi-thread-group ,thread-group
+	  :jdi-mode thread-group ; constant, intentionally no comma
+	  :args nil
+	  :expander jdibug-make-thread-groups-subtree
+	  :dynargs jdibug-make-thread-groups-subtree)))
+
+(defun jdibug-make-thread-group-value (thread-group)
+  "Create the string for displaying THREAD-GROUP"
+  (jdibug-trace "jdibug-make-thread-group-value")
+  (format "Thread Group [%s] %s"
+		  (jdi-thread-group-get-name thread-group)
+		  (if (jdi-thread-group-get-system-thread-p thread-group)
+			  "(System)" "")))
+
+(defun jdibug-make-thread-groups-subtree (tree)
+  "Create an list of child nodes for TREE.  This will contain 0+
+trees representing the child thread groups of the thread-group
+for TREE and 0+ trees representing the threads in the
+thread-group for TREE."
+  (jdibug-debug "jdibug-make-thread-groups-tree")
+  (let ((parent-thread-group (widget-get tree :jdi-thread-group)))
+	(jdi-thread-group-get-children parent-thread-group)
+	(append
+	 (mapcar 'jdibug-make-thread-group-tree (jdi-thread-group-child-groups parent-thread-group))
+	 (mapcar (lambda (thread)
+			   (jdibug-make-thread-tree thread 'thread-group))
+			 (jdi-thread-group-child-threads parent-thread-group)))))
+
+(defun jdibug-make-thread-detail-node (tree)
+  (jdibug-debug "jdibug-make-thread-detail-node")
+  (let ((thread (widget-get tree :jdi-thread)))
+	(multiple-value-bind (status suspend-status) (jdi-thread-get-status thread)
+	  `((item
+		 :value ,(format "id: %s" (jdi-thread-id thread)))
+		(item
+		 :value ,(format "Status: %s" (jdwp-thread-status-string status)))
+		(item
+		 :value ,(format "Suspend count: %d" (jdi-thread-get-suspend-count thread)))))))
+
 
 (provide 'jdibug-ui)

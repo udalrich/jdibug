@@ -1,6 +1,6 @@
 EMACS22=d:/emacs-22.3/bin/emacs.exe
 EMACS23=d:/emacs-23.1/bin/emacs.exe
-BUILD=-batch -q -l jdibug-build.el -f jdibug-build
+BUILD=-batch -q -l jdibug-build.el -f jdibug-build .
 TEST=-batch -q -l test/smoke-tests.el
 
 all: test

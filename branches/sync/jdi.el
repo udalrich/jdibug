@@ -1,12 +1,14 @@
 (require 'elog)
 (require 'jdwp)
 
+
 (elog-make-logger jdi)
 
 (defvar jdi-unit-testing nil)
 
 (eval-when-compile
-  (setq jdi-unit-testing t))
+  (setq jdi-unit-testing t)
+  (defvar jdibug-active-thread))
 
 (defstruct jdi-mirror
   virtual-machine)
@@ -629,6 +631,13 @@
   (jdi-debug "jdi-thread-get-suspended-p")
   (multiple-value-bind (status suspend-status) (jdi-thread-get-status thread)
 	(= suspend-status jdwp-suspend-status-suspended)))
+
+(defun jdi-thread-get-suspend-count (thread)
+  (jdi-trace "jdi-thread-get-suspend-count")
+  (let ((reply (jdwp-send-command (jdi-mirror-jdwp thread)
+								  "suspend-count"
+								  `((:thread . ,(jdi-thread-id thread))))))
+	(bindat-get-field reply :suspend-count)))
 
 (defun jdi-thread-resume (thread)
   (jdi-debug "jdi-thread-resume")

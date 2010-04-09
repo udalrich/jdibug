@@ -144,6 +144,13 @@
 (defconst jdwp-thread-status-monitor 3)
 (defconst jdwp-thread-status-wait 4)
 
+(defconst jdwp-thread-status-constants
+  `( (,jdwp-thread-status-zombie . "Zombie")
+	 (,jdwp-thread-status-running . "Running")
+	 (,jdwp-thread-status-sleeping . "Sleeping")
+	 (,jdwp-thread-status-monitor . "Monitor")
+	 (,jdwp-thread-status-wait . "Waiting")))
+
 (defconst jdwp-suspend-status-suspended 1)
 
 (defconst jdwp-mod-kind-case-count       1)
@@ -643,6 +650,11 @@
 				   :command      7
 				   :command-spec ((:thread         vec (eval jdwp-object-id-size)))
 				   :reply-spec   ((:frame-count    u32)))
+	(:name         "suspend-count"
+				   :command-set  11
+				   :command      12
+				   :command-spec ((:thread         vec (eval jdwp-object-id-size)))
+				   :reply-spec   ((:suspend-count    u32)))
 	(:name         "thread-group-name"
 				   :command-set  12
 				   :command      1
@@ -928,6 +940,11 @@
 
 (defun jdwp-get-string (s &rest fields)
   (concat (bindat-get-field (apply 'bindat-get-field s fields) :string)))
+
+(defun jdwp-thread-status-string (status)
+  "Convert a status to a meaning string representation"
+  (let ((match (find-if (lambda (pair) (= (car pair) status)) jdwp-thread-status-constants)))
+	(if match (cdr match) "Unknown")))
 
 (defun jdwp-get-int (s &rest fields)
   (jdwp-vec-to-int (apply 'bindat-get-field s fields)))
