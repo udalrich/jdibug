@@ -646,7 +646,7 @@
 
 (defun jdi-resume (vm)
   (jdi-debug "jdi-resume")
-  ;; We should update jdi-thread-running-p, but I don't think we have
+  ;; TODO: We should update jdi-thread-running-p, but I don't think we have
   ;; a good way of getting all thread threads in the vm
   (jdwp-send-command (jdi-virtual-machine-jdwp vm) "resume" nil))
 
@@ -1166,6 +1166,8 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 		 (signature (jdwp-get-string event :u :signature))
 		 (thread (jdi-virtual-machine-get-object-create vm (make-jdi-thread :id (bindat-get-field event :u :thread))))
 		 (newclass (jdi-virtual-machine-get-class-create vm type-id :signature signature)))
+	(jdi-debug "thread status: %s %d" (jdi-thread-get-status thread)
+			   (jdi-thread-get-suspend-count thread))
 	(jdi-debug "class-loaded:%s" signature)
 ;; 	(puthash type-id newclass (jdi-virtual-machine-classes vm))
 ;; 	(puthash signature (cons newclass (gethash signature (jdi-virtual-machine-classes-by-signature vm)))
@@ -1182,6 +1184,8 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 		 (thread (jdi-virtual-machine-get-object-create vm (make-jdi-thread
 															:id (bindat-get-field event :u :thread)))))
 	(jdi-debug "jdi-handle-thread-start:%s" (jdi-thread-id thread))
+	(jdi-debug "thread status: %s %d" (jdi-thread-get-status thread)
+			   (jdi-thread-get-suspend-count thread))
 	(run-hook-with-args 'jdi-thread-start-hooks thread)))
 
 (defun jdi-handle-thread-end (jdwp event)
@@ -1207,6 +1211,7 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 		  (jdi-debug "thread %s" thread)
 ;; 		  (jdi-debug "setting jdibug-active-thread to %s in jdi-handle-vm-start"
 ;; 					 thread)
+		  (setf (jdi-thread-running-p thread) nil)
 		  (setq jdibug-active-thread thread))
 	  ;; vm isn't initialized yet, so save this and run it later
 	  (add-to-list 'jdi-deferred-vm-start-events (list jdwp event))
@@ -1319,29 +1324,25 @@ This handles the event later, once we are connected."
   ;; send a command will cause an error since we don't support nested
   ;; commands
   (jdi-debug "sending-command=%s, event=%s" jdwp-sending-command event)
-  (if jdwp-sending-command
-	  (add-to-list 'jdwp-after-send-command-actions
-				   (cons (lambda (args) (jdi-handle-event (car args) (cdr args)))
-						 (cons jdwp event))
-				   'append)
-	(let* ((handlers (list
-					  `(,jdwp-event-breakpoint    . jdi-handle-breakpoint-event)
-					  `(,jdwp-event-single-step   . jdi-handle-step-event)
-					  `(,jdwp-event-class-prepare . jdi-handle-class-prepare-event)
-					  `(,jdwp-event-class-unload  . jdi-handle-class-unload-event)
-					  `(,jdwp-event-thread-start  . jdi-handle-thread-start)
-					  `(,jdwp-event-thread-end    . jdi-handle-thread-end)
-					  `(,jdwp-event-vm-death      . jdi-handle-vm-death)
-					  `(,jdwp-event-vm-start      . jdi-handle-vm-start)
-					  ))
-		   (event-kind (if (integerp event) event (bindat-get-field event :event-kind)))
-		   (handler (find-if (lambda (pair)
-							   (equal event-kind (car pair)))
-							 handlers)))
-	  (if handler
-		  (funcall (cdr handler) jdwp event)
-		(jdi-error "do not know how to handle event:%s" event)))))
+  (let* ((handlers (list
+					`(,jdwp-event-breakpoint    . jdi-handle-breakpoint-event)
+					`(,jdwp-event-single-step   . jdi-handle-step-event)
+					`(,jdwp-event-class-prepare . jdi-handle-class-prepare-event)
+					`(,jdwp-event-class-unload  . jdi-handle-class-unload-event)
+					`(,jdwp-event-thread-start  . jdi-handle-thread-start)
+					`(,jdwp-event-thread-end    . jdi-handle-thread-end)
+					`(,jdwp-event-vm-death      . jdi-handle-vm-death)
+					`(,jdwp-event-vm-start      . jdi-handle-vm-start)
+					))
+		 (event-kind (if (integerp event) event (bindat-get-field event :event-kind)))
+		 (handler (find-if (lambda (pair)
+							 (equal event-kind (car pair)))
+						   handlers)))
+	(if handler
+		(funcall (cdr handler) jdwp event)
+	  (jdi-error "do not know how to handle event:%s" event))))
 
 (add-hook 'jdwp-event-hooks 'jdi-handle-event)
+
 
 (provide 'jdi)

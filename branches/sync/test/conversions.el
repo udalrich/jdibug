@@ -1,12 +1,12 @@
-(add-hook 'after-save-hook
-		  (lambda ()
-			(eval-current-buffer)
-			(elunit "conversions-suite"))
-		  nil 'local)
+;; (add-hook 'after-save-hook
+;; 		  (lambda ()
+;; 			(eval-current-buffer)
+;; 			(elunit "conversions-suite"))
+;; 		  nil 'local)
 
 (require 'elunit)
 
-(defsuite conversions-suite nil
+(defsuite conversions-suite smoke-test-suite
   ;; :setup-hook (lambda () )
   ;; :teardown-hook (lambda () )
 )

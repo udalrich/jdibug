@@ -3,13 +3,17 @@
 	"elog"
 	"jdwp"
     "jdi"
-    "jdibug-ui"))
+    "jdibug-ui"
+	"jdibug-menu"))
 
 (defconst jdibug-build-directory
   "./")
 
 (defun jdibug-build ()
   (interactive)
+
+  (semantic-grammar-batch-build-packages)
+
   (when (get-buffer "jdibug.el")
     (save-excursion
       (set-buffer "jdibug.el")
@@ -43,7 +47,7 @@
 	(toggle-read-only 1)
 	(pop-to-buffer "*Compile-Log*")
 	(message "finished compilation")))
-				
+
 (defun jdibug-build-fixup-output ()
   (mapc (lambda (re)
 		  (goto-char (point-min))

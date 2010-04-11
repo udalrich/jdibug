@@ -46,6 +46,7 @@
   :type 'float)
 
 (elog-make-logger jdwp)
+(elog-make-logger jdwp-traffic)
 
 (defstruct jdwp
   ;; the elisp process that connects to the debuggee
@@ -834,32 +835,36 @@
 (defun jdwp-process-sentinel (proc string)
   (let ((jdwp (process-get proc 'jdwp)))
     (jdwp-debug "jdwp-process-sentinel:%s" string)
-	(run-hook-with-args 'jdwp-event-hooks jdwp jdwp-event-vm-death)))
+	(eval
+	 `(jdwp-uninterruptibly
+		(run-hook-with-args 'jdwp-event-hooks ,jdwp jdwp-event-vm-death)))))
 
 (defun jdwp-process-reply (jdwp packet command-data)
   (jdwp-debug "jdwp-process-reply")
   (jdwp-with-size
     jdwp
     (let* ((id           (jdwp-packet-id packet))
-		   (error        (jdwp-packet-reply-error packet))
+		   (error-code   (jdwp-packet-reply-error packet))
 		   (protocol     (jdwp-get-protocol (cdr (assoc :name command-data))))
 		   (reply-spec   (getf protocol :reply-spec)))
 	  (jdwp-trace "jdwp-process-reply packet-header:%s" packet)
-      (if (not (= error 0))
+      (if (not (= error-code 0))
 		  (progn
-			(jdwp-error "jdwp-process-reply: received error:%d:%s for id:%d command:%s" error (jdwp-error-string error) id (getf protocol :name))
-			(error "%s" error))
+			(jdwp-error "jdwp-process-reply: received error:%d:%s for id:%d command:%s" error-code (jdwp-error-string error-code) id (getf protocol :name))
+			(if (memq error-code jdwp-ignore-error) nil (error "%s" error-code)))
 		(if reply-spec
 			(let ((reply-data   (bindat-unpack reply-spec (jdwp-packet-data packet))))
+			  (jdwp-traffic-info "reply: %s" reply-data)
 			  (jdwp-info "jdwp-process-reply:id:%5s command:[%20s] time:%-6s len:%5s error:%1d"
 						 id
 						 (getf protocol :name)
 						 (float-time (time-subtract (current-time) (cdr (assoc :sent-time command-data))))
 						 (jdwp-packet-length packet)
-						 error)
+						 error-code)
 			  (jdwp-info "reply-data:%s" (elog-trim reply-data 100))
 			  reply-data)
 		  ;; special case for array, we return the string so the caller can call unpack-arrayregion
+		  (jdwp-traffic-info "reply: [no reply-spec]")
 		  (jdwp-packet-data packet))))))
 
 (defvar jdwp-event-hooks nil)
@@ -869,6 +874,9 @@
 
 (defvar jdwp-input-pending nil
   "The symbol that will be thrown when jdwp-throw-on-input-pending is non-nil and there's input pending")
+
+(defvar jdwp-ignore-error nil
+  "If an error response to `jdwp-send-command' is contained in this list, nil is returned rather than throwing an error")
 
 (defun jdwp-process-command (jdwp packet)
   (jdwp-debug "jdwp-process-command")
@@ -882,10 +890,12 @@
 		  (let* ((packet          (bindat-unpack jdwp-event-spec (jdwp-packet-data packet)))
 				 (suspend-policy  (bindat-get-field packet :suspend-policy))
 				 (events          (bindat-get-field packet :events)))
-			(jdwp-debug "event suspend-policy:%d events:%d" suspend-policy events)
+			(jdwp-info "event suspend-policy:%d events:%d" suspend-policy events)
 			(jdwp-trace "event:%s" (bindat-get-field packet :event))
+			(jdwp-traffic-info "event: %s" packet)
 			(dolist (event (bindat-get-field packet :event))
-			  (run-hook-with-args 'jdwp-event-hooks jdwp event)))
+			  (eval `(jdwp-uninterruptibly
+					   (run-hook-with-args 'jdwp-event-hooks ,jdwp (quote ,event))))))
 		(jdwp-error "do not know how to handle command-set %d command %d" command-set command)))))
 
 (defun jdwp-reply-packet-p (str)
@@ -1075,6 +1085,9 @@ conses.  The car should be the function.  The cdr is passed to
 the function as arguments.")
 
 (defun jdwp-send-command (jdwp name data)
+  (when (not jdwp-uninterruptibly-running-p)
+	(jdwp-error "(jdwp-send-command %s %s) must be called from within jdwp-uninterruptibly" name data)
+	(error "(jdwp-send-command %s %s) must be called from within jdwp-uninterruptibly" name data))
   (if jdwp-sending-command
 	  (error "jdwp-sending-command:%s:%s" name jdwp-sending-command))
 
@@ -1108,6 +1121,7 @@ the function as arguments.")
 						   (if (> (length outstr) 100)
 							   (substring outstr 0 100)
 							 outstr)))
+			  (jdwp-traffic-info "sending command [%-20s] %s" name data)
 			  (jdwp-debug "data:%s" data)
 			  (let ((inhibit-eol-conversion t))
 				(setf (jdwp-current-reply jdwp) nil)
@@ -1252,6 +1266,51 @@ This method does not consume the packet, the caller can know by checking jdwp-pa
 										   (apply function args)
 										 (setq signal-hook-function nil)))
 		 function args))
+
+
+(defvar jdwp-uninterruptibly-running-p nil
+  "Flag to indicate if an uninterruptible function is already running")
+(defvar jdwp-uninterruptibly-waiting nil
+  "List of objects to process uninterruptibly.")
+(defmacro jdwp-uninterruptibly (&rest body)
+  "Execute BODY, not allowing interrupts also wrapped in this
+macro to run until after BODY finishes.
+
+If BODY is executed immediately, the return value is the return value of BODY.  If execution is deferred, the return value is 'jdwp-deferred.
+
+BODY might also not be evaluated
+until after this returns, if another uninterruptable call is in
+progress.  That means that locally scoped variables (such as
+those defined in an enclosling `let' may have gone out of scope.
+
+A workaround is to use the following (somewhat ugly) pattern:
+	 (let ((extra \"456\"))
+	   (eval `(jdwp-uninterruptibly
+				(setq string (concat string ,extra)))))
+
+Variables that have complicated structure may require explicit quoting:
+	 (let ((extra '((:u (:foo bar)))))
+	   (eval `(jdwp-uninterruptibly
+				(setq string (concat string (format \"%s\" (quote ,extra)))))))
+
+It is best if this is placed at a high level where
+"
+  (declare (indent defun))
+  `(if jdwp-uninterruptibly-running-p
+	   (progn
+		 (setq jdwp-uninterruptibly-waiting
+			   (add-to-list 'jdwp-uninterruptibly-waiting
+							(lambda () ,@body)))
+		 'jdwp-deferred)
+	 (prog1
+		 (let ((jdwp-uninterruptibly-running-p t))
+		   ,@body)
+	   ;; If something is waiting, run it
+	   (when jdwp-uninterruptibly-waiting
+		 (let ((func (pop jdwp-uninterruptibly-waiting)))
+		   (jdwp-uninterruptibly (apply func nil)))))))
+
+
 
 (provide 'jdwp)
 

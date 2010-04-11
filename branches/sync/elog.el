@@ -82,7 +82,7 @@
 
 ;; All the logging functions foo-* are macros, so they will not be evaluating
 ;; their arguments if logging is not enabled for that category and priority.
-;; so its save to do something like this
+;; so it's safe to do something like this
 ;; (foo-debug "dump=%s" (convert-a-very-long-string-to-hex-format packet))
 
 ;; If anyhow you wish to check that whether logging is enabled for a certain

@@ -1,9 +1,14 @@
+(require 'elunit)
+
+(defsuite smoke-test-suite nil)
+
 (load "conversions.el")
-(add-hook 'elunit-done-running-hook 'elunit-report)
+(load "uninterrupt.el")
 
 (defun elunit-report (test-count failure-count)
   (switch-to-buffer "*elunit report*")
-  (erase-buffer)
+  (goto-char (point-max))
+  (insert (format "Suite: %s\n" elunit-default-suite))
   (insert (format "Total tests run: %d   Total failures: %d"
 				  test-count failure-count))
   (newline)
@@ -15,5 +20,6 @@
 		  (insert (format "     %s\n" (test-message test)))
 		  (insert (format "     %s\n" (test-problem test))))
 		  elunit-failures))
+(add-hook 'elunit-done-running-hook 'elunit-report)
 
-(elunit "conversions-suite")
+(elunit "smoke-test-suite")
