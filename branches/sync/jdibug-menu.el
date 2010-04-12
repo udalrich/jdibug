@@ -76,8 +76,20 @@
 		 jdibug-toggle-breakpoint
 		 :help "Cycle breakpoint through set, disabled and not set."]
 
+		"-"
 
+		["Refresh all windows"
+		jdibug-refresh-all-windows
+		:help "Refresh the contents of all the JDIbug windows"
+		:active (jdibug-connected-p) ]
 		))
+
+(defun jdibug-refresh-all-windows ()
+  "Refresh all of the dedicated window used by the debugger to display output"
+  (interactive)
+  (jdibug-refresh-threads-buffer-now)
+  (jdibug-refresh-locals-buffer-now)
+  (jdibug-refresh-frames-buffer-now))
 
 (easy-menu-define jdibug-menu java-mode-map "JDIbug Menu"
   jdibug-menu-spec)
