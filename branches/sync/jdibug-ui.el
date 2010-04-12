@@ -600,9 +600,9 @@ And position the point at the line number."
   "Redraw TREE.
 If tree has attribute :dynargs, generate new :args from that function.
 Otherwise use :old-args which saved by `tree-mode-backup-args'."
-  (jdibug-debug "jdibug-tree-mode-reflesh-tree")
-  (unless tree
-	(jdibug-error "tree is null!"))
+  (eval `(jdwp-uninterruptibly (jdibug-tree-mode-reflesh-tree-1 ,tree))))
+
+(defun jdibug-tree-mode-reflesh-tree-1 (tree)
   (let ((path (or (jdibug-tree-mode-find-child-path tree (widget-get tree :jdibug-opened-path))
 				  (tree-mode-opened-tree tree))))
 	(jdibug-debug "jdibug-tree-mode-reflesh-tree:tag=%s:path=%s" (widget-get (tree-widget-node tree) :tag) path)
@@ -617,7 +617,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
     (tree-mode-open-tree tree path)))
 
 (defun jdibug-value-expander (tree)
-  (jdibug-make-expansion-list 'jdibug-value-expander-1 tree))
+  (jdibug-make-expansion-list 'jdibug-value-expander-1 'jdibug-tree-mode-reflesh-tree tree))
 
 (defun jdibug-value-expander-1 (tree)
   (let ((value (widget-get tree :jdi-value)))
@@ -726,19 +726,23 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 						  (if (null jdibug-active-thread)
 							  (insert "Not suspended")
 
-							(let* ((variables (sort (copy-sequence (jdi-frame-get-visible-variables jdibug-active-frame)) 'jdibug-variable-sorter))
-								   (values (jdi-frame-get-values jdibug-active-frame variables))
-								   (tree (jdibug-make-locals-tree variables values)))
-								(setq jdibug-locals-tree (tree-mode-insert tree))
-								(widget-put jdibug-locals-tree :jdibug-opened-path (tree-mode-opened-tree jdibug-locals-tree))
-								(jdi-info "current opened tree path:%s" (tree-mode-opened-tree jdibug-locals-tree))
-								(local-set-key "s" 'jdibug-node-tostring)
-								(local-set-key "c" 'jdibug-node-classname)
-								(message "Locals updated")
-								(jdibug-debug "jdwp-uninterruptibly-running-p=%s" jdwp-uninterruptibly-running-p)
-								(jdibug-debug "jdwp-uninterruptibly-waiting=%s" jdwp-uninterruptibly-waiting)
-								(jdibug-debug "jdibug-refresh-locals-buffer-timer=%s" jdibug-refresh-locals-buffer-timer)
-)))))
+							(let* ((jdwp-ignore-error (list jdwp-error-absent-information))
+								   (variables (sort (copy-sequence (jdi-frame-get-visible-variables jdibug-active-frame)) 'jdibug-variable-sorter)))
+							  (if (null variables)
+								  (insert "No debug information available")
+								(let* ((values (jdi-frame-get-values jdibug-active-frame variables))
+									  (tree (jdibug-make-locals-tree variables values)))
+								  (jdibug-debug "values.size=" (length values))
+								  (setq jdibug-locals-tree (tree-mode-insert tree))
+								  (widget-put jdibug-locals-tree :jdibug-opened-path (tree-mode-opened-tree jdibug-locals-tree))
+								  (jdi-info "current opened tree path:%s" (tree-mode-opened-tree jdibug-locals-tree))
+								  (local-set-key "s" 'jdibug-node-tostring)
+								  (local-set-key "c" 'jdibug-node-classname)
+								  (message "Locals updated")
+								  (jdibug-debug "jdwp-uninterruptibly-running-p=%s" jdwp-uninterruptibly-running-p)
+								  (jdibug-debug "jdwp-uninterruptibly-waiting=%s" jdwp-uninterruptibly-waiting)
+								  (jdibug-debug "jdibug-refresh-locals-buffer-timer=%s" jdibug-refresh-locals-buffer-timer)
+								  )))))))
 					  t)))
 	(jdibug-refresh-locals-buffer)))
 
@@ -1608,23 +1612,24 @@ thread-group for TREE."
 			 (jdi-thread-group-child-threads parent-thread-group)))))
 
 (defun jdibug-make-thread-detail-node (tree)
-  (jdibug-make-expansion-list 'jdibug-make-thread-detail-node-1 tree))
+  (jdibug-make-expansion-list 'jdibug-make-thread-detail-node-1 'jdibug-tree-mode-reflesh-tree tree))
 
-(defun jdibug-make-expansion-list (func tree)
+(defun jdibug-make-expansion-list (func reflesh-func tree)
   "Create the child widgets for TREE by calling FUNC.  The call
-is wrapped in `jdwp-uninterruptibly' and a placeholder widget is
-returned if execution of the call is delayed.
+is wrapped in `jdwp-uninterruptibly'.  If the execution is
+delayed, a placeholder widget is returned and REFLESH-FUNC is
+called.  REFLESH-FUNC should take a single argument (TREE) and
+schedule a call for later execution to perform the actual update."
 
-TODO: Add a function to call later to rebuild the tree."
   (let ((result (jdwp-uninterruptibly
 				  ;; If execution is delayed, tree will be unbound, in
 				  ;; which case there is no point in buiding the node
 				  ;; since we won't be able to use it anyway.
 				  (if (and (boundp 'tree) (fboundp func))
-					  (apply func (list tree)))))
+					  (apply func (list tree))))))
 	(if (eq result 'jdwp-deferred)
 		(progn
-		  ;; TODO: reflesh tree
+		  (apply reflesh-func tree)
 		  `((item :value "Building...")))
 	  (jdibug-debug "jdibug-make-expansion-list:%s returning %s"
 					func result)
