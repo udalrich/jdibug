@@ -748,12 +748,15 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 
 (defun jdibug-frame-notify (button &rest ignore)
   (jdibug-debug "jdibug-frame-notify")
-  (let* ((frame (widget-get button :jdi-frame))
-		 (frames (jdi-thread-get-frames (jdi-frame-thread frame))))
+  (let ((frame (widget-get button :jdi-frame)))
+	(eval `(jdwp-uninterruptibly (jdibug-frame-notify-1 ,frame)))))
+
+(defun jdibug-frame-notify-1 (frame)
+  (let ((frames (jdi-thread-get-frames (jdi-frame-thread frame))))
 	(jdibug-debug "going to class=%s method=%s line-number=%s"
-				 (jdi-class-name (jdi-location-class (jdi-frame-location frame)))
-				 (jdi-method-name (jdi-location-method (jdi-frame-location frame)))
-				 (jdi-location-line-number (jdi-frame-location frame)))
+				  (jdi-class-name (jdi-location-class (jdi-frame-location frame)))
+				  (jdi-method-name (jdi-location-method (jdi-frame-location frame)))
+				  (jdi-location-line-number (jdi-frame-location frame)))
 	(let ((frame-index (position frame frames :test (lambda (f1 f2)
 													  (equal (jdi-frame-id f1) (jdi-frame-id f2)))))
 		  (thread (jdi-frame-thread frame)))
