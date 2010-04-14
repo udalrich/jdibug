@@ -833,6 +833,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 				   (frames (function jdibug-make-frames-node))
 				   (thread-group (function jdibug-make-thread-detail-node))
 				   (t (error "Unknown mode for thread tree: %s" mode))))
+		(format "%[%t%]\n")
 		widget)
 	(jdibug-debug "jdibug-make-thread-tree:value=%s" value)
 	(jdi-thread-update-status thread)
@@ -841,13 +842,33 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 						  :tag ,value
 						  :jdi-thread ,thread
 						  :notify jdibug-thread-notify
- 						  :format "%[%t%]\n"
+ 						  :format ,format
 						  )
 				   :open ,(eq mode 'frames)
 				   :jdi-thread ,thread
 				   :args nil
 				   :expander ,dynargs
 				   :dynargs ,dynargs))))
+
+;; 	;; Some modes want to add extra widgets
+;; 	(case mode
+;; 	  (frames widget)
+;; 	  (thread-group
+;; 	   (let* ((extra-buttons (jdibug-make-thread-extra-buttons thread))
+;; 			  (result `(,widget ,@extra-buttons)))
+;; 		 (jdibug-info "jdibug-make-thread-tree returning %s" (jdibug-widget-string result))
+;; 		 result))
+;; 	  (t (error "Unknown mode for thread tree: %s" mode)))))
+
+;; (defun jdibug-make-thread-extra-buttons (thread)
+;;   "Create a list of extra buttons for display with THREAD"
+;;   `((push-button
+;; 	 :value "Suspend "
+;; 	 :jdi-thread ,thread)
+;; 	(push-button
+;; 	 :tag "Resume"
+;; 	 :jdi-thread ,thread
+;; 	 :format "%[%t%]\n")))
 
 (defun jdibug-thread-notify (button &rest ignore)
   (jdibug-trace "jdibug-thread-notify" )
@@ -1555,7 +1576,7 @@ special cases like infinity."
 	(jdibug-refresh-threads-buffer)))
 
 (defun jdibug-make-top-level-thread-groups-tree ()
-  (jdibug-debug "jdibug-make-thread-groups-tree")
+  (jdibug-debug "jdibug-make-top-level-thread-groups-tree")
   `(tree-widget
 	:node (push-button
 		   :tag "Debuggees"
@@ -1608,11 +1629,17 @@ thread-group for TREE."
   (jdibug-debug "jdibug-make-thread-groups-tree")
   (let ((parent-thread-group (widget-get tree :jdi-thread-group)))
 	(jdi-thread-group-get-children parent-thread-group)
-	(append
-	 (mapcar 'jdibug-make-thread-group-tree (jdi-thread-group-child-groups parent-thread-group))
-	 (mapcar (lambda (thread)
+	(let ((groups 	 (mapcar 'jdibug-make-thread-group-tree (jdi-thread-group-child-groups parent-thread-group)))
+		  (threads 	 (mapcar (lambda (thread)
 			   (jdibug-make-thread-tree thread 'thread-group))
-			 (jdi-thread-group-child-threads parent-thread-group)))))
+			 (jdi-thread-group-child-threads parent-thread-group))))
+;; 	  ;; groups is a list in the correct form, but threads is a list
+;; 	  ;; of lists that needs to be flattened.
+;; 	(append groups (let (result)
+;; 					 (mapcar (lambda (list) (setq result (append result list))) threads)
+;; 					 result)))))
+	  (append groups threads))))
+
 
 (defun jdibug-make-thread-detail-node (tree)
   (jdibug-make-expansion-list 'jdibug-make-thread-detail-node-1 'jdibug-tree-mode-reflesh-tree tree))
@@ -1649,7 +1676,44 @@ schedule a call for later execution to perform the actual update."
 		  (item
 		   :value ,(format "Status: %s" (jdwp-thread-status-string status)))
 		  (item
-		   :value ,(format "Suspend count: %d" (jdi-thread-get-suspend-count thread)))))))
+		   :value ,(format "Suspend count: %d" (jdi-thread-get-suspend-count thread)))
+		  (push-button
+		   :tag "Suspend"
+		   :jdi-thread ,thread
+		   :format "%[%t%]\n")
+		  (push-button
+		   :tag "Resume"
+		   :jdi-thread ,thread
+		   :format "%[%t%]\n")))))
 
+
+(defun jdibug-widget-string (tree)
+  "Print TREE but do not include jdi-properties that are
+probably either very large or result in infinite loops when
+printed."
+  (if (widgetp tree)
+	  (let ((result (format "(%s" (car tree)))
+			(items (cdr tree)))
+		(while items
+		  (let ((name (symbol-name (nth 0 items)))
+				(value (nth 1 items)))
+			(unless (or (string-match "^:jdi" name) (string-match "^:parent" name))
+			  (cond ((widgetp value)
+					 (setq value (jdibug-widget-string value)))
+					((and value (listp value))
+					 (setq value (format "(%s)"
+										 (mapconcat 'jdibug-widget-string value " ")))))
+			  (setq result (concat result (format " %s %s" name value))))
+			(setq items (cddr items))))
+		(setq result (concat result ")")))
+	(format "%s" tree)))
+
+(defun jdibug-print-tree (tree)
+  "Print TREE but do not include jdi-properties that are
+probably either very large or result in infinite loops when
+printed."
+  (let ((result (jdibug-widget-string tree)))
+	(jdibug-info "%s" result)
+	(message "%s" result)))
 
 (provide 'jdibug-ui)
