@@ -293,6 +293,20 @@ to populate the jdi-value-values of the jdi-value.")
   (interactive)
   (jdwp-uninterruptibly
 	(jdibug-trace "jdibug-disconnect")
+	(jdibug-cleanup-on-disconnect)
+
+	(jdibug-message "JDIbug disconnecting... ")
+	(mapc (lambda (vm)
+			(jdibug-message (format "%s:%s"
+									(jdi-virtual-machine-host vm)
+									(jdi-virtual-machine-port vm)) t)
+			(jdi-virtual-machine-disconnect vm)
+			(jdibug-message "(disconnected) " t))
+		  jdibug-virtual-machines)
+	(setq jdibug-virtual-machines nil)
+	(run-hooks 'jdibug-detached-hook)))
+
+(defun jdibug-cleanup-on-disconnect nil
 	(if jdibug-current-line-overlay
 		(delete-overlay jdibug-current-line-overlay))
 	(mapc (lambda (bp)
@@ -324,15 +338,21 @@ to populate the jdi-value-values of the jdi-value.")
 		  jdibug-threads-tree   nil
 
 		  jdibug-active-thread  nil
-		  jdibug-active-frame   nil)
+		  jdibug-active-frame   nil))
 
-	(jdibug-message "JDIbug disconnecting... ")
+(defun jdibug-exit-jvm ()
+  "End the debugging session and kill all attached JVMs."
+  (interactive)
+  (jdwp-uninterruptibly
+	(jdibug-trace "jdibug-exit-jvm")
+
+	(jdibug-message "JDIbug disconnecting and killing JVM... ")
 	(mapc (lambda (vm)
 			(jdibug-message (format "%s:%s"
 									(jdi-virtual-machine-host vm)
 									(jdi-virtual-machine-port vm)) t)
-			(jdi-virtual-machine-disconnect vm)
-			(jdibug-message "(disconnected) " t))
+			(jdi-virtual-machine-exit vm -1)
+			(jdibug-message "(killed) " t))
 		  jdibug-virtual-machines)
 	(setq jdibug-virtual-machines nil)
 	(run-hooks 'jdibug-detached-hook)))
@@ -1221,6 +1241,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	  (run-hooks 'jdibug-resumed-hook)
 
 	  (jdibug-refresh-frames-buffer)
+	  (jdibug-refresh-threads-buffer)
 
 	  (if jdibug-others-suspended
 		  (let ((other (pop jdibug-others-suspended)))
@@ -1680,12 +1701,26 @@ schedule a call for later execution to perform the actual update."
 		  (push-button
 		   :tag "Suspend"
 		   :jdi-thread ,thread
+		   :notify jdibug-thread-suspend-notify
 		   :format "%[%t%]\n")
 		  (push-button
 		   :tag "Resume"
 		   :jdi-thread ,thread
+		   :notify jdibug-thread-resume-notify
 		   :format "%[%t%]\n")))))
 
+(defun jdibug-thread-resume-notify (button &rest event)
+  (let ((thread (widget-get button :jdi-thread)))
+	(eval `(jdwp-uninterruptibly
+			 (setq jdibug-active-thread thread)
+			 (jdibug-resume)))))
+
+(defun jdibug-thread-suspend-notify (button &rest event)
+  (let ((thread (widget-get button :jdi-thread)))
+	(eval `(jdwp-uninterruptibly
+			 (jdi-thread-suspend ,thread)
+			 (jdibug-refresh-threads-buffer)
+			 (jdibug-refresh-frames-buffer)))))
 
 (defun jdibug-widget-string (tree)
   "Print TREE but do not include jdi-properties that are

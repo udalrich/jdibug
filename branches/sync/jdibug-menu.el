@@ -70,6 +70,10 @@
 		 :active (jdibug-connected-p)
 		 :help "Disconnect from all running processes."]
 
+		["Kill JVM"
+		 jdibug-exit-jvm
+		 :active (jdibug-connected-p)
+		 :help "Disconnect from all running processes."]
 		"-"
 
 		["Toggle Breakpoint"

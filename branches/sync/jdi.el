@@ -437,6 +437,9 @@
 (defun jdi-virtual-machine-disconnect (vm)
   (jdwp-disconnect (jdi-virtual-machine-jdwp vm)))
 
+(defun jdi-virtual-machine-exit (vm exit-code)
+  (jdwp-exit (jdi-virtual-machine-jdwp vm) `((:exit-code ,exit-code))))
+
 (defun jdi-class-get-all-methods (class)
   (jdi-debug "jdi-class-get-all-methods")
   (let ((supers (jdi-class-get-all-super class)))
@@ -643,6 +646,11 @@
   (jdi-debug "jdi-thread-resume")
   (setf (jdi-thread-running-p thread) t)
   (jdwp-send-command (jdi-mirror-jdwp thread) "thread-resume" `((:thread . ,(jdi-thread-id thread)))))
+
+(defun jdi-thread-suspend (thread)
+  (jdi-debug "jdi-thread-suspend")
+  (setf (jdi-thread-running-p thread) nil)
+  (jdwp-send-command (jdi-mirror-jdwp thread) "thread-suspend" `((:thread . ,(jdi-thread-id thread)))))
 
 (defun jdi-resume (vm)
   (jdi-debug "jdi-resume")

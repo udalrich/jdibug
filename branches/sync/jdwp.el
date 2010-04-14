@@ -420,6 +420,11 @@
 				   :command      9
 				   :command-spec nil
 				   :reply-spec   nil)
+	(:name         "exit"
+				   :command-set  1
+				   :command      10
+				   :command-spec ((:exit-code u32))
+				   :reply-spec   nil)
 	(:name         "capabilities-new"
 				   :command-set  1
 				   :command      17
@@ -620,6 +625,11 @@
 				   :command      1
 				   :command-spec ((:thread        vec (eval jdwp-object-id-size)))
 				   :reply-spec   ((:thread-name   struct jdwp-string-spec)))
+	(:name         "thread-suspend"
+				   :command-set  11
+				   :command      2
+				   :command-spec ((:thread        vec (eval jdwp-object-id-size)))
+				   :reply-spec   nil)
 	(:name         "thread-resume"
 				   :command-set  11
 				   :command      3
@@ -825,6 +835,16 @@
 (defun jdwp-disconnect (jdwp)
   (condition-case err
 	  (jdwp-send-command jdwp "dispose" nil)
+	(error nil))
+  (when (jdwp-process jdwp)
+	(setf (process-sentinel (jdwp-process jdwp)) nil)
+	(kill-buffer (process-buffer (jdwp-process jdwp))))
+  ;;(delete-process (jdwp-process jdwp))
+  (setf (jdwp-process jdwp) nil))
+
+(defun jdwp-exit (jdwp command)
+  (condition-case err
+	  (jdwp-send-command jdwp "exit" command)
 	(error nil))
   (when (jdwp-process jdwp)
 	(setf (process-sentinel (jdwp-process jdwp)) nil)
