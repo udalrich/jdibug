@@ -438,7 +438,7 @@
   (jdwp-disconnect (jdi-virtual-machine-jdwp vm)))
 
 (defun jdi-virtual-machine-exit (vm exit-code)
-  (jdwp-exit (jdi-virtual-machine-jdwp vm) `((:exit-code ,exit-code))))
+  (jdwp-exit (jdi-virtual-machine-jdwp vm) `((:exit-code . ,exit-code))))
 
 (defun jdi-class-get-all-methods (class)
   (jdi-debug "jdi-class-get-all-methods")
@@ -1183,7 +1183,7 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 	(run-hook-with-args 'jdi-class-prepare-hooks newclass thread)))
 
 (defun jdi-handle-class-unload-event (jdwp event)
-  (jdi-debug "jdi-handle-class-unload-event")
+  (jdi-debug "jdi-handle-class-unload-event sig=%s"  (jdwp-get-string event :u :signature))
   ())
 
 (defun jdi-handle-thread-start (jdwp event)

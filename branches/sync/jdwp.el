@@ -845,7 +845,7 @@
 (defun jdwp-exit (jdwp command)
   (condition-case err
 	  (jdwp-send-command jdwp "exit" command)
-	(error nil))
+	(error (jdwp-error "Error executing exit command: %s" err)))
   (when (jdwp-process jdwp)
 	(setf (process-sentinel (jdwp-process jdwp)) nil)
 	(kill-buffer (process-buffer (jdwp-process jdwp))))

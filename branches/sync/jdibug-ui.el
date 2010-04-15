@@ -352,7 +352,7 @@ to populate the jdi-value-values of the jdi-value.")
 									(jdi-virtual-machine-host vm)
 									(jdi-virtual-machine-port vm)) t)
 			(jdi-virtual-machine-exit vm -1)
-			(jdibug-message "(killed) " t))
+			(jdibug-message " (killed) " t))
 		  jdibug-virtual-machines)
 	(setq jdibug-virtual-machines nil)
 	(run-hooks 'jdibug-detached-hook)))
@@ -1383,7 +1383,7 @@ locals and threads buffers."
 		 (jdibug-float-to-string (jdwp-vec-to-float (jdi-primitive-value-value value))))
 
 		((equal (jdi-value-type value) jdwp-tag-double)
-		 (jdibug-float-to-string (jdwp-vec-to-double (jdi-primitive-value-value value))))
+		 (jdibug-double-to-string (jdwp-vec-to-double (jdi-primitive-value-value value))))
 
 		((equal (jdi-value-type value) jdwp-tag-boolean)
 		 (if (= 0 (jdi-primitive-value-value value)) "false" "true"))
@@ -1422,8 +1422,16 @@ locals and threads buffers."
 The value is probably a number, but it could be a constant for
 special cases like infinity."
   (if (numberp float)
-	  (format "%g" float)
+	  (format "%.9g" float)
 	(format "%s" float)))
+
+(defun jdibug-double-to-string (double)
+  "Convert a DOUBLE converted by jdwp to a string for display.
+The value is probably a number, but it could be a constant for
+special cases like infinity."
+  (if (numberp double)
+	  (format "%.17g" double)
+	(format "%s" double)))
 
 (defun jdibug-object-get-string (object)
   (jdibug-debug "jdibug-object-get-string:object-id=%s" (jdi-object-id object))
