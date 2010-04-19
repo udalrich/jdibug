@@ -1,6 +1,8 @@
+VERSION=0.3
+
 BUILD_DIR=$(PWD)/build
 BUILD_CONFIG=$(BUILD_DIR)/config
-BUILD_DIST=$(BUILD_DIR)/dist
+BUILD_DIST=$(BUILD_DIR)/jdibug-$(VERSION)
 
 EMACS22=d:/emacs-22.3/bin/emacs.exe
 EMACS23=d:/emacs-23.1/bin/emacs.exe
@@ -15,7 +17,7 @@ EL_TEST_INIT=$(BUILD_CONFIG)/el_test_init.el
 BUILD=$(EMACS_ARGS) -l jdibug-build.el -f jdibug-build
 TEST=$(EMACS_ARGS) -l $(EL_TEST_INIT) -l $(TEST_DIR)/smoke-tests.el
 
-VERSION=0.3
+
 
 CYGWIN=[ "${OSTYPE}" = cygwin ]
 
