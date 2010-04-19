@@ -29,6 +29,8 @@
 ;; This class provides the menu support in jdibug.
 
 (require 'easymenu)
+(require 'cc-mode)
+(require 'jdibug-ui)
 
 (defvar jdibug-menu-spec
   (list "JDIbug"

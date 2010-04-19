@@ -1,3 +1,4 @@
+
 (require 'elunit)
 
 (defsuite smoke-test-suite nil)
@@ -20,6 +21,7 @@
 		  (insert (format "     %s\n" (test-message test)))
 		  (insert (format "     %s\n" (test-problem test))))
 		  elunit-failures))
-(add-hook 'elunit-done-running-hook 'elunit-report)
+(when (interactive-p)
+  (add-hook 'elunit-done-running-hook 'elunit-report))
 
 (elunit "smoke-test-suite")
