@@ -1,3 +1,40 @@
+;;; jdi.el --- library that provides the Java(tm) Debug Interface
+
+;; Copyright (C) 2008 Phuah Yee Keat
+
+;; Author: Phuah Yee Keat <ykphuah@gmail.com>
+;; Maintainer: Troy Daniels <udalrich.schermer@gmail.com>
+;; Created: 20 May 2008
+;; Keywords: lisp tools
+
+;; This file is NOT part of GNU Emacs.
+
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or (at
+;; your option) any later version.
+
+;; This program is distributed in the hope that it will be useful, but
+;; WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+;; General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see `http://www.gnu.org/licenses/'.
+
+;;; Commentary:
+
+;; This module tries to implement everything documented here:
+;; http://java.sun.com/j2se/1.4.2/docs/guide/jpda/jdi/
+
+;; Look near the end of the file for customizing how special
+;; objects (ArrayList, HashMap) are displayed in the locals buffer
+
+;; This module requires bindat.el, elog.el and jdwp.el
+
+;;; Code:
+
+(require 'bindat)
 (require 'elog)
 (require 'jdwp)
 
