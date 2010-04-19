@@ -34,6 +34,9 @@
 
 (require 'bindat)
 (require 'elog)
+(eval-when-compile
+  (load "cl-seq")
+  (load "cl-extra"))
 
 (defcustom jdwp-timeout 3
   "Number of seconds to timeout before replies arrive from the debuggee."
@@ -47,6 +50,14 @@
 
 (elog-make-logger jdwp)
 (elog-make-logger jdwp-traffic)
+
+(defvar jdwp-ignore-error nil
+  "If an error response to `jdwp-send-command' is contained in this list, nil is returned rather than throwing an error")
+
+(defvar jdwp-uninterruptibly-running-p nil
+  "Flag to indicate if an uninterruptible function is already running")
+(defvar jdwp-uninterruptibly-waiting nil
+  "List of objects to process uninterruptibly.")
 
 (defstruct jdwp
   ;; the elisp process that connects to the debuggee
@@ -895,9 +906,6 @@
 (defvar jdwp-input-pending nil
   "The symbol that will be thrown when jdwp-throw-on-input-pending is non-nil and there's input pending")
 
-(defvar jdwp-ignore-error nil
-  "If an error response to `jdwp-send-command' is contained in this list, nil is returned rather than throwing an error")
-
 (defun jdwp-process-command (jdwp packet)
   (jdwp-debug "jdwp-process-command")
   (jdwp-with-size
@@ -1288,10 +1296,6 @@ This method does not consume the packet, the caller can know by checking jdwp-pa
 		 function args))
 
 
-(defvar jdwp-uninterruptibly-running-p nil
-  "Flag to indicate if an uninterruptible function is already running")
-(defvar jdwp-uninterruptibly-waiting nil
-  "List of objects to process uninterruptibly.")
 (defmacro jdwp-uninterruptibly (&rest body)
   "Execute BODY, not allowing interrupts also wrapped in this
 macro to run until after BODY finishes.

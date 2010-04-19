@@ -8,7 +8,9 @@
 
 (eval-when-compile
   (setq jdi-unit-testing t)
-  (defvar jdibug-active-thread))
+  (defvar jdibug-active-thread)
+  (load "cl-seq")
+  (load "cl-extra"))
 
 (defstruct jdi-mirror
   virtual-machine)

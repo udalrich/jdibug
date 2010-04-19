@@ -7,7 +7,7 @@
 ;; 		  nil 'local)
 
 (require 'elunit)
-(require 'jdi)
+(require 'jdwp)
 
 (defsuite uninterrupt-suite smoke-test-suite
   ;; :setup-hook (lambda () )
