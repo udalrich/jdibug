@@ -193,6 +193,14 @@
 			 (dolist (app appenders)
 			   (elog-appender-apply app ,priority ,category ,fmt ,@objects))))))
 
+(defun elog-trim (obj max)
+  (let ((str (if (stringp obj)
+				 obj
+			   (format "%s" obj))))
+	(if (> (length str) max)
+		(substring str 0 (- max 3))
+	  str)))
+
 (defun elog-safe-message (string &rest args)
   "Send STRING to message without causing problems if it contains
 percent signs.  The remainder of the args are ignored."
