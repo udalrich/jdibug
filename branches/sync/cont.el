@@ -1,9 +1,11 @@
+
+
 (require 'elog)
 (elog-make-logger cont)
 
 (defstruct cont
   id
-  parent-id	
+  parent-id
   proc-id
   func
   )
@@ -13,8 +15,8 @@
   (cont-debug "cont-new parent-id:%s proc-id:%s" parent-id proc-id)
   (let* ((id (cont-generate-id))
 		 (new-cont (make-cont :id id :parent-id parent-id :proc-id proc-id :func func)))
-	(cont-trace "cont-new:id=%s:parent-id=%s:func=\n    %s" 
-				(cont-id new-cont) 
+	(cont-trace "cont-new:id=%s:parent-id=%s:func=\n    %s"
+				(cont-id new-cont)
 				(cont-parent-id new-cont)
 				(elog-trim func 100))
 	(push `(,id . ,new-cont) cont-alist)
@@ -95,7 +97,7 @@
 (defun cont-values (retval &rest retvals)
   (cont-debug "cont-values:current-id=%s" cont-current-id)
   (cont-trace "cont-values:retvals=%s" (elog-trim retvals 100))
-  ;; we do the bottom so to force user to pass in something 
+  ;; we do the bottom so to force user to pass in something
   (let ((retvals (cons retval retvals)))
 	(let* ((cont-previous-id cont-current-id)
 		   (cont-current (cont-get cont-current-id))
@@ -126,7 +128,7 @@
 	 (if (assoc cont-current-id cont-alist)
 		 cont-current-id
 	   result)))
-	 
+
 (defun cont-init ()
   (interactive)
   (setq cont-alist nil)
@@ -249,7 +251,7 @@
 
   (defun cont-test-send-message (ignore)
 	(setq cont-test-saved-cont (cont-get-current-id)))
-  
+
   (cont-bind (reply) (cont-test-send-message nil)
 	(setq cont-test-saved-reply reply))
 
