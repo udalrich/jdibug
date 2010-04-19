@@ -33,8 +33,11 @@
 ;;
 ;;     foo-trace, foo-debug, foo-info, foo-warn, foo-error and foo-fatal
 ;;
-;; its up to you to make sure they do not clash with any functions in your module
-;; each of the above functions have the same signature as the 'message' function
+;; its up to you to make sure they do not clash with any functions in
+;; your module each of the above functions have the same signature as
+;; the 'message' function.  Note that `message' is actually a bad
+;; function to use here, since the first argument might have percent
+;; signs in it.  elog-safe-message is a better alternative.
 
 ;; To configure what log goes where, create another file (I call this elog-conf.el)
 ;; and load it from your .emacs file after you require elog.el, this is totally
@@ -42,18 +45,18 @@
 ;; call the elog-set-appenders function, like this:
 ;;
 ;; (elog-set-appenders
-;;  (list 
+;;  (list
 ;;   (make-elog-appender :category 'foo
 ;; 					     :priority 'trace
-;; 					     :layout "%H:%M:%S [%p] %c : %m%n" 
+;; 					     :layout "%H:%M:%S [%p] %c : %m%n"
 ;; 					     :output " foo-log")
 ;;   (make-elog-appender :category 'bar
 ;; 					     :priority 'error
-;; 					     :layout "%H:%M:%S [%p] %c : %m%n" 
+;; 					     :layout "%H:%M:%S [%p] %c : %m%n"
 ;; 					     :output " bar-log")
 ;;   (make-elog-appender :priority 'error
-;; 					     :layout "%H:%M:%S [%p] %c : %m%n" 
-;; 					     :output 'message)))
+;; 					     :layout "%H:%M:%S [%p] %c : %m%n"
+;; 					     :output 'elog-safe-message)))
 ;;
 ;; :category specifies the module that you pass to elog-make-logger
 ;; :priority specifies that anything above and including this priority
@@ -70,7 +73,7 @@
 ;; :output   can either be a string or a function
 ;;           if its a string, its the name of the buffer that will be created
 ;;               and output to.
-;;           if its a function, it must conform to the same signature as 
+;;           if its a function, it must conform to the same signature as
 ;;               the message function.
 ;;
 ;; The above sample, will log everything from the foo module into the foo-log
@@ -79,7 +82,7 @@
 
 ;; All the logging functions foo-* are macros, so they will not be evaluating
 ;; their arguments if logging is not enabled for that category and priority.
-;; so its save to do something like this
+;; so it's safe to do something like this
 ;; (foo-debug "dump=%s" (convert-a-very-long-string-to-hex-format packet))
 
 ;; If anyhow you wish to check that whether logging is enabled for a certain
@@ -97,51 +100,66 @@
 
 ;;; Code:
 
+(require 'cl)
+
 (defstruct elog-appender
-  category 
+  category
   priority
-  layout  
+  layout
   output)
 
-(defvar elog-appenders nil
-  "A list of elog-appender.")
+(eval-and-compile
+  (defvar elog-appenders nil
+	"A list of elog-appender.")
 
-(defvar elog-categories nil
-  "List of categories that we have so far.")
+  (defvar elog-categories nil
+	"List of categories that we have so far.")
 
-(defvar elog-priorities nil
-  "A list of priorities for logging, higher number means more important.")
+  (defvar elog-priorities nil
+	"A list of priorities for logging, higher number means more important.")
 
-(setq elog-priorities
-      '((trace . 0)
-		(debug . 1)
-		(info  . 2)
-		(warn  . 3)
-		(error . 4)
-		(fatal . 5)))
+  (setq elog-priorities
+		'((trace . 0)
+		  (debug . 1)
+		  (info  . 2)
+		  (warn  . 3)
+		  (error . 4)
+		  (fatal . 5)))
 
-(defun elog-priority-num (pri)
-  (cdr (assoc pri elog-priorities)))
+  (defun elog-priority-num (pri)
+	(cdr (assoc pri elog-priorities)))
+
+  (defun elog-get-appenders (priority category)
+	(loop for app in elog-appenders
+		  when (and (or (null (elog-appender-category app)) (equal category (elog-appender-category app)))
+					(<= (elog-priority-num (elog-appender-priority app)) (elog-priority-num priority)))
+		  collect app))
+
+  (defun elog-update-flags ()
+	(loop for cat in elog-categories
+		  do
+		  (loop for priority in elog-priorities
+				do
+				(let ((flag (intern (format "%s-%s-flag" cat (car priority)))))
+				  (if (elog-get-appenders (car priority) cat)
+					  (set flag t)
+					(set flag nil)))))))
 
 (defmacro elog-make-logger (category)
   (let ((macros
-		 (mapcar (lambda (pri) 
+		 (mapcar (lambda (pri)
 				   (let* ((suffix (car pri))
 						  (funcname (concat (symbol-name category) "-" (symbol-name suffix))))
 					 `(defmacro ,(intern funcname) (fmt &rest objects)
 						`(elog-log ',',suffix ',',category ,fmt ,@objects))))
 				 elog-priorities)))
+	(add-to-list 'elog-categories category)
+	(elog-update-flags)
     `(progn ,@macros (add-to-list 'elog-categories ',category) (elog-update-flags))))
 
 (defun elog-set-appenders (appenders)
   (setq elog-appenders appenders)
   (elog-update-flags))
-
-(defun elog-get-appenders (priority category)
-  (loop for app in elog-appenders 
-		when (and (or (null (elog-appender-category app)) (equal category (elog-appender-category app)))
-				  (<= (elog-priority-num (elog-appender-priority app)) (elog-priority-num priority)))
-		collect app))
 
 (defun elog-appender-layout-apply (layout priority category fmt &rest objects)
   (let* ((msg layout)
@@ -175,15 +193,10 @@
 			 (dolist (app appenders)
 			   (elog-appender-apply app ,priority ,category ,fmt ,@objects))))))
 
-(defun elog-update-flags ()
-  (loop for cat in elog-categories
-		do 
-		(loop for priority in elog-priorities
-			  do
-			  (let ((flag (intern (format "%s-%s-flag" cat (car priority)))))
-				(if (elog-get-appenders (car priority) cat)
-					(set flag t)
-				  (set flag nil))))))
+(defun elog-safe-message (string &rest args)
+  "Send STRING to message without causing problems if it contains
+percent signs.  The remainder of the args are ignored."
+  (message "%s" string))
 
 (provide 'elog)
 

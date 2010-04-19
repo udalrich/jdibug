@@ -5,17 +5,24 @@
 ** Supports multi dimensional array
 Now supports displaying/expanding of multi dimensional array.
 
-** Supports generics 
-Now the locals browser supports displaying generics as 
-ArrayList<String>. I do not understand why Eclipse is displaying it 
+** Supports generics
+Now the locals browser supports displaying generics as
+ArrayList<String>. I do not understand why Eclipse is displaying it
 as ArrayList<E>!
 
 ** Supports connecting to multiple debuggee
-Now JDIbug can connect to multiple debuggee on different host:port. 
+Now JDIbug can connect to multiple debuggee on different host:port.
 The configuration parameter jdibug-connect-host and jdibug-connect-port
 have been merged into a jdibug-connect-hosts which should be set
-to a list, containing strings of "host:port". You can then set 
+to a list, containing strings of "host:port". You can then set
 breakpoints in any of the files in any of the debuggee.
+
+** Supports switching active thread
+Clicking on a thread in the frames display makes that thread active
+for future commands like step and resume.
+
+** Menu of commands
+A menu of the commonly used commands has been added.
 
 * 0.2 (2009-05-07)
 
@@ -26,7 +33,7 @@ Thanks to Len Trigg <len@netvalue.net.nz>
 If an attribute in a class contain a reference to itself, now the node
 will just display as "this" and it will not be expandable, this is to
 prevent confusion to the user because the attribute will be infinitely
-expandable. 
+expandable.
 
 ** Class loaded by multiple class loaders
 Previously, if a class is loaded by that once by different class
