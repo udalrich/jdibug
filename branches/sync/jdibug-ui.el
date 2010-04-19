@@ -1358,7 +1358,9 @@ locals and threads buffers."
   (define-key jde-mode-map [?\C-c ?\C-c ?\C-i] 'jdibug-step-into)
   (define-key jde-mode-map [?\C-c ?\C-c ?\C-o] 'jdibug-step-out)
   (define-key jde-mode-map [?\C-c ?\C-c ?\C-r] 'jdibug-resume)
-  (define-key jde-mode-map [?\C-c ?\C-c ?\C-a] 'jdibug-resume-all))
+  (define-key jde-mode-map [?\C-c ?\C-c ?\C-a] 'jdibug-resume-all)
+  (define-key jde-mode-map [?\C-c ?\C-c ?\C-k] 'jdibug-exit-jvm)
+  )
 
 (defun jdibug-value-get-string (value)
   "[ASYNC] get a string to be displayed for a value"
