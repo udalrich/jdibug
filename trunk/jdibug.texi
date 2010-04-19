@@ -26,7 +26,7 @@
 @node Rationale
 @chapter Rationale
 
-One word, locals browser. As I started using JDE, there are two
+One word, locals browser. As I started using JDEE, there are two
 debuggers that are available, which are jdb and jdebug.
 
 jdb is too simple to be used as a debugger, I find myself doing
@@ -51,13 +51,13 @@ JDIbug is hosted at googlecode, at
 Download all the package file and untar them into somewhere within
 your @code{load-path}. For example, I keep all my emacs modules under
 my @file{~/emacs/site}, so the jdibug @file{.el} files will go into
-@file{~/emacs/site/jdibug-0.1}.
+@file{~/emacs/site/jdibug-0.3}.
 
 Then add the path into your @code{load-path}, and @code{require} it,
 for example, I have the following in my @file{.emacs} file:
 
 @example
-(add-to-list 'load-path (expand-file-name "~/emacs/site/jdibug-0.1"))
+(add-to-list 'load-path (expand-file-name "~/emacs/site/jdibug-0.3"))
 (require 'jdibug)
 @end example
 
@@ -66,9 +66,9 @@ That's it, you are good to go.
 @node Configuration
 @chapter Configuration
 
-Although JDIbug current does not rely on any data from JDE, a lot of
-things are made very simple when using JDIbug with JDE. So please
-install JDE if you have not yet done it.
+Although JDIbug current does not rely on any data from JDEE, a lot of
+things are made very simple when using JDIbug with JDEE. So please
+install JDEE if you have not yet done it.
 
 There are only two parameters that you need to configure before you
 can start using JDIbug, which is the @code{jdibug-connect-host}
@@ -78,11 +78,16 @@ parameter and the @code{jdibug-connect-port} parameter.
 process that you want to debug. And @code{jdibug-connect-port}
 specifies the port to connect to.
 
-If you have multiple projects set up using JDE's @file{prj.el} file,
+If you have multiple projects set up using JDEE's @file{prj.el} file,
 you can set the two parameters inside the @file{prj.el} file so that
 different projects can be connected using different host/ports by
 JDIbug. Having said that, JDIbug currently @emph{does not} support
 more than one debugging session per emacs session.
+
+If you want to use JDIbug without juse JDE, you need to customize two
+additoinal parameters.  Customize @code{jdibug-use-jde-source-paths} to false
+(nil).  Then customize @code{jdibug-source-paths} to the location of your
+source.
 
 @node Connecting
 @chapter Connecting
@@ -125,8 +130,8 @@ When the debugger is suspended, you can use the following key
 sequences to step through the program.
 
 @example
-C-c C-c C-n to step over.  
-C-c C-c C-i to step into.  
+C-c C-c C-n to step over.
+C-c C-c C-i to step into.
 C-c C-c C-o to step out.
 @end example
 
@@ -134,9 +139,9 @@ As these keys are used very often, I bind them to function keys for
 faster access. I have the following in my .emacs file:
 
 @example
-(define-key jde-mode-map [f8]   'jdibug-step-over) 
-(define-key jde-mode-map [M-f8] 'jdibug-step-into) 
-(define-key jde-mode-map [f7]   'jdibug-step-out) 
+(define-key jde-mode-map [f8]   'jdibug-step-over)
+(define-key jde-mode-map [M-f8] 'jdibug-step-into)
+(define-key jde-mode-map [f7]   'jdibug-step-out)
 (define-key jde-mode-map [M-f7] 'jdibug-resume)
 @end example
 
@@ -152,7 +157,7 @@ variables by clicking on the expand icon.
 
 When the cursor is over any element in the tree, you can press the
 @kbd{s} key to invoke the @code{toString} method on the variable under
-the cursor. The result will be printed in the echo-area. You can also 
+the cursor. The result will be printed in the echo-area. You can also
 press the @kbd{c} key to print the class name of the object under the
 cursor in the echo area.
 
@@ -202,6 +207,10 @@ Please note that the current execution point does not change when you
 switch between the frames, so if you do @code{jdibug-step-over}, the
 stepping will go back to the original execution point.
 
+Threads are also clickable.  This does not update the locals browser,
+but does change which thread will be affected with subsequent commands
+like @code{jdibug-resume} or @code{jdibug-step-into}.
+
 @node Breakpoints Buffer
 @chapter Breakpoints Buffer
 The breakpoints buffer shows a list of the current active and disabled
@@ -216,7 +225,7 @@ functions that create the window layout of your liking, and then add
 this in your @file{.emacs} file:
 
 @example
-(remove-hook 'jdibug-connected-hook 'jdibug-debug-view) 
+(remove-hook 'jdibug-connected-hook 'jdibug-debug-view)
 (remove-hook 'jdibug-detached-hook  'jdibug-undebug-view)
 @end example
 
@@ -235,18 +244,18 @@ purpose.
 Run the following piece of code
 @example
 (elog-set-appenders
- (list 
-  (make-elog-appender :category 'jdwp 
+ (list
+  (make-elog-appender :category 'jdwp
 					  :priority 'trace
-					  :layout "%H:%M:%S [%p] %c : %m%n" 
+					  :layout "%H:%M:%S [%p] %c : %m%n"
 					  :output "*jdwp-log*")
   (make-elog-appender :category 'jdi
 					  :priority 'trace
-					  :layout "%H:%M:%S [%p] %c : %m%n" 
+					  :layout "%H:%M:%S [%p] %c : %m%n"
 					  :output "*jdwp-log*")
   (make-elog-appender :category 'jdibug
 					  :priority 'trace
-					  :layout "%H:%M:%S [%p] %c : %m%n" 
+					  :layout "%H:%M:%S [%p] %c : %m%n"
 					  :output "*jdwp-log*")))
 @end example
 
