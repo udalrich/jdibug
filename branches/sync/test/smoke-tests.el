@@ -5,6 +5,7 @@
 
 (load "conversions.el")
 (load "uninterrupt.el")
+(load "parsing.el")
 
 (defun elunit-report (test-count failure-count)
   (switch-to-buffer "*elunit report*")
@@ -21,7 +22,7 @@
 		  (insert (format "     %s\n" (test-message test)))
 		  (insert (format "     %s\n" (test-problem test))))
 		  elunit-failures))
-(when (interactive-p)
+(when (not noninteractive)
   (add-hook 'elunit-done-running-hook 'elunit-report))
 
 (elunit "smoke-test-suite")

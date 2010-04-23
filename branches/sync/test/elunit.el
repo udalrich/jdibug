@@ -127,14 +127,19 @@
 (defmacro deftest (name suite &rest body)
   "Define a test NAME in SUITE with BODY."
   `(save-excursion
-     ;; TODO: Use backtrace info to get line number
-     (search-backward (concat "deftest " (symbol-name ',name)) nil t)
-     (let ((line (line-number-at-pos))
-           (file buffer-file-name))
-       (elunit-delete-test ',name ,suite)
-       (push (make-test :name ',name :body (lambda () ,@body)
-                        :file file :line line)
-             (test-suite-tests ,suite)))))
+	 (let ((file (if load-in-progress load-file-name buffer-file-name))
+		   (def-regexp (concat "deftest\\s-+"
+							   (symbol-name ',name)))
+		   line test)
+	   (find-file file)
+	   (goto-char (point-min))
+	   (search-forward-regexp def-regexp nil t)
+	   (setq line (line-number-at-pos))
+	   (setq test (make-test :name ',name :body (lambda () ,@body)
+							 :file file :line line))
+	   (elunit-delete-test ',name ,suite)
+       (push test (test-suite-tests ,suite)))))
+
 
 (defun elunit-get-test (name suite)
   "Return a test given a NAME and SUITE."
