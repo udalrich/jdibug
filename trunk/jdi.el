@@ -3,7 +3,7 @@
 ;; Copyright (C) 2008 Phuah Yee Keat
 
 ;; Author: Phuah Yee Keat <ykphuah@gmail.com>
-;; Maintainer: Phuah Yee Keat <ykphuah@gmail.com>
+;; Maintainer: Troy Daniels <udalrich.schermer@gmail.com>
 ;; Created: 20 May 2008
 ;; Keywords: lisp tools
 
@@ -24,13 +24,13 @@
 
 ;;; Commentary:
 
-;; This module try to implement everything documented here:
+;; This module tries to implement everything documented here:
 ;; http://java.sun.com/j2se/1.4.2/docs/guide/jpda/jdi/
 
 ;; Look near the end of the file for customizing how special
 ;; objects (ArrayList, HashMap) are displayed in the locals buffer
 
-;; This module requires elog.el and jdwp.el
+;; This module requires bindat.el, elog.el and jdwp.el
 
 ;;; Code:
 
@@ -52,8 +52,8 @@
 (defstruct jdi-mirror
   virtual-machine)
 
-  ;; list of paths that the source files are in
-  source-paths
+(defstruct jdi-virtual-machine
+  jdwp
 
   description
   jdwp-major
@@ -67,17 +67,13 @@
   (classes (make-hash-table :test 'equal)) ;; hash table where key=class-id value=jdi-class
   classes-by-signature ;; hash table where key=signature value=jdi-class
 
-  ;; the current thread-id that have suspended, will be set after a breakpoint
-  ;; or step event, this is used for the step events that we will send over
   suspended-thread-id
 
-  ;; current frame that we are interesting to see the locals buffer
-  current-frame
-  
-  ;; will have the current jdi-location if the debuggee is suspended, nil otherwise
-  current-location
+  ;; list of jdi-frame that is suspended (by breakpoint/step events)
+  suspended-frames
 
-  thread-groups
+  (objects (make-hash-table :test 'equal)) ;; hash table where key=object-id value=jdi-object
+  )
 
 (defstruct (jdi-reference-type (:include jdi-mirror))
   id
@@ -106,8 +102,8 @@
 (defstruct (jdi-method (:include jdi-mirror))
   id
   name
-  status
-  suspend-status)
+  signature
+  mod-bits
 
   ;; list of jdi-location
   locations
@@ -122,8 +118,6 @@
 (defstruct (jdi-location (:include jdi-mirror))
   ;; this might have to be resolved
   line-number
-  class-id
-  method-id
   line-code-index
   type
 
@@ -135,21 +129,14 @@
   ;; String to be displayed in the frames buffer
   string)
 
-(defstruct jdi-breakpoint-request
-  source-file
-  line-number)
+(defstruct jdi-event-request-manager
+  breakpoint-requests
+  )
 
-(defstruct jdi-breakpoint
-  source-file
-  line-number
-  request-ids)
-
-(defstruct jdi-field
+(defstruct (jdi-event-request (:include jdi-mirror))
   id
-  name
-  signature
-  generic-signature
-  mod-bits)
+  data
+  )
 
 ;; com.sun.jdi.Value
 (defstruct (jdi-value (:include jdi-mirror))
@@ -177,28 +164,20 @@
   system-thread-p-cache
   )
 
-;; as java returns interfaces using all-classes command, this might represent an interface
-(defstruct jdi-class
-  id
-  ;; jni-style
-  signature 
-  ref-type-tag
-  status
-  ;; list of nonstatic jdi-field
-  fields    
-  ;; parent jdi-class
-  super	    
-  ;; list of interfaces implemented by this class
-  interfaces
-  ;; list of jdi-method
-  methods)
+(defstruct (jdi-thread-group (:include jdi-object))
+  name
+  parent
+  child-threads
+  child-groups)
 
-(defstruct jdi-frame
-  id     
-  ;; jdi-location
+(defstruct (jdi-frame (:include jdi-mirror)) ;; this is actually StackFrame in JDI
+  id
+  values
+  thread
   location)
 
-(defstruct jdi-value
+(defstruct (jdi-variable (:include jdi-mirror)) ;; this is actually LocalVariable in JDI
+  code-index
   name
   signature
   length
@@ -223,7 +202,8 @@
 (defconst jdi-access-native        #x0100)
 (defconst jdi-access-abstract      #x0400)
 
-;;; And the functions:
+(defun jdi-mirror-jdwp (mirror)
+  (jdi-virtual-machine-jdwp (jdi-mirror-virtual-machine mirror)))
 
 (defun jdi-event-request-manager-create-breakpoint (erm location)
   (let* ((location-data `((:type .   1)
@@ -365,12 +345,14 @@
 			   (jdi-virtual-machine-classes vm)))
 	found))
 
-(defun jdi-class-dump (class)
-  (format "id=%s\nsignature=%s\nref-type-tag=%s\nstatus=%s\n"
-		  (jdi-class-id class)
-		  (jdi-class-signature class)
-		  (jdi-class-ref-type-tag class)
-		  (jdi-class-status class)))
+(defun jdi-virtual-machine-get-object-create (vm newobj)
+  (jdi-debug "jdi-virtual-machine-get-object-create:%s" (jdi-object-id newobj))
+  (let ((found (gethash (jdi-object-id newobj) (jdi-virtual-machine-objects vm))))
+	(jdi-debug "jdi-virtual-machine-get-object-create:%s" (if found "found" "not found"))
+	(unless found
+	  (setf (jdi-mirror-virtual-machine newobj) vm)
+	  (puthash (jdi-object-id newobj) (setq found newobj) (jdi-virtual-machine-objects vm)))
+	found))
 
 (defun jdi-thread-get-name (thread)
   (jdi-debug "jdi-thread-get-name")
@@ -491,8 +473,8 @@
   (multiple-value-bind (child-threads child-groups) (jdi-thread-group-get-children thread-group)
 	child-groups))
 
-(defun jdi-handle-thread-start (jdwp event)
-  (jdi-info "jdi-handle-thread-start"))
+(defun jdi-virtual-machine-disconnect (vm)
+  (jdwp-disconnect (jdi-virtual-machine-jdwp vm)))
 
 (defun jdi-virtual-machine-exit (vm exit-code)
   (jdwp-exit (jdi-virtual-machine-jdwp vm) `((:exit-code . ,exit-code))))
@@ -603,78 +585,12 @@
 (defun jdi-virtual-machine-has-generic-p (vm)
   (>= (jdi-virtual-machine-jdwp-minor vm) 5))
 
-(defun jdi-clear-breakpoint (jdi source-file line-number)
-  (jdi-trace "jdi-clear-breakpoint, total number of breakpoints:%d" (length (jdi-breakpoints jdi)))
-  (let* ((breakpoints
-		  (loop for bp in (jdi-breakpoints jdi)
-				if (and (equal (jdi-breakpoint-source-file bp) source-file)
-						(equal (jdi-breakpoint-line-number bp) line-number))
-				collect bp))
-		 (request-ids
-		  (loop for bp in breakpoints
-				append (jdi-breakpoint-request-ids bp))))
-    (if breakpoints
-		(progn
-		  (jdi-trace "jdi-clear-breakpoint, found number of breakpoints:%d, number of request-ids:%d" (length breakpoints) (length request-ids))
-		  (mapc (lambda (request-id)
-				  (jdwp-clear-breakpoint (jdi-jdwp jdi) request-id))
-				request-ids)
-		  (mapc (lambda (bp)
-				  (setf (jdi-breakpoints jdi) (delete bp (jdi-breakpoints jdi))))
-				breakpoints))
-      (jdi-error "failed to find breakpoint %s:%s" source-file line-number))))
-
-(defun jdi-source-to-class-signature (jdi source)
-  "Converts a source file to a JNI class name."
-  (let ((buf source))
-    (mapc (lambda (sp)
-			(setf buf (replace-regexp-in-string (expand-file-name sp) "" buf)))
-		  (jdi-source-paths jdi))
-    (setf buf (replace-regexp-in-string "^/" "" buf))
-    (setf buf (replace-regexp-in-string ".java$" "" buf))
-    (setf buf (concat "L" buf ";"))
-    (jdi-trace "jdi-source-to-class-signature : %s -> %s" source buf)
-    buf))
-
-(defun jdi-source-to-class-name (jdi source)
-  "Converts a source file to a a.b.c class name."
-  (let ((buf source))
-    (mapc (lambda (sp)
-			(setf buf (replace-regexp-in-string (expand-file-name sp) "" buf)))
-		  (jdi-source-paths jdi))
-    (setf buf (replace-regexp-in-string "^/" "" buf))
-    (setf buf (replace-regexp-in-string ".java$" "" buf))
-    (setf buf (replace-regexp-in-string "/" "." buf))
-    (jdi-trace "jdi-source-to-class-name : %s -> %s" source buf)
-    buf))
-
-(defun jdi-class-signature-to-source (jdi class-signature)
-  "Converts a JNI class name to source file."
-  (let ((buf class-signature))
-    (setf buf (replace-regexp-in-string "^L" "" buf))
-    (setf buf (replace-regexp-in-string ";$" "" buf))
-    (setf buf (concat buf ".java"))
-    (mapc (lambda (sp)
-			(if (file-exists-p (concat (expand-file-name sp) "/" buf))
-				(setf buf (concat (expand-file-name sp) "/" buf))))
-		  (jdi-source-paths jdi))
-    (jdi-trace "jdi-class-signature-to-source : %s -> %s" class-signature buf)
-    buf))
-
-(defun jdi-class-name-to-class-signature (jdi class-name)
-  "Converts a.b.c class name to JNI class signature."
-  (let ((buf class-name))
-	(setf buf (replace-regexp-in-string "\\." "/" buf))
-	(setf buf (format "L%s;" buf))
-	(jdi-info "jdi-class-name-to-class-signature:%s:%s" class-name buf)
-	buf))
-
-(defun jdi-locations-find-by-line-code-index (method line-code-index)
-  (jdi-trace "jdi-locations-find-by-line-code-index:%s:%s:%d" (jdi-method-name method) line-code-index (length (jdi-method-locations method)))
+(defun jdi-method-location-by-line-code-index (method line-code-index)
+  (jdi-trace "jdi-method-location-by-line-code-index:%s:%s:%s" (jdi-method-name method) line-code-index (length (jdi-method-locations method)))
   (if jdi-trace-flag
       (loop for loc in (jdi-method-locations method)
 			do
-			(jdi-trace "line-code-index:%s line-number:%d" (jdi-location-line-code-index loc) (jdi-location-line-number loc))))
+			(jdi-trace "line-code-index:%s line-number:%s" (jdi-location-line-code-index loc) (jdi-location-line-number loc))))
   (let ((result))
     (loop for loc in (jdi-method-locations method)
 		  while (>= (jdwp-vec-to-int line-code-index)
@@ -683,7 +599,7 @@
     (if (null result)
 		(setq result (car (last (jdi-method-locations method)))))
     (if result
-		(jdi-trace "found at line-number:%d" (jdi-location-line-number result)))
+		(jdi-trace "found at line-number:%s" (jdi-location-line-number result)))
     result))
 
 (defun jdi-class-get-locations-of-line (class line-number)
@@ -695,8 +611,15 @@
 			(push location result))))
 	result))
 
-(defun jdi-field-mod-bits-string (field)
-  (jdi-access-string (jdi-field-mod-bits field)))
+(defun jdi-class-find-location (class method-id line-code-index)
+  (jdi-debug "jdi-class-find-location:number of methods=%s" (length (jdi-class-methods class)))
+  (let* ((method (find-if (lambda (method)
+							(equal (jdi-method-id method) method-id))
+						  (jdi-class-methods class)))
+		 (location (if method (jdi-method-location-by-line-code-index method line-code-index))))
+    (if location
+		location
+	  (jdi-error "failed to look line-code-index %s in class %s" line-code-index (jdi-class-name class)))))
 
 (defun jdi-location-get-line-number (location)
   (jdi-debug "jdi-location-get-line-number:wanted-line-code-index=%s" (jdi-location-line-code-index location))
@@ -783,8 +706,8 @@
 	(jdi-event-request-enable er)
 	(jdi-thread-resume thread)))
 
-(defun jdi-value-sigbyte (value)
-  (string-to-char (jdi-value-signature value)))
+(defun jdi-variable-sigbyte (variable)
+  (string-to-char (jdi-variable-signature variable)))
 
 (defun jdi-method-get-variables (method)
   (jdi-debug "jdi-method-get-variables")
@@ -1031,39 +954,11 @@ http://java.sun.com/j2se/1.5.0/docs/guide/jni/spec/types.html#wp428"
 	   (and (jdi-object-p value)
 			(not (equal (jdi-object-id value) [0 0 0 0 0 0 0 0])))))
 
-;; (defun jdi-resolve-thread-group (jdi thread-group)
-;;   (=progn (jdi thread-group)
-;; 		  (=bind (jdwp id status reply) (thread-group) (jdwp-send-command (jdi-jdwp jdi) "thread-group-name" `((:group . ,(jdi-thread-group-id thread-group))))
-;; 				 (jdi-trace "name of thread group:%s" (jdwp-get-string reply :group-name))
-;; 				 (setf (jdi-thread-group-name thread-group) (jdwp-get-string reply :group-name)))
-;; 		  (=bind (jdwp id status reply) (jdi thread-group) (jdwp-send-command (jdi-jdwp jdi) "thread-group-children" `((:group . ,(jdi-thread-group-id thread-group))))
-;; 				 (=progn (jdi thread-group reply)
-;; 						 (jdi-trace "number of child-group:%d:%s" (bindat-get-field reply :child-groups) (bindat-get-field reply :child-group))
-;; 						 (jdi-trace "number of child-thread:%d:%s" (bindat-get-field reply :child-threads) (bindat-get-field reply :child-thread))
-;; 						 (=dolist (child-thread (bindat-get-field reply :child-thread)) (jdi thread-group)
-;; 								  (lexical-let ((jdi-child-thread (make-jdi-thread :id (bindat-get-field child-thread :child-thread))))
-;; 									(push jdi-child-thread (jdi-thread-group-threads thread-group))
-;; 									(=progn (jdi jdi-child-thread child-thread)
-;; 											(=bind (jdwp id status reply) (jdi-child-thread) (jdwp-send-command (jdi-jdwp jdi) "thread-name" `((:thread . ,(bindat-get-field child-thread :child-thread))))
-;; 												   (setf (jdi-thread-name jdi-child-thread) (jdwp-get-string reply :thread-name)))
-;; 											(=bind (jdwp id status reply) (jdi-child-thread) (jdwp-send-command (jdi-jdwp jdi) "thread-status" `((:thread . ,(bindat-get-field child-thread :child-thread))))
-;; 												   (setf (jdi-thread-status jdi-child-thread) (bindat-get-field reply :thread-status))
-;; 												   (setf (jdi-thread-suspend-status jdi-child-thread) (bindat-get-field reply :suspend-status))))))
-;; 						 (=dolist (child-group (bindat-get-field reply :child-group)) (jdi thread-group)
-;; 								  (let ((new-thread-group (make-jdi-thread-group :id (bindat-get-field child-group :child-group))))	  
-;; 									(push new-thread-group (jdi-thread-group-thread-groups thread-group))								
-;; 									(jdi-resolve-thread-group jdi new-thread-group)))))))
-        
+(defun jdi-field-static-p (field)
+  (not (equal (logand (jdi-field-mod-bits field) jdi-access-static) 0)))
 
-;; (defun jdi-get-top-level-thread-groups (jdi)
-;;   (=progn (jdi)
-;; 		  (setf (jdi-thread-groups jdi) nil)
-;; 		  (=bind (jdwp id status reply) (jdi) (jdwp-send-command (jdi-jdwp jdi) "top-level-thread-groups" nil)
-;; 				 (jdi-trace "number of top level groups:%d" (bindat-get-field reply :groups))
-;; 				 (=dolist (group (bindat-get-field reply :group)) (jdi)
-;; 						  (let ((top-level-thread-group (make-jdi-thread-group :id (bindat-get-field group :id))))
-;; 							(push top-level-thread-group (jdi-thread-groups jdi))
-;; 							(jdi-resolve-thread-group jdi top-level-thread-group))))))
+(defun jdi-field-final-p (field)
+  (not (equal (logand (jdi-field-mod-bits field) jdi-access-final) 0)))
 
 (defun jdi-remove-duplicated (fields)
   "Return a list of jdi-fields, without duplicated names, the first field is kept."
@@ -1189,22 +1084,26 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
   (jdi-debug "jdi-class-get-all-interfaces")
   (jdi-mappend 'jdi-class-get-interfaces (cons class (jdi-class-get-all-super class))))
 
-(defun jdi-send-step (jdi depth)
-  (let ((tid (jdi-suspended-thread-id jdi)))
-    (setf (jdi-suspended-thread-id jdi) nil)
-    (setf (jdi-current-location jdi) nil)
-    (setf (jdi-frames jdi) nil)
-    (setf (jdi-locals jdi) nil)
-	(jdwp-send-step (jdi-jdwp jdi) depth tid)
-	(jdwp-send-command (jdi-jdwp jdi) "resume" nil)))
+(defun jdi-access-string (bits)
+  (let ((str)
+		(map `((,jdi-access-public       . "[public]")
+			   (,jdi-access-private      . "[private]")
+			   (,jdi-access-protected    . "[protected]")
+			   (,jdi-access-static       . "[static]")
+			   (,jdi-access-final        . "[final]")
+			   (,jdi-access-synchronized . "[final]")
+			   (,jdi-access-volatile     . "[volatile]")
+			   (,jdi-access-transient    . "[transient]")
+			   (,jdi-access-native       . "[native]")
+			   (,jdi-access-abstract     . "[abstract]"))))
+    (mapc (lambda (m)
+			(if (not (equal (logand bits (car m)) 0))
+				(setq str (concat str (cdr m)))))
+		  map)
+    str))
 
-(defun jdi-resume (jdi)
-  (jdi-info "jdi-resume")
-  (setf (jdi-suspended-thread-id jdi) nil)
-  (setf (jdi-current-location jdi) nil)
-  (setf (jdi-frames jdi) nil)
-  (setf (jdi-locals jdi) nil)
-  (jdwp-send-command (jdi-jdwp jdi) "resume" nil))
+(defun jdi-field-mod-bits-string (field)
+  (jdi-access-string (jdi-field-mod-bits field)))
 
 (defun jdi-reference-type-get-fields (reference-type)
   "Get all the fields in this reference-type only."
@@ -1274,8 +1173,7 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 								:location location)))
 
 	(setf (jdi-thread-running-p thread) nil)
-(defvar jdi-value-custom-expanders nil
-  "a list of (instance expander-func) where
+	(setf (jdi-virtual-machine-suspended-frames vm) (nreverse (cons frame (jdi-virtual-machine-suspended-frames vm))))
 
 	(setf (jdi-virtual-machine-suspended-thread-id vm) (bindat-get-field event :u :thread))
 	(run-hook-with-args 'jdi-breakpoint-hooks thread location)))
@@ -1305,13 +1203,8 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 
 	(setf (jdi-virtual-machine-suspended-frames vm) (nreverse (cons frame (jdi-virtual-machine-suspended-frames vm))))
 
-(defun jdi-value-custom-set-strings-find (jdi value)
-  (let ((element (find-if (lambda (custom)
-							(jdi-value-instance-of-p jdi value (jdi-class-name-to-class-signature jdi (car custom))))
-						  jdi-value-custom-set-strings)))
-    (jdi-trace "jdi-value-custom-set-strings-find value:%s class:%s found:%s" value (jdi-value-class value) element)
-    (if element
-		(cadr element))))
+	(setf (jdi-virtual-machine-suspended-thread-id vm) (bindat-get-field event :u :thread))
+	(run-hook-with-args 'jdi-step-hooks thread location)))
 
 (defun jdi-handle-class-prepare-event (jdwp event)
   (jdi-debug "jdi-handle-class-prepare-event")
@@ -1402,28 +1295,15 @@ This handles the event later, once we are connected."
   (jdi-debug "jdi-object-instance-of-p:signature=%s" signature)
   (jdi-class-instance-of-p (jdi-object-get-reference-type object) signature))
 
-	(multiple-value-bind (reply error jdwp id)
-		(jdi-value-invoke-method jdi value "values")
-	  (setf values-value (make-jdi-value :value 
-										 (bindat-get-field reply :return-value :u :value))))
+(defun jdi-value-extract-generic-class-name (generic-signature)
+  (string-match "<L.*/\\(.*\\);>" generic-signature)
+  (match-string 1 generic-signature))
 
-	(setf (jdi-value-class values-value) (car (jdi-classes-find-by-signature jdi "Ljava/util/Collection;")))
-	(jdi-trace "values-value:%s" values-value)
-	(multiple-value-bind (reply error jdwp id)
-		(jdi-value-invoke-method jdi values-value "toArray")
-	  (let ((values-array (bindat-get-field reply :return-value :u :value)))
-		(setf (jdi-value-name values-value) "value")
-		(setf (jdi-value-array-length values-value) (jdi-value-array-length value))
-		(setf (jdi-value-value values-value) values-array)
-		(jdi-value-get-array-values jdi values-value))
+(defun jdi-method-native-p (method)
+  (not (equal (logand (jdi-method-mod-bits method) jdi-access-native) 0)))
 
-	  (setf (jdi-value-values value)
-			(loop for key in (jdi-value-values keyset-value)
-				  for value in (jdi-value-values values-value)
-				  append (list key value)))
-	  (jdi-trace "keys=%d, values=%d" 
-				 (length (jdi-value-values keyset-value))
-				 (length (jdi-value-values values-value))))))
+(defun jdi-method-static-p (method)
+  (not (equal (logand (jdi-method-mod-bits method) jdi-access-static) 0)))
 
 (defun jdi-class-invoke-method (class thread method arguments options)
   "Invoke the static method on the class on the thread, if method is a string, it will pick the first method that matches the method-name."

@@ -561,21 +561,22 @@ And position the point at the line number."
 		,display))))
 
 (defun jdibug-expand-methods (tree)
-  (let ((value (widget-get tree :jdi-value)))
-	(let ((class (jdi-value-get-reference-type value)))
-	  (let ((methods (jdi-class-get-all-methods class)))
-		(mapcar (lambda (method)
-				  (jdibug-make-method-node value method))
-				(sort (remove-duplicates methods
-										 :test (lambda (obj1 obj2)
-												 (and (equal (jdi-method-name obj1)
-															 (jdi-method-name obj2))
-													  (equal (jdi-method-signature obj1)
-															 (jdi-method-signature obj2))))
-										 :from-end t)
-					  (lambda (obj1 obj2)
-						(string< (jdi-method-name obj1)
-								 (jdi-method-name obj2)))))))))
+  (jdwp-uninterruptibly
+	(let ((value (widget-get tree :jdi-value)))
+	  (let ((class (jdi-value-get-reference-type value)))
+		(let ((methods (jdi-class-get-all-methods class)))
+		  (mapcar (lambda (method)
+					(jdibug-make-method-node value method))
+				  (sort (remove-duplicates methods
+										   :test (lambda (obj1 obj2)
+												   (and (equal (jdi-method-name obj1)
+															   (jdi-method-name obj2))
+														(equal (jdi-method-signature obj1)
+															   (jdi-method-signature obj2))))
+										   :from-end t)
+						(lambda (obj1 obj2)
+						  (string< (jdi-method-name obj1)
+								   (jdi-method-name obj2))))))))))
 
 (defun jdibug-make-methods-node (value)
   `(tree-widget
