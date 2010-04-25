@@ -4,6 +4,7 @@
 	"jdwp"
     "jdi"
     "jdibug-ui"
+    "jdibug-expr"
 	"jdibug-menu"))
 
 

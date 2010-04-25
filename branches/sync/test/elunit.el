@@ -69,6 +69,9 @@
 ;; mode-unit.el (http://www.emacswiki.org/cgi-bin/wiki/ModeUnit)
 ;; useful as it is designed to help test whole Emacs modes.
 
+;; This version has been modified to support jdibug.
+
+
 ;; TODO:
 
 ;; - improve readability of failure reports
@@ -303,6 +306,25 @@ Takes the same ARGS as `error'."
   `(assert-equal (eval ,form)
                      (progn ,@body
                        (eval ,form))))
+
+
+(defun elunit-report (test-count failure-count)
+  (switch-to-buffer "*elunit report*")
+  (goto-char (point-max))
+  (insert (format "Suite: %s\n" elunit-default-suite))
+  (insert (format "Total tests run: %d   Total failures: %d"
+				  test-count failure-count))
+  (newline)
+  (mapc (lambda (test)
+		  (insert (format "  Test %20s %20s:%-5d \n"
+						  (test-name test)
+						  (test-file test)
+						  (test-line test)))
+		  (insert (format "     %s\n" (test-message test)))
+		  (insert (format "     %s\n" (test-problem test))))
+		  elunit-failures))
+(when (not noninteractive)
+  (add-hook 'elunit-done-running-hook 'elunit-report))
 
 (provide 'elunit)
 ;;; elunit.el ends here

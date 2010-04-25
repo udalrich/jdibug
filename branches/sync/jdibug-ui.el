@@ -94,7 +94,12 @@ jdibug-source-paths will be ignored if this is set to t."
   :group 'jdibug
   :type 'string)
 
-(defcustom jdibug-break-on-class-regexp "^public class"
+(defcustom jdibug-watchpoints-buffer-name "*JDIbug-Watchpoints*"
+  "Name of the buffer to display the list of watchpoints."
+  :group 'jdibug
+  :type 'string)
+
+(defcustom jdibug-break-on-class-regexp "^public\\s-+class"
   "The regexp that will be used to identify whether you want to break on all the methods in the class."
   :group 'jdibug
   :type 'string)
@@ -145,7 +150,13 @@ When the user resume, we will switch to this thread and location.")
 
 (defvar jdibug-breakpoints-buffer nil)
 
+(defvar jdibug-watchpoints nil
+  "List of watchpoints")
+
 (defvar jdibug-locals-buffer nil
+  "buffer the shows a tree of the local variables")
+
+(defvar jdibug-watchpoints-buffer nil
   "buffer the shows a tree of the local variables")
 
 (defvar jdibug-locals-tree nil
@@ -157,6 +168,7 @@ When the user resume, we will switch to this thread and location.")
 (defvar jdibug-refresh-threads-buffer-timer nil)
 (defvar jdibug-refresh-frames-buffer-timer nil)
 (defvar jdibug-refresh-locals-buffer-timer nil)
+(defvar jdibug-refresh-watchpoints-buffer-timer nil)
 
 (defvar jdibug-breakpoints-mode-map nil
   "Local keymap for breakpoints buffer.")
@@ -212,6 +224,13 @@ to populate the jdi-value-values of the jdi-value.")
   event-requests
 )
 
+(defstruct jdibug-watchpoint
+  ;; Basic expression to evaluate
+  expression
+
+  ;; Parsed form of the expression
+  parse)
+
 (defun jdibug-breakpoint-short-source-file (bp)
   (let ((buf (jdibug-breakpoint-source-file bp)))
 	(setf buf (replace-regexp-in-string ".*/" "" buf))
@@ -251,6 +270,7 @@ to populate the jdi-value-values of the jdi-value.")
 
 	  (setq jdibug-threads-buffer     (get-buffer-create jdibug-threads-buffer-name)
 			jdibug-locals-buffer      (get-buffer-create jdibug-locals-buffer-name)
+			jdibug-watchpoints-buffer (get-buffer-create jdibug-watchpoints-buffer-name)
 			jdibug-frames-buffer      (get-buffer-create jdibug-frames-buffer-name)
 			jdibug-breakpoints-buffer (get-buffer-create jdibug-breakpoints-buffer-name)
 
@@ -318,6 +338,9 @@ to populate the jdi-value-values of the jdi-value.")
 	(and (timerp jdibug-refresh-locals-buffer-timer)
 		 (cancel-timer jdibug-refresh-locals-buffer-timer))
 
+	(and (timerp jdibug-refresh-watchpoints-buffer-timer)
+		 (cancel-timer jdibug-refresh-watchpoints-buffer-timer))
+
 	(and (timerp jdibug-refresh-frames-buffer-timer)
 		 (cancel-timer jdibug-refresh-frames-buffer-timer))
 
@@ -325,6 +348,7 @@ to populate the jdi-value-values of the jdi-value.")
 		 (cancel-timer jdibug-refresh-threads-buffer-timer))
 
 	(kill-buffer jdibug-locals-buffer)
+	(kill-buffer jdibug-watchpoints-buffer)
 	(kill-buffer jdibug-frames-buffer)
 	(kill-buffer jdibug-threads-buffer)
 
@@ -336,6 +360,8 @@ to populate the jdi-value-values of the jdi-value.")
 
 		  jdibug-threads-buffer nil
 		  jdibug-threads-tree   nil
+
+		  jdibug-watchpoints-buffer nil
 
 		  jdibug-active-thread  nil
 		  jdibug-active-frame   nil))
@@ -427,6 +453,7 @@ And position the point at the line number."
 		(jdibug-goto-location location)
 		(setq jdibug-active-frame (car (jdi-thread-get-frames thread)))
 		(jdibug-refresh-locals-buffer)
+		(jdibug-refresh-watchpoints-buffer)
 ;; 	(jdibug-debug "setting jdibug-active-thread to %s in jdibug-handle-breakpoint"
 ;; 			   thread)
 
@@ -453,13 +480,15 @@ And position the point at the line number."
 
   (unless jdibug-active-frame
 	(setq jdibug-active-frame (car (jdi-thread-get-frames jdibug-active-thread)))
-	(jdibug-refresh-locals-buffer)))
+	(jdibug-refresh-locals-buffer)
+	(jdibug-refresh-watchpoints-buffer)))
 
 (defun jdibug-handle-change-frame (frame)
   (jdibug-debug "jdibug-handle-change-frame")
 
   (jdibug-goto-location (jdi-frame-location frame))
   (jdibug-refresh-frames-buffer)
+  (jdibug-refresh-watchpoints-buffer)
   (jdibug-refresh-locals-buffer))
 
 (defun jdibug-handle-class-prepare (class thread)
@@ -730,41 +759,74 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		(jdibug-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-locals-buffer-now)))
 
 (defun jdibug-refresh-locals-buffer-now ()
-  (when (or (jdwp-accepting-process-output-p)
+  (jdibug-refresh-buffer-now jdibug-locals-buffer #'jdibug-refresh-locals-buffer
+	(let* ((jdwp-ignore-error (list jdwp-error-absent-information))
+		   (variables (sort (copy-sequence (jdi-frame-get-visible-variables jdibug-active-frame)) 'jdibug-variable-sorter)))
+	  (if (null variables)
+		  (insert "No debug information available")
+		(let* ((values (jdi-frame-get-values jdibug-active-frame variables))
+			   (tree (jdibug-make-locals-tree variables values)))
+		  (jdibug-debug "values.size=" (length values))
+		  (setq jdibug-locals-tree (tree-mode-insert tree))
+		  (widget-put jdibug-locals-tree :jdibug-opened-path (tree-mode-opened-tree jdibug-locals-tree))
+		  (jdi-info "current opened tree path:%s" (tree-mode-opened-tree jdibug-locals-tree))
+		  (local-set-key "s" 'jdibug-node-tostring)
+		  (local-set-key "c" 'jdibug-node-classname)
+		  (message "Locals updated")
+		  (jdibug-debug "jdwp-uninterruptibly-running-p=%s" jdwp-uninterruptibly-running-p)
+		  (jdibug-debug "jdwp-uninterruptibly-waiting=%s" jdwp-uninterruptibly-waiting)
+		  (jdibug-debug "jdibug-refresh-locals-buffer-timer=%s" jdibug-refresh-locals-buffer-timer)
+		  )))))
+
+(defun jdibug-refresh-watchpoints-buffer ()
+  (if (timerp jdibug-refresh-watchpoints-buffer-timer)
+	  (cancel-timer jdibug-refresh-watchpoints-buffer-timer))
+  (setq jdibug-refresh-watchpoints-buffer-timer
+		(jdibug-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-watchpoints-buffer-now)))
+
+(defun jdibug-refresh-watchpoints-buffer-now ()
+  (jdibug-refresh-buffer-now jdibug-watchpoints-buffer #'jdibug-refresh-watchpoints-buffer
+	(let* ((jdwp-ignore-error (list jdwp-error-absent-information))
+		   (watchpoint-alist (jdibug-evaluate-watchpoints jdibug-active-frame)))
+	  (mapc jdibug-refresh-watchpoints-1 watchpoint-alist))))
+
+(defun jdibug-evaluate-watchpoints (frame)
+  "Evaluate all of the currently defined watch points, using
+FRAME as the stack frame for defining the values.  Returns a list
+of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
+  (mapcar (lambda watchpoint
+			(let* ((parse (jdibug-watchpoint-parse watchpoint))
+				   (jdwp (jdi-virtual-machine-jdwp (jdi-frame-virtual-machine frame)))
+				   (object (jdibug-expr-eval-expr jdwp parse)))
+			  (cons (jdibug-watchpoint-expression object))))
+		  (jdibug-watchpoints)))
+
+
+(defun jdibug-refresh-watchpoints-1 (pair)
+  "Display the value of a watchpoint in the current buffer.  PAIR must be a cons of the form (expression . value)"
+  (let ((expression (car pair))
+		(value (cdr pair)))
+	;; TODO: do we want to color the text?
+	(insert (format "%20s%s\n") expression value)))
+
+(defmacro jdibug-refresh-buffer-now (buffer retry-func &rest body)
+  "Standard boilerplate for updating BUFFER"
+  (declare (indent 2))
+  `(when (or (jdwp-accepting-process-output-p)
 			jdwp-uninterruptibly-running-p
 			jdwp-sending-command
 			(null (catch 'jdwp-input-pending
 					(jdwp-uninterruptibly
 					  (let ((jdwp-throw-on-input-pending t))
-						(with-current-buffer jdibug-locals-buffer
+						(with-current-buffer ,buffer
 						  (let ((inhibit-read-only t))
 							(erase-buffer))
 
-						  (jdibug-debug "jdibug-refresh-locals-buffer-now:active-thread=%s active-frame=%s"
-										(if jdibug-active-thread "yes" "no")
-										(if jdibug-active-frame "yes" "no"))
 						  (if (null jdibug-active-thread)
 							  (insert "Not suspended")
-
-							(let* ((jdwp-ignore-error (list jdwp-error-absent-information))
-								   (variables (sort (copy-sequence (jdi-frame-get-visible-variables jdibug-active-frame)) 'jdibug-variable-sorter)))
-							  (if (null variables)
-								  (insert "No debug information available")
-								(let* ((values (jdi-frame-get-values jdibug-active-frame variables))
-									  (tree (jdibug-make-locals-tree variables values)))
-								  (jdibug-debug "values.size=" (length values))
-								  (setq jdibug-locals-tree (tree-mode-insert tree))
-								  (widget-put jdibug-locals-tree :jdibug-opened-path (tree-mode-opened-tree jdibug-locals-tree))
-								  (jdi-info "current opened tree path:%s" (tree-mode-opened-tree jdibug-locals-tree))
-								  (local-set-key "s" 'jdibug-node-tostring)
-								  (local-set-key "c" 'jdibug-node-classname)
-								  (message "Locals updated")
-								  (jdibug-debug "jdwp-uninterruptibly-running-p=%s" jdwp-uninterruptibly-running-p)
-								  (jdibug-debug "jdwp-uninterruptibly-waiting=%s" jdwp-uninterruptibly-waiting)
-								  (jdibug-debug "jdibug-refresh-locals-buffer-timer=%s" jdibug-refresh-locals-buffer-timer)
-								  )))))))
+							,@body))))
 					  t)))
-	(jdibug-refresh-locals-buffer)))
+	(,retry-func)))
 
 (defun jdibug-frame-notify (button &rest ignore)
   (jdibug-debug "jdibug-frame-notify")
@@ -1761,4 +1823,18 @@ printed."
 	(jdibug-info "%s" result)
 	(message "%s" result)))
 
+
+(defun jdibug-add-watchpoint (expression)
+  "Create a watchpoint of EXPRESSION.  It's value will be displayed in the `jdibug-watchpoints-buffer' whenever the JVM is suspended."
+  (interactive "sExpression to watch: ")
+  (let ((parse (jdibug-expr-parse-expr expression)))
+	(cond
+	 ((semantic-tag-p parse)
+	  (push (make-jdibug-watchpoint expression parse)
+			jdibug-watchpoints)
+	  (jdibug-refresh-watchpoints-buffer-now))
+	 (stringp parse
+	  (jdibug-error "Unable to parse %s because %s"
+					expression parse))
+	 (t (error "Unknown return from jdibug-expr-parse-expr: %s" parse)))))
 (provide 'jdibug-ui)

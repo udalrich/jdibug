@@ -35,6 +35,7 @@
 (require 'jdibug-java-expr-wy)
 (require 'eieio)
 (require 'elog)
+(require 'semantic-java)
 
 (elog-make-logger jdibug-expr)
 
@@ -54,6 +55,13 @@
 		(name (semantic-tag-name tree)))
 	(and (eq class (oref this class))
 		 (eq name (oref this name)))))
+
+(defmethod jdibug-eval-rule-accept ((this jdibug-eval-rule) jdwp tree)
+  "Use this rule to evaluate TREE in the context of the JDWP.  This should only be called if `jdibug-eval-rule-match' has passed with THIS and TREE.
+
+Subclasses must override this method."
+  (error "jdibug-eval-rule-accept was not overriden in %s"
+		 (object-class-name this)))
 
 (defclass jdibug-eval-rule-dot (jdibug-eval-rule)
   ;; fields

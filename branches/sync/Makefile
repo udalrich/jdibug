@@ -34,6 +34,7 @@ build: init
 #	$(EMACS22) $(BUILD)
 #	$(EMACS23) $(BUILD)
 	emacs $(EMACS_ARGS) -f semantic-grammar-batch-build-packages .
+	cp *.wy *wy.el{,c} $(BUILD_DIST)
 	emacs $(BUILD)
 
 .PHONY: test

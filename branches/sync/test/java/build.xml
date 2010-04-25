@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<project name="jdibug-test" default="build">
+  <target name="-init" >
+	 <property name="src" location="./src" />
+	 <property name="classes" location="./classes" />
+  </target>
+
+  <target name="create-dirs" depends="-init"
+			 description="Create any needed directories">
+	 <mkdir dir="${classes}" />
+  </target>
+
+  <target name="build" depends="create-dirs"
+			 description="Compile the code">
+	 <javac srcdir="${src}" destdir="${classes}" debug="true" includeantruntime="no" />
+  </target>
+
+  <target name="run" depends="build"
+			 description="Run the main class">
+	 <java classname="com.jdibug.Main" classpath="${classes}" />
+  </target>
+</project>

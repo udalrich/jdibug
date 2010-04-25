@@ -3,6 +3,7 @@
 (require 'tree-mode)
 (require 'jdwp)
 (require 'jdi)
+(require 'jdibug-expr)
 (require 'jdibug-ui)
 (require 'jdibug-menu)
 
