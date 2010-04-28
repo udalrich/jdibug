@@ -5,7 +5,6 @@
 ;; 			(eval-current-buffer)
 ;; 			(elunit "uninterrupt-suite"))
 ;; 		  nil 'local)
-
 (require 'elunit)
 (require 'jdwp)
 
@@ -50,7 +49,6 @@
 
 	(assert-equal "123((:u (:foo bar)))789" string)))
 
-
 (deftest interrupt-scope-backquote uninterrupt-suite
   "See what happens when variables go out of scope.
 Extra (sadly) becomes undefined and causes an error with normal
@@ -88,8 +86,6 @@ nice to change that, but I'm not sure how."
 	   (jdwp-uninterruptibly
 		 (setq string (concat string extra))))
 	 (setq string (concat string "789"))))))
-
-
 
 (eval-when (eval) (elunit "uninterrupt-suite"))
 

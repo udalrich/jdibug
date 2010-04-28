@@ -77,6 +77,11 @@
 ;;; Code:
 
 (require 'cl)
+(require 'custom)
+
+(defvar elunit-verbose nil
+  "Should elunit be verbose when running tests?")
+
 
 (defstruct test-suite name children tests setup-hooks teardown-hooks)
 (defstruct test name body file line problem message)
@@ -176,6 +181,7 @@
 
 (defun elunit-run-suite (suite)
   "Run a SUITE's tests and children."
+  (when elunit-verbose (message "Running suite %s" (test-suite-name suite)))
   (setq elunit-default-suite (symbol-name (test-suite-name suite))
         elunit-test-count 0
         elunit-failures nil)
@@ -193,6 +199,7 @@
 
 (defun elunit-run-test (test)
   "Run a single `TEST'."
+  (when elunit-verbose (message "Running test %s" (test-name test)))
   (condition-case err
       (progn
         (incf elunit-test-count)
@@ -213,11 +220,13 @@
 (defun elunit-highlight-test (test face)
   (save-window-excursion
     (save-excursion
-      (find-file (test-file test))
-      (goto-line (test-line test))
-      (let ((line-start (point)))
-        (end-of-line)
-        (overlay-put (make-overlay line-start (point)) 'face face)))))
+	  (let ((file (test-file test)))
+		(when file
+		  (find-file file)
+		  (goto-line (test-line test))
+		  (let ((line-start (point)))
+			(end-of-line)
+			(overlay-put (make-overlay line-start (point)) 'face face)))))))
 
 (defun elunit-explain-problem ()
   "Display a message explaining the problem with the test at point."

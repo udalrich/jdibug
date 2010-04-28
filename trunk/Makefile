@@ -1,4 +1,6 @@
-VERSION=0.3
+MAJOR_VERSION=0
+MINOR_VERSION=3
+VERSION=$(MAJOR_VERSION).$(MINOR_VERSION)
 
 #BUILD_DIR=$(PWD)/build
 BUILD_DIR=./build
@@ -54,10 +56,13 @@ init:
 	@echo "(add-to-list 'load-path "'"'$(CEDET_DIR)/semantic'")' >> $(EL_INIT)
 	@echo "(require 'semantic)" >> $(EL_INIT)
 	@echo "(setq wisent-verbose-flag t)" >> $(EL_INIT)
+	@echo '(defconst jdibug-release-major-version "'$(MAJOR_VERSION)'")' >> $(EL_INIT)
+	@echo '(defconst jdibug-release-minor-version "'$(MINOR_VERSION)'")' >> $(EL_INIT)
 	@echo ";; EOF" >> $(EL_INIT)
 
 	@echo "(add-to-list 'load-path " '"'$(TEST_DIR)'")' > $(EL_TEST_INIT)
 	@echo "(add-to-list 'load-path " '"'$(BUILD_DIST)'")' >> $(EL_TEST_INIT)
+	@echo "(setq elunit-verbose t)" >> $(EL_TEST_INIT)
 	@echo ";; EOF" >> $(EL_TEST_INIT)
 # EOF
 
