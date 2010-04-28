@@ -1,0 +1,67 @@
+* JDIbug News                  -*- outline -*-
+
+* 0.3 (Current)
+
+** Supports multi dimensional array
+Now supports displaying/expanding of multi dimensional array.
+
+** Supports generics
+Now the locals browser supports displaying generics as
+ArrayList<String>. I do not understand why Eclipse is displaying it
+as ArrayList<E>!
+
+** Supports connecting to multiple debuggee
+Now JDIbug can connect to multiple debuggee on different host:port.
+The configuration parameter jdibug-connect-host and jdibug-connect-port
+have been merged into a jdibug-connect-hosts which should be set
+to a list, containing strings of "host:port". You can then set
+breakpoints in any of the files in any of the debuggee.
+
+** Supports switching active thread
+Clicking on a thread in the frames display makes that thread active
+for future commands like step and resume.
+
+** Menu of commands
+A menu of the commonly used commands has been added.
+
+* 0.2 (2009-05-07)
+
+** Supports relative paths in jde-source-paths
+Thanks to Len Trigg <len@netvalue.net.nz>
+
+** Class that contains attributes pointing back to itself
+If an attribute in a class contain a reference to itself, now the node
+will just display as "this" and it will not be expandable, this is to
+prevent confusion to the user because the attribute will be infinitely
+expandable.
+
+** Class loaded by multiple class loaders
+Previously, if a class is loaded by that once by different class
+loaders, setting breakpoint on the class might not work
+properly. Fixed it.
+
+** Invoking methods
+When an object is expanded, there will be a pseudo node named
+"methods" at the end of the list. Expanding the node will invoke the
+method on the object. Only methods which do not need arguments can be
+invoked.
+
+** Break on all methods within a class
+Now you can break on all the methods a class by positioning the cursor
+on the first line in the class (usually "^public class...") and
+calling jdibug-toggle-breakpoint or C-c C-c C-b. Multiple breakpoints
+will be installed for the first line of every method in the
+class. Note that the pseudo method <init> will also be breakpoint-ed.
+
+** Setting breakpoint before debuggee is connected
+You can now set the breakpoints before connecting to the debuggee.
+
+** Fixed bug where expanding HttpServletRequest causes JBOSS to crash
+As reported by Lei Wang <tendant@gmail.com>, when expanding
+HttpServletRequest under JBOSS, it causes JBOSS to crash, the reason
+being that there are several toString methods within the Integer
+object, and we were invoking the wrong one. The fix makes sure we only
+invoke those methods that takes no argument and returns a string.
+
+* 0.1 (2008-11-04)
+Initial Release
