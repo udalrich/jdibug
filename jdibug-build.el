@@ -37,7 +37,7 @@
 	(goto-char (point-min))
 	(while (search-forward "@minor-version@" nil t)
 	  (replace-match jdibug-release-minor-version)))
-  (let ((out-file (concat jdibug-build-directory "/jdibug.el")))
+  (let ((out-file (expand-file-name "jdibug.el" jdibug-build-directory )))
 	(write-file out-file)
 	(byte-compile-file out-file))
 
