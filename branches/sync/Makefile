@@ -1,4 +1,6 @@
-VERSION=0.3
+MAJOR_VERSION=0
+MINOR_VERSION=3
+VERSION=$(MAJOR_VERSION).$(MINOR_VERSION)
 
 #BUILD_DIR=$(PWD)/build
 BUILD_DIR=./build
@@ -10,8 +12,8 @@ EMACS22=d:/emacs-22.3/bin/emacs.exe
 EMACS23=d:/emacs-23.1/bin/emacs.exe
 EMACS_ARGS=-batch -q --no-site-file  -l $(EL_INIT)
 
-#CEDET_DIR=c:/Program Files/emacs-22.3/site-lisp/cedet-1.0beta3b
-CEDET_DIR=~/cedet-1.0pre7
+CEDET_DIR=c:/Program Files/emacs-22.3/site-lisp/cedet-1.0beta3b
+#CEDET_DIR=~/cedet-1.0pre7
 TEST_DIR = ./test
 
 EL_INIT=$(BUILD_CONFIG)/el_init.el
@@ -55,10 +57,13 @@ init:
 	@echo "(add-to-list 'load-path "'"'$(CEDET_DIR)/semantic'")' >> $(EL_INIT)
 	@echo "(require 'semantic)" >> $(EL_INIT)
 	@echo "(setq wisent-verbose-flag t)" >> $(EL_INIT)
+	@echo '(defconst jdibug-release-major-version "'$(MAJOR_VERSION)'")' >> $(EL_INIT)
+	@echo '(defconst jdibug-release-minor-version "'$(MINOR_VERSION)'")' >> $(EL_INIT)
 	@echo ";; EOF" >> $(EL_INIT)
 
 	@echo "(add-to-list 'load-path " '"'$(TEST_DIR)'")' > $(EL_TEST_INIT)
 	@echo "(add-to-list 'load-path " '"'$(BUILD_DIST)'")' >> $(EL_TEST_INIT)
+	@echo "(setq elunit-verbose t)" >> $(EL_TEST_INIT)
 	@echo ";; EOF" >> $(EL_TEST_INIT)
 # EOF
 
