@@ -81,11 +81,11 @@ used"
 		buffer started)
 	(save-excursion
 	  ;; Start the JVM
-	  (jde-run)
+	  (jde-run 1)
 	  ;; Wait for it to start
 	  (save-excursion
 		(while (and (< count 10) (not started))
-		  (sleep 1)
+		  (sleep-for 1)
 		  (setq buffer (get-buffer (concat "*" main-class "*"))
 				count (1+ count))
 		  (when buffer

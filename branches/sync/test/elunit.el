@@ -201,7 +201,11 @@
     (if (test-suite-teardown-hooks suite)
         (apply #'funcall (test-suite-teardown-hooks suite))))
   (dolist (child-suite (test-suite-children suite))
-    (elunit-run-suite child-suite))
+    (if (test-suite-setup-hooks suite)
+        (apply #'funcall (test-suite-setup-hooks suite)))
+    (elunit-run-suite child-suite)
+    (if (test-suite-teardown-hooks suite)
+        (apply #'funcall (test-suite-teardown-hooks suite))))
   (run-hook-with-args 'elunit-done-running-hook
                       elunit-test-count (length elunit-failures)))
 

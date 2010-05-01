@@ -3,7 +3,7 @@
 ;; 			(eval-current-buffer)
 ;; 			(elunit "watchpoints-suite"))
 ;; 		  nil 'local)
-
+;; (elunit "jde-test-suite")
 (require 'elunit)
 (require 'jdibug)
 
