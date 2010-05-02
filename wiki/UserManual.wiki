@@ -49,6 +49,9 @@ install JDE if you have not yet done it.
 can start using JDIbug, which is the `jdibug-connect-host' parameter
 and the `jdibug-connect-port' parameter.
 
+You will also want to customize jde-run-option-debug.
+
+
    `jdibug-connect-host' specifies the hostname of the debuggee process
 that you want to debug. And `jdibug-connect-port' specifies the port to
 connect to.
