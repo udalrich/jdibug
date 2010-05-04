@@ -93,6 +93,7 @@
 (defun jdibug-refresh-all-windows ()
   "Refresh all of the dedicated window used by the debugger to display output"
   (interactive)
+  (jdibug-refresh-watchpoints-buffer-now)
   (jdibug-refresh-threads-buffer-now)
   (jdibug-refresh-locals-buffer-now)
   (jdibug-refresh-frames-buffer-now))

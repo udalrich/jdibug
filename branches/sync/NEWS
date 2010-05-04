@@ -1,6 +1,8 @@
 * JDIbug News                  -*- outline -*-
 
-* 0.3 (Current)
+* 0.4 (Current)
+
+* 0.3 (2010-04-28)
 
 ** Supports multi dimensional array
 Now supports displaying/expanding of multi dimensional array.

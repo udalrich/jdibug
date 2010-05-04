@@ -45,9 +45,7 @@
 
 (eval-when-compile
   (setq jdi-unit-testing t)
-  (defvar jdibug-active-thread)
-  (load "cl-seq")
-  (load "cl-extra"))
+  (defvar jdibug-active-thread))
 
 (defstruct jdi-mirror
   virtual-machine)
@@ -1391,5 +1389,21 @@ This handles the event later, once we are connected."
 
 (add-hook 'jdwp-event-hooks 'jdi-handle-event)
 
+(defun jdi-primitive-emacs-value (jdi-value)
+  "Convert a jdi-primitive JDI-VALUE, which my be a vector of bytes,
+into something that is numberp and can be used with emacs
+built-in numerical functions."
+  (let ((type (jdi-value-type jdi-value))
+		(value (jdi-primitive-value-value jdi-value)))
+	(cond
+		((memq type (list jdwp-tag-short jdwp-tag-byte jdwp-tag-int jdwp-tag-long))
+		 (jdwp-vec-to-int value))
+		((eql type jdwp-tag-float)
+		 (jdwp-vec-to-float value))
+		((eql type jdwp-tag-double)
+		 (jdwp-vec-to-double value))
+		(t
+		 (jdibug-error "Unknown type (%s) for value: %s" type jdi-value)
+		 (error "%s is not a numerical type" (jdwp-type-name type))))))
 
 (provide 'jdi)

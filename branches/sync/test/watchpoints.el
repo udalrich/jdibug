@@ -1,16 +1,18 @@
 ;; (add-hook 'after-save-hook
 ;; 		  (lambda ()
 ;; 			(eval-current-buffer)
-;; 			(elunit "watchpoints-suite"))
+;;          (elunit "jde-test-suite"))
 ;; 		  nil 'local)
-;; (elunit "jde-test-suite")
+;;
 (require 'elunit)
 (require 'jdibug)
 
 (defsuite watchpoints-suite jde-test-suite
   :setup-hooks (list (lambda ()
 					   ;; Remove any prexisting breakpoints
-					   (mapc #'jdibug-remove-breakpoint jdibug-breakpoints)))
+					   (jdwp-uninterruptibly
+						 (mapc #'jdibug-remove-breakpoint jdibug-breakpoints))
+					   (jdibug-remove-all-watchpoints)))
   ;; :teardown-hooks (lambda () )
 )
 
@@ -28,6 +30,7 @@
 
 	;; Start running
 	(jdibug-test-resume-and-wait-for-breakpoint)
+	(jdibug-test-wait-for-refresh-timers)
 
 	;; Check that the watchpoint buffer shows that the variable does not yet exist
 	(assert-watchpoint-display-unknown var-name)
@@ -36,3 +39,16 @@
 	(jdibug-test-step-over-and-wait)
 
 	(assert-watchpoint-display-value value "3.4")))
+
+(defun assert-watchpoint-display-unknown (var-name)
+  "Assert that VAR-NAME is listed in the watchpoint display window, but that it's value is unknown."
+
+  (save-excursion
+	(set-buffer jdibug-watchpoints-buffer)
+	(goto-char (point-min))
+	(assert-that
+	 (search-forward-regexp (concat "^" (regexp-quote var-name)) nil t)
+	 (format "Found %s in watchpoint buffer" var-name))
+	(let* ((eol (save-excursion (end-of-line) (point)))
+		   (rest-of-line (buffer-substring-no-properties (point) eol)))
+	  (assert-match "is not in scope" rest-of-line))))

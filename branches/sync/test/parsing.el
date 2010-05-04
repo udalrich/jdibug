@@ -56,7 +56,6 @@
 	 '("embedded \\\" string" constant (:type string))
 	 parse-embedded-string)))
 
-
 (deftest parse-bad-input parsing-suite
   "Test that parsing of bad input fails"
   (let ((parse-1 (jdibug-expr-parse-expr "foo.bar bad"))
@@ -118,3 +117,5 @@ in ACTUAL may have additional members that are ignored."
 				(assert-same-structure-prefix (nth index expected)
 											  (nth index actual))))
 	  (assert-equal expected actual))))
+
+(message "Loaded parsing.el")

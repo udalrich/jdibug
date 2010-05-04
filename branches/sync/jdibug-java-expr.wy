@@ -596,7 +596,7 @@ name
 
 simple_name
   : IDENTIFIER
-	(TAG $1 "unknown-type")
+	(TAG $1 'identifier)
   ;
 
 qualified_name

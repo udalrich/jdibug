@@ -20,45 +20,52 @@
 (defun jdibug-test-resume-and-wait-for-breakpoint ()
   "Resume all threads, and then wait until a breakpoint is hit."
   ;; Add a hook to remember when we hit a breakpoint
-  (add-hook jdibug-breakpoint-hit-hook #'jdibug-test-breakpoint-hit-hook)
+  (add-hook 'jdibug-breakpoint-hit-hook #'jdibug-test-breakpoint-hit-hook)
   (setq jdibug-test-breakpoint-hit nil)
 
   ;; Resume everything
   (jdibug-resume-all)
 
   ;; Wait for the flag to be set
-  (let* ((interval 0.1) (max-count (/ 30 interval)))
+  (let* ((interval 0.1)
+		 (max-count (/ 30 interval))
+		 (count 0))
 	(while (and (not jdibug-test-breakpoint-hit) (< count max-count))
 	  (setq count (1+ count))
-	  (sleep interval)))
+	  (sleep-for interval)))
 
-  (assert-that jdibug-test-breakpoint-hit))
+  (assert-that jdibug-test-breakpoint-hit "breakpoint hit"))
 
 (defun jdibug-test-breakpoint-hit-hook (&rest ignore)
   (setq jdibug-test-breakpoint-hit t)
-  (remove-hook jdibug-breakpoint-hit-hook #'jdibug-test-breakpoint-hit-hook))
+  (remove-hook 'jdibug-breakpoint-hit-hook #'jdibug-test-breakpoint-hit-hook))
 
 (defvar jdibug-test-step-hit nil)
 (defun jdibug-test-step-over-and-wait ()
   "Step over the current thread, and then wait until the step is finished."
   ;; Add a hook to remember when we hit a breakpoint
-  (add-hook jdi-step-hooks #'jdibug-test-step-hit-hook)
+  (add-hook 'jdi-step-hooks #'jdibug-test-step-hit-hook)
   (setq jdibug-test-step-hit nil)
 
   ;; Step
   (jdibug-step-over)
 
   ;; Wait for the flag to be set
-  (let* ((interval 0.1) (max-count (/ 30 interval)))
+  (let* ((interval 0.1) (max-count (/ 30 interval)) (count 0))
 	(while (and (not jdibug-test-step-hit) (< count max-count))
 	  (setq count (1+ count))
 	  (sleep interval)))
 
-  (assert-that jdibug-test-step-hit))
+  (assert-that jdibug-test-step-hit "step hit"))
 
 (defun jdibug-test-step-hit-hook (&rest ignore)
   (setq jdibug-test-step-hit t)
-  (remove-hook jdi-step-hooks #'jdibug-test-step-hit-hook))
+  (remove-hook 'jdi-step-hooks #'jdibug-test-step-hit-hook))
+
+(defvar jdibug-test-connected nil)
+(defun jdibug-test-connected-hook (&rest ignore)
+  (setq jdibug-test-connected t)
+  (remove-hook 'jdibug-connected-hook #'jdibug-test-connected-hook))
 
 (defun jdibug-test-connect-to-jvm (&optional buffer)
   "Start a JVM and attach to it with JDIbug from within BUFFER.
@@ -74,33 +81,76 @@ used"
   (switch-to-buffer buffer)
 
   ;; TODO: there is probably a more general way to do this
-  (let ((main-class (or (and (not (eq "" jde-run-application-class))
+  (let* ((main-class (or (and (not (string-equal "" jde-run-application-class))
 							 jde-run-application-class)
 						(jde-run-get-main-class)))
 		(count 0)
+		(run-buffer (concat "*" main-class "*"))
 		buffer started)
 	(save-excursion
+	  ;; Kill any currently running process
+	  (when (get-buffer run-buffer)
+		(kill-buffer run-buffer))
 	  ;; Start the JVM
 	  (jde-run 1)
 	  ;; Wait for it to start
 	  (save-excursion
 		(while (and (< count 10) (not started))
 		  (sleep-for 1)
-		  (setq buffer (get-buffer (concat "*" main-class "*"))
+		  (setq buffer (get-buffer run-buffer)
 				count (1+ count))
 		  (when buffer
 			(set-buffer buffer)
-			(goto-char point-min)
+			(goto-char (point-min))
 			(setq started (search-forward "Listening for transport dt_socket at address: "))))
-		(assert-that started))
+		(assert-that started "jvm started"))
 	  ;; Start jdibug
+	  (setq jdibug-test-connected nil)
+	  (add-hook 'jdibug-connected-hook 'jdibug-test-connected-hook)
 	  (jdibug-connect)
+	  (jdibug-test-wait-until jdibug-test-connected "Connected to JVM")
+
 	  ;; Check that we actually connected
 	  (assert-equal (length jdibug-virtual-machines)
-					(length jdibug-connect-host))
+					(length jdibug-connect-hosts)
+					"Connected to all virtual machines")
 	  )))
+
+(defun jdibug-test-wait-for-refresh-timers nil
+  "Wait until all of the buffer refresh timers have finished, or
+an unreasonable amount of time has passed."
+  (mapc (lambda (timer)
+		  (let* ((count 0)
+				 (interval 0.1)
+				 (max-count (/ 10 interval))
+				 done)
+			(while (and (< count max-count)
+						(not done))
+			  (if (memq timer timer-list)
+				  (sleep-for interval)
+				(setq done t)))
+		  (assert-that done (format "Refresh timer never ran: %S" timer))))
+		(list jdibug-refresh-threads-buffer-timer
+			  jdibug-refresh-locals-buffer-timer
+			  jdibug-refresh-watchpoints-buffer-timer
+			  jdibug-refresh-frames-buffer-timer)))
+
+(defmacro jdibug-test-wait-until (var message)
+  "Wait until VAR becomes true."
+  (declare (indent 2))
+  `(let* ((count 0) (interval 0.1) (max-count (/ 10 interval)))
+	 (while (and (< count max-count) (not ,var))
+	   (sleep-for interval)
+	   (setq	count (1+ count)))
+	 (assert-that ,var ,message)))
 
 
 (load "watchpoints.el")
+
+(debug-on-entry 'jdibug-test-connect-to-jvm)
+(debug-on-entry 'jdibug-test-wait-for-refresh-timers)
+(debug-on-entry 'jdibug-test-wait-until)
+(debug-on-entry 'jdibug-connect)
+
 
 (elunit "jde-test-suite")

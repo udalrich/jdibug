@@ -121,7 +121,11 @@
 ;;; Defining tests
 
 (defmacro* defsuite (suite-name suite-ancestor &key setup-hooks teardown-hooks)
-  "Define a suite, which may be hierarchical."
+  "Define a suite, which may be hierarchical.  SETUP-HOOKS and
+TEARDOWN-HOOKS, if not nil, must be a list.  The first element is
+a function to call before/after the suite runs.  The remaining
+elements of the list (if any) are passed to the function as
+arguments."
   `(progn
      (setq ,suite-name (make-test-suite :name ',suite-name
                                       :setup-hooks ,setup-hooks
@@ -135,7 +139,10 @@
 (defmacro deftest (name suite &rest body)
   "Define a test NAME in SUITE with BODY."
   `(save-excursion
-	 (let ((file (if load-in-progress load-file-name buffer-file-name))
+	 ;; In theory, we should use load-file-name only if load-in-progress,
+	 ;; but it appears that load-in-progress is not set when loading a file
+	 ;; from the command line in a non-interactive session.
+	 (let ((file (or load-file-name buffer-file-name))
 		   (def-regexp (concat "deftest\\s-+"
 							   (symbol-name ',name)))
 		   line test)
@@ -269,20 +276,22 @@ Takes the same ARGS as `error'."
 ;; These are preferred over stuff like (assert (equal [...] because
 ;; they use the `fail' function, which reports errors nicely.
 
-(defun assert-that (actual)
+(defun assert-that (actual &optional message)
   "Fails if ACTUAL is nil."
   (unless actual
-    (fail "%s expected to be non-nil" actual)))
+    (fail "%s expected to be non-nil" message)))
 
 (defun assert-nil (actual)
   "Fails if ACTUAL is non-nil."
   (when actual
     (fail "%s expected to be nil" actual)))
 
-(defun assert-equal (expected actual)
+(defun assert-equal (expected actual &optional message)
   "Fails if EXPECTED is not equal to ACTUAL."
   (unless (equal expected actual)
-    (fail "%s expected to be %s" actual expected)))
+    (fail "%s%s expected to be %s"
+		  (if message (format "%s: " message) "")
+		  actual expected)))
 
 (defun assert-not-equal (expected actual)
   "Fails if EXPECTED is equal to ACTUAL."

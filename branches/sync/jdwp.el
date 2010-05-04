@@ -139,6 +139,19 @@
 (defconst jdwp-tag-thread-group 103)
 (defconst jdwp-tag-class-loader 108)
 
+(defconst jdwp-tag-constants
+  (let (values)
+	(mapatoms
+	 (lambda (atom)
+	   (let ((name (symbol-name atom)))
+		 (when (and (string-match "^jdwp-tag-\\(.+\\)$" name)
+					(not (string-equal name "jdwp-tag-constants")))
+		   (push (cons (symbol-value atom)
+					   (match-string 1 name))
+				 values)))))
+	values)
+  "Map from jdwp type constants to printable names")
+
 (defconst jdwp-type-tag-class     1)
 (defconst jdwp-type-tag-interface 2)
 (defconst jdwp-type-tag-array     3)
@@ -988,7 +1001,9 @@
   (jdwp-vec-to-int (apply 'bindat-get-field s fields)))
 
 (defun jdwp-vec-to-int (vec)
-  "Converts a vector presentation into an integer."
+  "Converts a vector representation VEC into an integer.  This will
+fail for large values that require more bits than emacs uses to
+store an integer."
   (let ((result 0)
 		(i 0))
     (while (< i (length vec))
@@ -996,6 +1011,21 @@
       (setq result (+ result (elt vec i)))
       (incf i))
     result))
+
+(defun jdwp-integer-to-vec (number length)
+  "Converts an integer NUMBER (int or long in java terms) to a vector of bytes.  The returned value with have LENGTH elements."
+  (let* ((result (make-vector length 0))
+		(positive (>= number 0))
+		(negative (< number 0))
+		(byte 256)
+		bits mask index)
+	(loop for index from 0 below length do
+		  (setq mask (if (eql index (1- length)) #x7f #xff)
+				bits (1+ (logand mask (1- number))))
+		  (aset result (- length index 1) bits)
+		  (setq number (lsh number -8)))
+	result))
+
 
 (defun jdwp-vec-to-float (vec)
   (let* ((int (jdwp-vec-to-int vec))
@@ -1300,7 +1330,9 @@ This method does not consume the packet, the caller can know by checking jdwp-pa
   "Execute BODY, not allowing interrupts also wrapped in this
 macro to run until after BODY finishes.
 
-If BODY is executed immediately, the return value is the return value of BODY.  If execution is deferred, the return value is 'jdwp-deferred.
+If BODY is executed immediately, the return value is the return
+value of BODY.  If execution is deferred, the return value is
+'jdwp-deferred.
 
 BODY might also not be evaluated
 until after this returns, if another uninterruptable call is in
@@ -1317,7 +1349,9 @@ Variables that have complicated structure may require explicit quoting:
 	   (eval `(jdwp-uninterruptibly
 				(setq string (concat string (format \"%s\" (quote ,extra)))))))
 
-It is best if this is placed at a high level where
+It is best if these types of constructs are placed at a high
+level where the evaled block is simple, as the resulting code
+cannot be byte compiled.
 "
   (declare (indent defun))
   `(if jdwp-uninterruptibly-running-p
@@ -1335,6 +1369,10 @@ It is best if this is placed at a high level where
 		   (jdwp-uninterruptibly (apply func nil)))))))
 
 
+(defun jdwp-type-name (type)
+  "Get a printable name for the jdwp TYPE"
+  (or (cdr (assoc type jdwp-tag-constants))
+	  (format "jdwp type %s" type)))
 
 (provide 'jdwp)
 
