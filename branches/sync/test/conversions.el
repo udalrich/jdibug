@@ -5,6 +5,7 @@
 ;; 		  nil 'local)
 
 (require 'elunit)
+(require 'jdwp)
 
 (defsuite conversions-suite smoke-test-suite
   ;; :setup-hook (lambda () )
@@ -31,4 +32,18 @@
 		  pairs)))
 
 
+(deftest int-to-vec-to-int conversions-suite
+  "Test that converting int to vectors and back does not change the value."
+  (mapc (lambda (int)
+		  (let* ((vec (jdwp-integer-to-vec int 4))
+				 (back-to-int (jdwp-vec-to-int vec)))
+			(assert-equal int back-to-int
+						  (format "converted %d to %s correctly"
+								  int vec))))
+		'(0 1 -1 256 -257 66666 -77777)))
 
+(deftest int-to-vec conversions-suite
+  "Test that negative values are converted with 32 bits, not 28."
+  (assert-equal '[#xff #xff #xff #xff] (jdwp-integer-to-vec -1 4))
+  (assert-equal '[#xff #xff #xff #xff #xff #xff #xff #xff]
+				(jdwp-integer-to-vec -1 8)))

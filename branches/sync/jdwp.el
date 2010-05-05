@@ -1015,17 +1015,41 @@ store an integer."
 (defun jdwp-integer-to-vec (number length)
   "Converts an integer NUMBER (int or long in java terms) to a vector of bytes.  The returned value with have LENGTH elements."
   (let* ((result (make-vector length 0))
-		(positive (>= number 0))
-		(negative (< number 0))
-		(byte 256)
-		bits mask index)
+		 (negative (< number 0))
+		(mask #xff)
+		bits index prev-bits)
 	(loop for index from 0 below length do
-		  (setq mask (if (eql index (1- length)) #x7f #xff)
-				bits (1+ (logand mask (1- number))))
+		  (setq bits (logand mask (1+ (logand mask (1- number)))))
+		  ;; If this is the last byte in the emacs representation,
+		  ;; fill it out from 28 to 32 bits.
+		  (setq bits (jdwp-patch-bits bits index length negative prev-bits)
+				prev-bits bits)
 		  (aset result (- length index 1) bits)
 		  (setq number (lsh number -8)))
 	result))
 
+(defun jdwp-patch-bits (bits index length negative prev-bits)
+  "Patch BITS to be the correct bits for byte INDEX of a LENGTH
+byte integer rather than an emacs 28 bit integer.  If NEGATIVE,
+the number is negative.  PREV-BITS are the bits from the previous
+byte, which might be needed to fill out the vector."
+  (let* ((last-byte (eql index (1- length)))
+		(sign-bit (if (and negative last-byte) 1 0))
+		(must-fill (>= index 3))
+		fill-bit first-bit last-bit bit-index)
+	(when must-fill
+	  (setq first-bit (if (eql index 3) 4 0)
+			last-bit (if last-byte 7 8))
+	  ;; Duplicate the highest order bit that is not the sign bit
+	  (setq fill-bit
+			(if (eql index 3)
+				(lsh (logand bits #x08) -3)
+			  (lsh (logand prev-bits #x80) -7)))
+	  (loop for bit-index from first-bit below last-bit do
+			(setq bits (logior bits (lsh fill-bit bit-index)))))
+	(when last-byte
+	  (setq bits (logior bits (lsh sign-bit 7))))
+	bits))
 
 (defun jdwp-vec-to-float (vec)
   (let* ((int (jdwp-vec-to-int vec))
