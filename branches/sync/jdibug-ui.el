@@ -796,7 +796,8 @@ we quickly step several times."
 		(insert "Not suspended")
 	  (let* ((jdwp-ignore-error (list jdwp-error-absent-information))
 			 (watchpoint-alist (jdibug-evaluate-watchpoints jdibug-active-frame)))
-		(mapc 'jdibug-refresh-watchpoints-1 watchpoint-alist)))))
+		(mapc 'jdibug-refresh-watchpoints-1 watchpoint-alist)
+		(message "Watchpoints updated")))))
 
 (defun jdibug-evaluate-watchpoints (frame)
   "Evaluate all of the currently defined watch points, using
@@ -1020,7 +1021,8 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
 							(goto-char active-frame-point)
 							(set-window-point (get-buffer-window jdibug-frames-buffer t) (point))
 							(forward-line -1)
-							(set-window-start (get-buffer-window jdibug-frames-buffer t) (point)))))))
+							(set-window-start (get-buffer-window jdibug-frames-buffer t) (point))))))
+					(message "Frames updated"))
 						t)))
 	(jdibug-refresh-frames-buffer)))
 
@@ -1095,6 +1097,7 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
   (let ((buf class-signature))
     (setf buf (replace-regexp-in-string "^L" "" buf))
     (setf buf (replace-regexp-in-string ";$" "" buf))
+	(setf buf (replace-regexp-in-string "\\$.*" "" buf))
     (setf buf (concat buf ".java"))
     (mapc (lambda (sp)
 			(if (file-exists-p (concat (expand-file-name sp) "/" buf))
@@ -1682,13 +1685,8 @@ special cases like infinity."
 							(erase-buffer))
 						  (setq jdibug-threads-tree (tree-mode-insert tree))
 										;						(jdibug-debug "jdibug-threads-tree=%s" jdibug-threads-tree)
-						  (tree-mode)
-						  (let ((active-frame-point (jdibug-point-of-active-frame)))
-							(when active-frame-point
-							  (goto-char active-frame-point)
-							  (set-window-point (get-buffer-window jdibug-threads-buffer t) (point))
-							  (forward-line -1)
-							  (set-window-start (get-buffer-window jdibug-threads-buffer t) (point)))))))
+						  (tree-mode)))
+					  (message "Threads updated"))
 						t)))
 	(jdibug-refresh-threads-buffer)))
 
