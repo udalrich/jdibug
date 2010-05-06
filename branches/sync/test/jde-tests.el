@@ -147,10 +147,10 @@ an unreasonable amount of time has passed."
 
 (load "watchpoints.el")
 
-(debug-on-entry 'jdibug-test-connect-to-jvm)
-(debug-on-entry 'jdibug-test-wait-for-refresh-timers)
-(debug-on-entry 'jdibug-test-wait-until)
-(debug-on-entry 'jdibug-connect)
+;; (debug-on-entry 'jdibug-test-connect-to-jvm)
+;; (debug-on-entry 'jdibug-test-wait-for-refresh-timers)
+;; (debug-on-entry 'jdibug-test-wait-until)
+;; (debug-on-entry 'jdibug-connect)
 
 
 (elunit "jde-test-suite")

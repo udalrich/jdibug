@@ -108,14 +108,18 @@ Subclasses must override this method."
 		 (second-value (jdibug-expr-eval-expr jdwp second-arg frame))
 		 (first-type (jdi-value-type first-value))
 		 (second-type (jdi-value-type second-value))
-		 (result-type (jdibug-expr-merge-types first-type second-type)))
+		 (result-type (jdibug-expr-merge-types first-type second-type))
+		 product vector)
 
 	;; Multiplication is only defined between numbers.
 	(if (and (jdibug-expr-type-is-number-p first-type)
 			 (jdibug-expr-type-is-number-p second-type))
+		(progn
+		  (setq product (* (jdi-primitive-emacs-value first-value)
+						   (jdi-primitive-emacs-value second-value))
+				vector (jdwp-number-to-vec product result-type))
 		  (make-jdi-primitive-value :type result-type
-									:value (* (jdi-primitive-emacs-value first-value)
-											  (jdi-primitive-emacs-value second-value)))
+									:value vector))
 	  (throw 'jdibug-expr-bad-eval
 			 (format "Unable to multiple a %s and a %s"
 					 (jdwp-type-name first-type)
@@ -143,7 +147,7 @@ Subclasses must override this method."
 	(if  var
 		;; jdi-frame-get-values will return a list but we want the bare value.
 		(car (jdi-frame-get-values frame (list var)))
-	  (format "%s is not in scope" name))))
+	  (throw jdibug-expr-bad-eval (format "%s is not in scope" name)))))
 
 
 

@@ -1134,6 +1134,22 @@ byte, which might be needed to fill out the vector."
 	;;  (elunit "jdwp-suite")
 	))
 
+(defun jdwp-number-to-vec (number type)
+  "Convert NUMBER to a vector of bytes.  TYPE is the type of the result."
+  (cond
+   ((eql type jdwp-tag-int)
+	(jdwp-integer-to-vec number 4))
+   ((eql type jdwp-tag-long)
+	(jdwp-integer-to-vec number 8))
+   ((memq type (list jdwp-tag-byte jdwp-tag-short))
+	number)
+   ((eql type jdwp-tag-float)
+	(jdwp-float-to-vec number))
+   ((eql type jdwp-tag-double)
+	(jdwp-double-to-vec number))
+   (t
+	(error "Unknown type of number: %s" (jdwp-type-name type)))))
+
 (defun jdwp-get-protocol (name)
   (find-if (lambda (p)
 			 (string= name (getf p :name)))
