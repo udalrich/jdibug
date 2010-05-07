@@ -807,7 +807,7 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
 			(let* ((parse (jdibug-watchpoint-parse watchpoint))
 				   (jdwp (jdi-virtual-machine-jdwp (jdi-frame-virtual-machine frame)))
 				   (object (jdibug-expr-eval-expr jdwp parse frame)))
-			  (cons (jdibug-watchpoint-expression watchpoint) object)))
+			  (cons (catch 'jdibug-expr-bad-eval (jdibug-watchpoint-expression watchpoint)) object)))
 		  jdibug-watchpoints))
 
 
@@ -835,13 +835,14 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
 			(null (catch 'jdwp-input-pending
 					(jdwp-uninterruptibly
 					  (let ((jdwp-throw-on-input-pending t))
-						(with-current-buffer ,buffer
-						  (let ((inhibit-read-only t))
-							(erase-buffer))
+						(when (buffer-live-p ,buffer)
+						  (with-current-buffer ,buffer
+							(let ((inhibit-read-only t))
+							  (erase-buffer))
 
-						  (if (null jdibug-active-thread)
-							  (insert "Not suspended")
-							,@body))))
+							(if (null jdibug-active-thread)
+								(insert "Not suspended")
+							  ,@body)))))
 					  t)))
 	(,retry-func)))
 

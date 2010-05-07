@@ -147,7 +147,7 @@ Subclasses must override this method."
 	(if  var
 		;; jdi-frame-get-values will return a list but we want the bare value.
 		(car (jdi-frame-get-values frame (list var)))
-	  (throw jdibug-expr-bad-eval (format "%s is not in scope" name)))))
+	  (throw 'jdibug-expr-bad-eval (format "%s is not in scope" name)))))
 
 
 
