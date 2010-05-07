@@ -1085,6 +1085,7 @@ byte, which might be needed to fill out the vector."
 	   (jdwp-debug " to %f" result)
 	   result))))
 
+(defconst jdwp-double-exponent-bias 1023)
 (defun jdwp-vec-to-double (vec)
   (jdwp-debug "jdwp-vec-to-double %s" vec)
   (let* ((short-high (jdwp-vec-to-int (subseq vec 0 2)))
@@ -1114,7 +1115,7 @@ byte, which might be needed to fill out the vector."
 					   (* mantissa-low (expt 2.0 -52))))
 	   (jdwp-debug "Converting %s %f %f" sign result exponent)
 										; Need to use a floating point in expt to avoid integer overflow
-	   (setq result (* sign result (expt 2.0 (- exponent 1023))))
+	   (setq result (* sign result (expt 2.0 (- exponent jdwp-double-exponent-bias))))
 	   (jdwp-debug " to %f" result)
 	   result))))
 
@@ -1133,6 +1134,55 @@ byte, which might be needed to fill out the vector."
 
 	;;  (elunit "jdwp-suite")
 	))
+
+(defun jdwp-double-to-vec (double)
+  "Convert DOUBLE into a vector for passing over jdwp."
+  (cond ((or (eq double 'NaN) (and (numberp double) (not (= double double))))
+		 ;; NaN
+		 (vector #x7f #xf0 0 0  0 0 0 1))
+		((or (memq double '(+infinity -infinity))
+			 (not (zerop (* 0 double))))
+		 ;; +- infinity
+		 (let ((first-byte (if (numberp double)
+							   (if (> double 0) #x7f #xff)
+							 (if (eq double '+infinity) #x7f #xff))))
+		   (vector first-byte #xf0 0 0  0 0 0 0)))
+		(t
+		 ;; Normal number
+		 (let* ((exponent (logb double))
+				(sign-bit (if (< double 0) 1 0))
+				(mantissa (abs (* double (expt 2.0 (- exponent)))))
+				(byte 7) (bits 4)
+				(result (make-vector 8 0))
+				(shifted-exponent (+ exponent jdwp-double-exponent-bias))
+				int-mantissa factor index)
+		   (if (< shifted-exponent 0)
+			   (progn
+				 ;; Subnormalized
+				 (aset result 0 (lsh sign-bit 7))
+				 (setq mantissa (* mantissa (expt 2.0 (1- jdwp-double-exponent-bias)))))
+
+			 ;; Remove the implicit leading 1 from the mantissa
+			 (setq mantissa (1- mantissa))
+			 ;; Set the exponent
+			 (let ((exp-high (lsh shifted-exponent -4))
+				   (exp-low (logand shifted-exponent #x0f)))
+			   (aset result 1 (lsh exp-low 4))
+			   (aset result 0 exp-high))
+			 ;; Set the sign bit
+			 (aset result 0 (logior (aref result 0)
+									(lsh sign-bit 7))))
+		   ;; Extract the bits from the mantissa
+		   (while (> byte 0)
+			 (setq index (- 8 byte)
+				   factor (lsh 1 bits)
+				   int-mantissa (truncate (* mantissa factor)))
+			 (aset result index (logior (aref result index) int-mantissa))
+			 (setq mantissa (mod (* mantissa factor) 1)
+				   byte (1- byte)
+				   bits 8))
+		   result))))
+
 
 (defun jdwp-number-to-vec (number type)
   "Convert NUMBER to a vector of bytes.  TYPE is the type of the result."

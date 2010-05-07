@@ -1,8 +1,8 @@
-;; (add-hook 'after-save-hook
-;; 		  (lambda ()
-;; 			(eval-current-buffer)
-;; 			(elunit "conversions-suite"))
-;; 		  nil 'local)
+(add-hook 'after-save-hook
+		  (lambda ()
+			(eval-buffer)
+			(elunit "conversions-suite"))
+		  nil 'local)
 
 (require 'elunit)
 (require 'jdwp)
@@ -25,10 +25,13 @@
 				 ([#x7f #xf0 0 0  0 0 0 1] . NaN)
 				 ([#x7f #xf0 0 0  0 0 0 0] . +infinity)
 				 ([#xff #xf0 0 0  0 0 0 0] . -infinity)))
-		vec actual expected)
+		vec actual expected back-to-vec)
 	(mapc (lambda (pair)
-			(setq vec (car pair) expected (cdr pair))
-			(assert-equal expected (jdwp-vec-to-double vec)))
+			(setq vec (car pair) expected (cdr pair)
+				  actual (jdwp-vec-to-double vec))
+			(assert-equal expected actual "conversion to double")
+			(setq back-to-vec (jdwp-double-to-vec actual))
+			(assert-equal vec back-to-vec (format "conversion back to vector of %s" actual)))
 		  pairs)))
 
 
