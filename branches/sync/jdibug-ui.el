@@ -446,7 +446,8 @@ And position the point at the line number."
 										t))))
 
 (defun jdibug-handle-breakpoint (thread location)
-  (jdibug-debug "jdibug-handle-breakpoint")
+  (jdibug-debug "jdibug-handle-breakpoint: active-frames is %s"
+				(and jdibug-active-frame (jdi-frame-id jdibug-active-frame)))
 
   (if (null jdibug-active-frame)
 	  (progn
@@ -791,11 +792,14 @@ we quickly step several times."
 		(jdibug-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-watchpoints-buffer-now)))
 
 (defun jdibug-refresh-watchpoints-buffer-now ()
+  (jdibug-trace "jdibug-refresh-watchpoints-buffer-now: %s" jdibug-watchpoints)
   (jdibug-refresh-buffer-now jdibug-watchpoints-buffer jdibug-refresh-watchpoints-buffer
 	(if (not jdibug-active-frame)
 		(insert "Not suspended")
+	  (jdibug-debug "evaluating watchpoints")
 	  (let* ((jdwp-ignore-error (list jdwp-error-absent-information))
 			 (watchpoint-alist (jdibug-evaluate-watchpoints jdibug-active-frame)))
+		(jdibug-debug "watchpoint-alist: %s" watchpoint-alist)
 		(mapc 'jdibug-refresh-watchpoints-1 watchpoint-alist)
 		(message "Watchpoints updated")))))
 
@@ -806,8 +810,8 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
   (mapcar (lambda (watchpoint)
 			(let* ((parse (jdibug-watchpoint-parse watchpoint))
 				   (jdwp (jdi-virtual-machine-jdwp (jdi-frame-virtual-machine frame)))
-				   (object (jdibug-expr-eval-expr jdwp parse frame)))
-			  (cons (catch 'jdibug-expr-bad-eval (jdibug-watchpoint-expression watchpoint)) object)))
+				   (object (catch jdibug-expr-bad-eval (jdibug-expr-eval-expr jdwp parse frame))))
+			  (cons (jdibug-watchpoint-expression watchpoint) object)))
 		  jdibug-watchpoints))
 
 

@@ -41,6 +41,14 @@
 
 (elog-make-logger jdibug-expr)
 
+(defconst jdibug-expr-bad-eval 'jdibug-expr-bad-eval
+  "Symbol thrown when an evaluation fails")
+
+(defun jdibug-expr-bad-eval (string &rest args)
+  "Throw the standard error when an eval fails.  The associated
+data is STRING, which is passed to `format' and supplied with
+ARGS"
+  (throw jdibug-expr-bad-eval (apply #'format string args)))
 
 (defclass jdibug-eval-rule ()
   ;; fields
@@ -86,6 +94,43 @@ Subclasses must override this method."
   (oset this :class 'function)
   (oset this :name 'dot))
 
+(defmethod jdibug-eval-rule-accept ((this jdibug-eval-rule-dot) jdwp tree frame)
+  ;; There are several possibilities: we could be looking at
+  ;; var.field, package.class.staticMethod or (implicit this)
+  ;; field.field.
+  (or (jdibug-eval-rule-accept-var-dot-fields this jdwp tree frame)
+	  (jdibug-eval-rule-accept-package this jdwp tree frame)
+	  (jdibug-eval-rule-accept-implicit-this this jdwp tree frame)))
+
+(defmethod jdibug-eval-rule-accept-implicit-this ((this jdibug-eval-rule-dot) jdwp tree frame)
+  (jdibug-expr-bad-eval "jdibug-eval-rule-accept-implicit-this not yet implemented"))
+
+(defmethod jdibug-eval-rule-accept-package ((this jdibug-eval-rule-dot) jdwp tree frame)
+  (jdibug-expr-bad-eval "jdibug-eval-rule-accept-package not yet implemented"))
+
+(defmethod jdibug-eval-rule-accept-var-dot-fields ((this jdibug-eval-rule-dot) jdwp tree frame)
+  (let* ((attrs (semantic-tag-attributes tree))
+		 (args (plist-get attrs :arguments))
+		 (first-arg (car args))
+		 (second-arg (nth 1 args)))
+	;; If this is a variable, we can evaluate it and get a value.  If
+	;; it isn't, we'll probably throw, in which case we just want to
+	;; return nil
+	(condition-case nil
+		(let* ((first-value (jdibug-expr-eval-expr jdwp first-arg frame))
+			  (second-name (semantic-tag-name second-arg))
+			  (second-type (semantic-tag-class second-arg))
+			  class)
+		  (when (and first-value (jdi-value-object-p first-value)
+					 (eql second-type 'identifier))
+			;; TODO: also handle array.length.  Do we need to handle class and thread also?
+			(setq class (jdi-object-get-reference-type first-value)
+				  field (jdi-reference-type-get-field-by-name class second-name))
+			(when field
+			  (jdi-object-get-value first-value field))))
+	  (error nil))))
+
+
 ;; Multiplication
 (defclass jdibug-eval-rule-mult (jdibug-eval-rule-with-name)
   ;; fields
@@ -120,10 +165,9 @@ Subclasses must override this method."
 				vector (jdwp-number-to-vec product result-type))
 		  (make-jdi-primitive-value :type result-type
 									:value vector))
-	  (throw 'jdibug-expr-bad-eval
-			 (format "Unable to multiple a %s and a %s"
-					 (jdwp-type-name first-type)
-					 (jdwp-type-name second-type))))))
+	  (jdibug-expr-bad-eval "Unable to multiple a %s and a %s"
+							(jdwp-type-name first-type)
+							(jdwp-type-name second-type)))))
 
 
 
@@ -140,6 +184,7 @@ Subclasses must override this method."
 
 (defmethod jdibug-eval-rule-accept ((this jdibug-eval-rule-identifier) jdwp tree frame)
   "Get the object represented by the variable name"
+  (jdibug-expr-debug "jdibug-eval-rule-accept %s" tree)
   (let* ((name (semantic-tag-name tree))
 		(variables (jdi-frame-get-visible-variables frame))
 		(var (find name variables :key 'jdi-variable-name :test 'string-equal)))
@@ -147,7 +192,7 @@ Subclasses must override this method."
 	(if  var
 		;; jdi-frame-get-values will return a list but we want the bare value.
 		(car (jdi-frame-get-values frame (list var)))
-	  (throw 'jdibug-expr-bad-eval (format "%s is not in scope" name)))))
+	  (jdibug-expr-bad-eval "%s is not in scope" name))))
 
 
 

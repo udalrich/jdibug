@@ -18,19 +18,9 @@
 
 (deftest add-watchpoint-var watchpoints-suite
   "Test that a watch point on a local variable works"
-  (jdibug-test-connect-to-jvm)
 
   (let ((var-name  "dblVar"))
-	(jdibug-add-watchpoint var-name)
-
-	;; Set a breakpoint on the line where we define the variable
-	(goto-char (point-min))
-	(search-forward var-name)
-	(jdibug-toggle-breakpoint)
-
-	;; Start running
-	(jdibug-test-resume-and-wait-for-breakpoint)
-	(jdibug-test-wait-for-refresh-timers)
+	(watch-expression-and-run-to-first-reference var-name)
 
 	;; Check that the watchpoint buffer shows that the variable does not yet exist
 	(assert-watchpoint-display-unknown var-name)
@@ -39,6 +29,29 @@
 	(jdibug-test-step-over-and-wait)
 
 	(assert-watchpoint-display-value value "3.4")))
+
+(deftest add-watchpoint-dot watchpoints-suite
+  "Test that a watch point on a dot expression works"
+  (let ((var-name  "stuff.x"))
+	(watch-expression-and-run-to-first-reference var-name)
+
+	;; Check that the watchpoint buffer shows that the variable does exist
+	(assert-watchpoint-display-value value "7")))
+
+(defun watch-expression-and-run-to-first-reference (var-name)
+  (jdibug-test-connect-to-jvm)
+
+  (jdibug-add-watchpoint var-name)
+
+  ;; Set a breakpoint on the line where we define the variable
+  (goto-char (point-min))
+  (search-forward var-name)
+  (jdibug-toggle-breakpoint)
+
+  ;; Start running
+  (jdibug-test-resume-and-wait-for-breakpoint)
+  (jdibug-test-wait-for-refresh-timers))
+
 
 (defun assert-watchpoint-display-unknown (var-name)
   "Assert that VAR-NAME is listed in the watchpoint display window, but that it's value is unknown."

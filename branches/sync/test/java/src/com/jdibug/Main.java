@@ -11,6 +11,9 @@ public class Main
 {
     public static void main(String[] args)
     {
+		Stuff stuff = new Stuff();
+		stuff.x = 7;
+
         float f = 1.2f;
         int intVar = 3;
         double dblVar = 3.4;
@@ -83,4 +86,10 @@ public class Main
         }
 
     }
+
+	private static class Stuff
+	{
+		int x;
+		double y;
+	}
 }
