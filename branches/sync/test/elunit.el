@@ -303,10 +303,12 @@ Takes the same ARGS as `error'."
   (unless (member elt list)
     (fail "%s expected to include %s" list elt)))
 
-(defun assert-match (regex string)
+(defun assert-match (regex string &optional message)
   "Fails if REGEX does not match STRING."
   (unless (string-match regex string)
-    (fail "%s expected to match %s" string regex)))
+    (fail "%s%s expected to match %s"
+		  (if message (concat message ": ") "")
+		  string regex)))
 
 (defmacro assert-error (&rest body)
   "Fails if BODY does not signal an error."

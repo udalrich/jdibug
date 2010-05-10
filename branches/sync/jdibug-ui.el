@@ -766,7 +766,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 		(jdibug-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-locals-buffer-now)))
 
 (defun jdibug-refresh-locals-buffer-now ()
-  (jdibug-refresh-buffer-now jdibug-locals-buffer jdibug-refresh-locals-buffer
+  (jdibug-refresh-buffer-now jdibug-locals-buffer jdibug-refresh-locals-buffer t
 	(let* ((jdwp-ignore-error (list jdwp-error-absent-information))
 		   (variables (sort (copy-sequence (jdi-frame-get-visible-variables jdibug-active-frame)) 'jdibug-variable-sorter)))
 	  (if (null variables)
@@ -786,6 +786,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   "Start the timer to refresh the watchpoints buffer.  This is
 delayed because immediately refreshing slows down the debugger if
 we quickly step several times."
+  (jdibug-trace "jdibug-refresh-watchpoints-buffer")
   (if (timerp jdibug-refresh-watchpoints-buffer-timer)
 	  (cancel-timer jdibug-refresh-watchpoints-buffer-timer))
   (setq jdibug-refresh-watchpoints-buffer-timer
@@ -793,7 +794,7 @@ we quickly step several times."
 
 (defun jdibug-refresh-watchpoints-buffer-now ()
   (jdibug-trace "jdibug-refresh-watchpoints-buffer-now: %s" jdibug-watchpoints)
-  (jdibug-refresh-buffer-now jdibug-watchpoints-buffer jdibug-refresh-watchpoints-buffer
+  (jdibug-refresh-buffer-now jdibug-watchpoints-buffer jdibug-refresh-watchpoints-buffer t
 	(if (not jdibug-active-frame)
 		(insert "Not suspended")
 	  (jdibug-debug "evaluating watchpoints")
@@ -830,9 +831,11 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
 		   (insert (format "Unknown data structure: %s" value))))
 	(insert "\n")))
 
-(defmacro jdibug-refresh-buffer-now (buffer retry-func &rest body)
-  "Standard boilerplate for updating BUFFER"
-  (declare (indent 2))
+(defmacro jdibug-refresh-buffer-now (buffer retry-func must-be-suspended &rest body)
+  "Standard boilerplate for updating BUFFER.  If we cannot update
+now, call RETRY-FUNC to schedule another try later.  Otherwise,
+execute BODY."
+  (declare (indent 3))
   `(when (or (jdwp-accepting-process-output-p)
 			jdwp-uninterruptibly-running-p
 			jdwp-sending-command
@@ -844,7 +847,7 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
 							(let ((inhibit-read-only t))
 							  (erase-buffer))
 
-							(if (null jdibug-active-thread)
+							(if (and ,must-be-suspended (null jdibug-active-thread))
 								(insert "Not suspended")
 							  ,@body)))))
 					  t)))
@@ -1006,30 +1009,17 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
 
 (defun jdibug-refresh-frames-buffer-now ()
   (jdibug-debug "jdibug-refresh-frames-buffer-now")
-  (when (or (jdwp-accepting-process-output-p)
-			jdwp-sending-command
-			jdwp-uninterruptibly-running-p
-			(null (catch 'jdwp-input-pending
-					(jdwp-uninterruptibly
-					(let ((jdwp-throw-on-input-pending t))
-					  (with-current-buffer jdibug-frames-buffer
-						;; 	(if (jdibug-frames-tree jdibug-this)
-						;; 		(tree-mode-reflesh-tree (jdibug-frames-tree jdibug-this))
-						(let ((inhibit-read-only t))
-						  (erase-buffer))
-						(setq jdibug-frames-tree
-							  (tree-mode-insert (jdibug-make-frames-tree)))
-;						(jdibug-debug "jdibug-frames-tree=%s" jdibug-frames-tree)
-						(tree-mode)
-						(let ((active-frame-point (jdibug-point-of-active-frame)))
-						  (when active-frame-point
-							(goto-char active-frame-point)
-							(set-window-point (get-buffer-window jdibug-frames-buffer t) (point))
-							(forward-line -1)
-							(set-window-start (get-buffer-window jdibug-frames-buffer t) (point))))))
-					(message "Frames updated"))
-						t)))
-	(jdibug-refresh-frames-buffer)))
+  (jdibug-refresh-buffer-now jdibug-frames-buffer jdibug-refresh-frames-buffer nil
+	(setq jdibug-frames-tree
+		  (tree-mode-insert (jdibug-make-frames-tree)))
+	(tree-mode)
+	(let ((active-frame-point (jdibug-point-of-active-frame)))
+	  (when active-frame-point
+		(goto-char active-frame-point)
+		(set-window-point (get-buffer-window jdibug-frames-buffer t) (point))
+		(forward-line -1)
+		(set-window-start (get-buffer-window jdibug-frames-buffer t) (point))))
+	(message "Frames updated")))
 
 (defun jdibug-node-tostring ()
   (interactive)
@@ -1652,10 +1642,9 @@ special cases like infinity."
 
 (defun jdibug-run-with-timer (secs repeat function &rest args)
   (apply 'run-with-timer secs repeat (lambda (function &rest args)
-									   (setq signal-hook-function 'jdibug-signal-hook)
-									   (unwind-protect
-										   (apply function args)
-										 (setq signal-hook-function nil)))
+									   (let ((signal-hook-function 'jdibug-signal-hook))
+										 (unwind-protect
+											 (apply function args))))
 		 function args))
 
 (defun jdibug-normalize-path (path symbol cygwin-p)
@@ -1676,24 +1665,14 @@ special cases like infinity."
 
 (defun jdibug-refresh-threads-buffer-now ()
   (jdibug-debug "jdibug-refresh-threads-buffer-now")
-  (when (or (jdwp-accepting-process-output-p)
-			jdwp-sending-command
-			jdwp-uninterruptibly-running-p
-			(null (catch 'jdwp-input-pending
-					(jdwp-uninterruptibly
-					  (let ((jdwp-throw-on-input-pending t)
-							(tree  (jdibug-make-top-level-thread-groups-tree)))
-						(with-current-buffer jdibug-threads-buffer
-						  ;; 	(if (jdibug-threads-tree jdibug-this)
-						  ;; 		(tree-mode-reflesh-tree (jdibug-threads-tree jdibug-this))
-						  (let ((inhibit-read-only t))
-							(erase-buffer))
-						  (setq jdibug-threads-tree (tree-mode-insert tree))
+  (jdibug-refresh-buffer-now jdibug-threads-buffer jdibug-refresh-threads-buffer nil
+	(let ((tree  (jdibug-make-top-level-thread-groups-tree)))
+	  ;; 	(if (jdibug-threads-tree jdibug-this)
+	  ;; 		(tree-mode-reflesh-tree (jdibug-threads-tree jdibug-this))
+	  (setq jdibug-threads-tree (tree-mode-insert tree))
 										;						(jdibug-debug "jdibug-threads-tree=%s" jdibug-threads-tree)
-						  (tree-mode)))
-					  (message "Threads updated"))
-						t)))
-	(jdibug-refresh-threads-buffer)))
+	  (tree-mode))
+	(message "Threads updated")))
 
 (defun jdibug-make-top-level-thread-groups-tree ()
   (jdibug-debug "jdibug-make-top-level-thread-groups-tree")

@@ -1,9 +1,9 @@
-;; (add-hook 'after-save-hook
-;; 		  (lambda ()
-;; 			(eval-current-buffer)
-;;          (elunit "jde-test-suite"))
-;; 		  nil 'local)
-;;
+(add-hook 'after-save-hook
+		  (lambda ()
+			(eval-current-buffer)
+         (elunit "jde-test-suite"))
+		  nil 'local)
+
 (require 'elunit)
 (require 'jdibug)
 
@@ -28,15 +28,19 @@
 	;; Step to the next line, which should cause the display to show the value
 	(jdibug-test-step-over-and-wait)
 
-	(assert-watchpoint-display-value value "3.4")))
+	(assert-watchpoint-display-value var-name "3.4")))
 
 (deftest add-watchpoint-dot watchpoints-suite
   "Test that a watch point on a dot expression works"
   (let ((var-name  "stuff.x"))
 	(watch-expression-and-run-to-first-reference var-name)
 
-	;; Check that the watchpoint buffer shows that the variable does exist
-	(assert-watchpoint-display-value value "7")))
+	;; Check that the watchpoint buffer shows that the variable does exist.  Value has not yet been set.
+	(assert-watchpoint-display-value var-name "0")
+
+	;; Step over, which should set the value
+	(jdibug-test-step-over-and-wait)
+	(assert-watchpoint-display-value var-name "7")))
 
 (defun watch-expression-and-run-to-first-reference (var-name)
   (jdibug-test-connect-to-jvm)
@@ -50,7 +54,9 @@
 
   ;; Start running
   (jdibug-test-resume-and-wait-for-breakpoint)
-  (jdibug-test-wait-for-refresh-timers))
+  (jdibug-test-wait-for-refresh-timers)
+
+  (jdibug-expr-debug "watch-expression-and-run-to-first-reference %s finished" var-name))
 
 
 (defun assert-watchpoint-display-unknown (var-name)
@@ -61,7 +67,21 @@
 	(goto-char (point-min))
 	(assert-that
 	 (search-forward-regexp (concat "^" (regexp-quote var-name)) nil t)
-	 (format "Found %s in watchpoint buffer" var-name))
+	 (format "Found %s in watchpoint buffer (%S)" var-name (buffer-string)))
 	(let* ((eol (save-excursion (end-of-line) (point)))
 		   (rest-of-line (buffer-substring-no-properties (point) eol)))
 	  (assert-match "is not in scope" rest-of-line))))
+
+(defun assert-watchpoint-display-value (var-name value)
+  "Assert that VAR-NAME is listed in the watchpoint display window with a value of VALUE."
+
+  (save-excursion
+	(set-buffer jdibug-watchpoints-buffer)
+	(goto-char (point-min))
+	(assert-that
+	 (search-forward-regexp (concat "^" (regexp-quote var-name)) nil t)
+	 (format "Found %s in watchpoint buffer (%S)" var-name (buffer-string)))
+	(let* ((eol (save-excursion (end-of-line) (point)))
+		   (rest-of-line (buffer-substring-no-properties (point) eol)))
+	  (assert-match (concat ":.*" value) rest-of-line (format "Correct value in buffer(%S)" (buffer-string))))))
+

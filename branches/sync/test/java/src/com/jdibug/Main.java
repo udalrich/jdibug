@@ -14,9 +14,13 @@ public class Main
 		Stuff stuff = new Stuff();
 		stuff.x = 7;
 
+		System.out.println("Created stuff");
+
         float f = 1.2f;
         int intVar = 3;
         double dblVar = 3.4;
+		System.out.println("Created dbl Var");
+
         float[] array = new float[10];
         array[1] =-3.4f;
         array[0] = Float.NaN;

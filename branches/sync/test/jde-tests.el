@@ -5,14 +5,17 @@
 (require 'jde)
 (require 'jdibug)
 
+
 (defvar jdibug-jde-test-Main-buffer nil
   "Buffer with the source for the Main.java for testing")
+
+(defconst jdibug-test-root-dir (symbol-file 'jdibug-jde-test-Main-buffer))
 
 (defsuite jde-test-suite nil
   :setup-hooks (list (lambda ()
 				;; TODO figure out if there is already a process running and kill it
 				(setq jdibug-jde-test-Main-buffer
-					  (find-file (expand-file-name "java/src/com/jdibug/Main.java")))))
+					  (find-file (expand-file-name "java/src/com/jdibug/Main.java" jdibug-test-root-dir)))))
   :teardown-hooks (list (function jdibug-exit-jvm))
   )
 
@@ -54,7 +57,7 @@
   (let* ((interval 0.1) (max-count (/ 30 interval)) (count 0))
 	(while (and (not jdibug-test-step-hit) (< count max-count))
 	  (setq count (1+ count))
-	  (sleep interval)))
+	  (sleep-for interval)))
 
   (assert-that jdibug-test-step-hit "step hit"))
 
@@ -119,21 +122,31 @@ used"
 (defun jdibug-test-wait-for-refresh-timers nil
   "Wait until all of the buffer refresh timers have finished, or
 an unreasonable amount of time has passed."
-  (mapc (lambda (timer)
+  (jdibug-debug "Waiting for timers: %s" timer-list)
+  (mapc (lambda (timer-symbol)
 		  (let* ((count 0)
 				 (interval 0.1)
 				 (max-count (/ 10 interval))
 				 done)
 			(while (and (< count max-count)
 						(not done))
-			  (if (memq timer timer-list)
-				  (sleep-for interval)
-				(setq done t)))
-		  (assert-that done (format "Refresh timer never ran: %S" timer))))
-		(list jdibug-refresh-threads-buffer-timer
-			  jdibug-refresh-locals-buffer-timer
-			  jdibug-refresh-watchpoints-buffer-timer
-			  jdibug-refresh-frames-buffer-timer)))
+			  ;; Need to get the value every iteration,
+			  ;; since it can change if the timer runs
+			  ;; while we are sleeping and then needs to
+			  ;; restart the timer.
+			  (let ((timer (symbol-value timer-symbol)))
+				(jdibug-info "Checking if %s is in %S"
+							 timer-symbol timer timer-list)
+			    (if (memq timer timer-list)
+					(sleep-for interval)
+			      (jdibug-debug "%s no longer running" timer)
+			      (setq done t)))
+			  (setq count (1+ count)))
+			  (assert-that done (format "Refresh timer never ran: %S" timer-symbol))))
+		  '(jdibug-refresh-threads-buffer-timer
+		    jdibug-refresh-locals-buffer-timer
+		    jdibug-refresh-watchpoints-buffer-timer
+		    jdibug-refresh-frames-buffer-timer)))
 
 (defmacro jdibug-test-wait-until (var message)
   "Wait until VAR becomes true."
