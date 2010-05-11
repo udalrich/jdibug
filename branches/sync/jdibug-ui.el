@@ -802,7 +802,8 @@ we quickly step several times."
 			 (watchpoint-alist (jdibug-evaluate-watchpoints jdibug-active-frame)))
 		(jdibug-debug "watchpoint-alist: %s" watchpoint-alist)
 		(mapc 'jdibug-refresh-watchpoints-1 watchpoint-alist)
-		(message "Watchpoints updated")))))
+		(message "Watchpoints updated")
+		(jdibug-trace "jdibug-refresh-watchpoints-buffer-now finished")))))
 
 (defun jdibug-evaluate-watchpoints (frame)
   "Evaluate all of the currently defined watch points, using

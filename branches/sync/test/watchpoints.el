@@ -1,7 +1,7 @@
 (add-hook 'after-save-hook
 		  (lambda ()
 			(eval-current-buffer)
-         (elunit "jde-test-suite"))
+			(elunit "jde-test-suite"))
 		  nil 'local)
 
 (require 'elunit)
@@ -28,7 +28,9 @@
 	;; Step to the next line, which should cause the display to show the value
 	(jdibug-test-step-over-and-wait)
 
-	(assert-watchpoint-display-value var-name "3.4")))
+	(jdibug-test-wait-for-refresh-timers)
+	;; TODO: add an epsilon
+	(assert-watchpoint-display-value var-name (regexp-quote "3.39999"))))
 
 (deftest add-watchpoint-dot watchpoints-suite
   "Test that a watch point on a dot expression works"
@@ -40,6 +42,7 @@
 
 	;; Step over, which should set the value
 	(jdibug-test-step-over-and-wait)
+	(jdibug-test-wait-for-refresh-timers)
 	(assert-watchpoint-display-value var-name "7")))
 
 (defun watch-expression-and-run-to-first-reference (var-name)

@@ -9,14 +9,22 @@
 (defvar jdibug-jde-test-Main-buffer nil
   "Buffer with the source for the Main.java for testing")
 
-(defconst jdibug-test-root-dir (symbol-file 'jdibug-jde-test-Main-buffer))
+(defconst jdibug-test-root-dir
+  (expand-file-name (concat
+					 (or (symbol-file 'jdibug-jde-test-Main-buffer)
+						 load-file-name
+						 (buffer-file-name))
+					 "/..")))
+(message "jdibug-test-root-dir: %s" jdibug-test-root-dir)
 
 (defsuite jde-test-suite nil
   :setup-hooks (list (lambda ()
 				;; TODO figure out if there is already a process running and kill it
 				(setq jdibug-jde-test-Main-buffer
 					  (find-file (expand-file-name "java/src/com/jdibug/Main.java" jdibug-test-root-dir)))))
-  :teardown-hooks (list (function jdibug-exit-jvm))
+  :teardown-hooks (list (lambda()
+						  (jdibug-info "jde-test-suite teardown")
+						  (jdibug-exit-jvm)))
   )
 
 (defvar jdibug-test-breakpoint-hit nil)
@@ -54,11 +62,13 @@
   (jdibug-step-over)
 
   ;; Wait for the flag to be set
+  (jdibug-info "Waiting for step to finish")
   (let* ((interval 0.1) (max-count (/ 30 interval)) (count 0))
 	(while (and (not jdibug-test-step-hit) (< count max-count))
 	  (setq count (1+ count))
 	  (sleep-for interval)))
 
+  (jdibug-info "Step finished")
   (assert-that jdibug-test-step-hit "step hit"))
 
 (defun jdibug-test-step-hit-hook (&rest ignore)
@@ -136,17 +146,18 @@ an unreasonable amount of time has passed."
 			  ;; restart the timer.
 			  (let ((timer (symbol-value timer-symbol)))
 				(jdibug-info "Checking if %s is in %S"
-							 timer-symbol timer timer-list)
+							 timer-symbol timer-list)
 			    (if (memq timer timer-list)
 					(sleep-for interval)
-			      (jdibug-debug "%s no longer running" timer)
+			      (jdibug-debug "%s no longer running" timer-symbol)
 			      (setq done t)))
 			  (setq count (1+ count)))
 			  (assert-that done (format "Refresh timer never ran: %S" timer-symbol))))
 		  '(jdibug-refresh-threads-buffer-timer
 		    jdibug-refresh-locals-buffer-timer
 		    jdibug-refresh-watchpoints-buffer-timer
-		    jdibug-refresh-frames-buffer-timer)))
+		    jdibug-refresh-frames-buffer-timer))
+  (jdibug-debug "Waiting for timers finished"))
 
 (defmacro jdibug-test-wait-until (var message)
   "Wait until VAR becomes true."
