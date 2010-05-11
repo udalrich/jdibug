@@ -32,6 +32,40 @@
 	;; TODO: add an epsilon
 	(assert-watchpoint-display-value var-name (regexp-quote "3.39999"))))
 
+(deftest add-watchpoint-mult watchpoints-suite
+  "Test that a watch point on a multiplication works"
+
+  (let ((var-name  "dblVar")
+		(expr-name  "dblVar * intVar"))
+	(jdibug-add-watchpoint expr-name)
+	(watch-expression-and-run-to-first-reference var-name)
+
+	;; Check that the watchpoint buffer shows that the variable does not yet exist
+	(assert-watchpoint-display-unknown var-name)
+
+	;; Step to the next line, which should cause the display to show the value
+	(jdibug-test-step-over-and-wait)
+
+	;; TODO: add an epsilon
+	(assert-watchpoint-display-value expr-name "10.19999")))
+
+(deftest add-watchpoint-plus watchpoints-suite
+  "Test that a watch point on a multiplication works"
+
+  (let ((var-name  "dblVar")
+		(expr-name  "dblVar + intVar"))
+	(jdibug-add-watchpoint expr-name)
+	(watch-expression-and-run-to-first-reference var-name)
+
+	;; Check that the watchpoint buffer shows that the variable does not yet exist
+	(assert-watchpoint-display-unknown var-name)
+
+	;; Step to the next line, which should cause the display to show the value
+	(jdibug-test-step-over-and-wait)
+
+	;; TODO: add an epsilon
+	(assert-watchpoint-display-value expr-name "6\\.4")))
+
 (deftest add-watchpoint-dot watchpoints-suite
   "Test that a watch point on a dot expression works"
   (let ((var-name  "stuff.x"))

@@ -130,20 +130,18 @@ Subclasses must override this method."
 			  (jdi-object-get-value first-value field))))
 	  (error nil))))
 
+;; Binary numerical operations
+(defclass jdibug-eval-rule-binary-numerical (jdibug-eval-rule-with-name)
+  ((operation-name :initarg :operation-name
+				   :type string))
+  :abstract
+  "Abstract class for rules representing binary numerical operations")
 
-;; Multiplication
-(defclass jdibug-eval-rule-mult (jdibug-eval-rule-with-name)
-  ;; fields
-  ()
-  "Evaluation of a multiplication (foo * bar)")
+(defmethod eval-binary-expression ((this jdibug-eval-rule-binary-numerical) first second)
+  "Perform the actual evaluation of FIRST and SECOND, which are emacs numbers."
+  (error "Subclasses must override eval-binary-expression: %s" this))
 
-(defmethod initialize-instance ((this jdibug-eval-rule-mult) &rest fields)
-  "Constructor for jdibug-eval-rule-mult instance"
-  (call-next-method)
-  (oset this :class 'function)
-  (oset this :name 'mult))
-
-(defmethod jdibug-eval-rule-accept ((this jdibug-eval-rule-mult) jdwp tree frame)
+(defmethod jdibug-eval-rule-accept ((this jdibug-eval-rule-binary-numerical) jdwp tree frame)
   "Evalutate multiplication"
   (let* ((attrs (semantic-tag-attributes tree))
 		 (args (plist-get attrs :arguments))
@@ -160,14 +158,50 @@ Subclasses must override this method."
 	(if (and (jdibug-expr-type-is-number-p first-type)
 			 (jdibug-expr-type-is-number-p second-type))
 		(progn
-		  (setq product (* (jdi-primitive-emacs-value first-value)
-						   (jdi-primitive-emacs-value second-value))
+		  (setq product (eval-binary-expression this (jdi-primitive-emacs-value first-value)
+												(jdi-primitive-emacs-value second-value))
 				vector (jdwp-number-to-vec product result-type))
 		  (make-jdi-primitive-value :type result-type
 									:value vector))
-	  (jdibug-expr-bad-eval "Unable to multiple a %s and a %s"
+	  (jdibug-expr-bad-eval "Unable to %s a %s and a %s"
+							(operation-name this)
 							(jdwp-type-name first-type)
 							(jdwp-type-name second-type)))))
+
+
+;; Multiplication
+(defclass jdibug-eval-rule-mult (jdibug-eval-rule-binary-numerical)
+  ;; fields
+  ()
+  "Evaluation of a multiplication (foo * bar)")
+
+(defmethod initialize-instance ((this jdibug-eval-rule-mult) &rest fields)
+  "Constructor for jdibug-eval-rule-mult instance"
+  (call-next-method)
+  (oset this :class 'function)
+  (oset this :name 'mult)
+  (oset this :operation-name "multiply"))
+
+
+(defmethod eval-binary-expression ((this jdibug-eval-rule-mult) first second)
+  (* first second))
+
+;; Addition
+(defclass jdibug-eval-rule-plus (jdibug-eval-rule-binary-numerical)
+  ;; fields
+  ()
+  "Evaluation of an addition (foo + bar)")
+
+(defmethod initialize-instance ((this jdibug-eval-rule-plus) &rest fields)
+  "Constructor for jdibug-eval-rule-mult instance"
+  (call-next-method)
+  (oset this :class 'function)
+  (oset this :name 'plus)
+  (oset this :operation-name "add"))
+
+
+(defmethod eval-binary-expression ((this jdibug-eval-rule-plus) first second)
+  (+ first second))
 
 
 

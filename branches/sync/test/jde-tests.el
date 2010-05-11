@@ -53,7 +53,8 @@
 
 (defvar jdibug-test-step-hit nil)
 (defun jdibug-test-step-over-and-wait ()
-  "Step over the current thread, and then wait until the step is finished."
+  "Step over the current thread, and then wait until the step is
+finished.  Also wait for all of the buffers to finish updating."
   ;; Add a hook to remember when we hit a breakpoint
   (add-hook 'jdi-step-hooks #'jdibug-test-step-hit-hook)
   (setq jdibug-test-step-hit nil)
@@ -69,7 +70,9 @@
 	  (sleep-for interval)))
 
   (jdibug-info "Step finished")
-  (assert-that jdibug-test-step-hit "step hit"))
+  (assert-that jdibug-test-step-hit "step hit")
+
+  (jdibug-test-wait-for-refresh-timers))
 
 (defun jdibug-test-step-hit-hook (&rest ignore)
   (setq jdibug-test-step-hit t)
