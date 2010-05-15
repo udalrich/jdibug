@@ -604,7 +604,9 @@
   (jdi-debug "jdi-class-get-locations-of-line")
   (let ((result))
 	(dolist (method (jdi-class-get-methods class))
+	  (jdibug-debug "Checking method %s" (jdi-method-name method))
 	  (dolist (location (jdi-method-get-locations method))
+		(jdibug-debug "Checking if %d equals %d" line-number (jdi-location-line-number location))
 		(if (equal line-number (jdi-location-line-number location))
 			(push location result))))
 	result))
@@ -820,6 +822,9 @@
 
 (defun jdi-value-object-p (value)
   (equal (jdi-value-type value) jdwp-tag-object))
+
+(defun jdi-value-array-p (value)
+  (equal (jdi-value-type value) jdwp-tag-array))
 
 (defun jdi-generic-signature-to-print (generic-signature)
   (setq generic-signature (replace-regexp-in-string "^<" "" generic-signature))
@@ -1123,27 +1128,35 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 										(jdwp-get-string field :generic-signature)
 										(bindat-get-field field :mod-bits))))))
 
-(defun jdi-array-get-values (array)
+(defun jdi-array-get-values (array &optional first last)
+  "Get the values of ARRAY from FIRST (inclusive) to
+LAST (exclusive).  If FIRST or LAST are not supplied, they
+default to 0 and the length of the array.
+
+Returns nil if array is the null object.  Otherwise, it returns a
+list whose nth element is the array element at index FIRST + n"
   (jdi-debug "jdi-array-get-values:object-id=%s" (jdi-object-id array))
 
   (unless (equal (jdi-object-id array) [0 0 0 0 0 0 0 0])
-	(let ((array-length (jdi-array-get-array-length array)))
-	  (when (> array-length 0)
+	(let (array-length)
+	  (setq first (or first 0)
+			last (or last (jdi-array-get-array-length array)))
+	  (when (> last first)
 		(let* ((reply (jdwp-send-command (jdi-mirror-jdwp array) "array-get-values"
 										 `((:array-object . ,(jdi-object-id array))
-										   (:first-index . 0)
-										   (:length . ,array-length))))
+										   (:first-index . ,first)
+										   (:length . ,(- last first)))))
 			   (reply-array (jdwp-unpack-arrayregion (jdi-mirror-jdwp array) reply)))
 		  (jdi-trace "got array-get-values:%s" reply-array)
 		  (if (or (= (bindat-get-field reply-array :type) jdwp-tag-object)
 				  (= (bindat-get-field reply-array :type) jdwp-tag-array))
 			  (loop for value-reply in (bindat-get-field reply-array :value)
-					for i from 0 to (- array-length 1)
+					for i from first to (1- last)
 					collect (jdi-virtual-machine-get-value-create (jdi-mirror-virtual-machine array)
 																  (bindat-get-field value-reply :value :type)
 																  (bindat-get-field value-reply :value :u :value)))
 			(loop for value-reply in (bindat-get-field reply-array :value)
-				  for i from 0 to (- array-length 1)
+				  for i from first to (1- last)
 				  collect (jdi-virtual-machine-get-value-create (jdi-mirror-virtual-machine array)
 																(bindat-get-field reply-array :type)
 																(bindat-get-field value-reply :value)))))))))

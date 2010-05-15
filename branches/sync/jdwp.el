@@ -1051,6 +1051,7 @@ byte, which might be needed to fill out the vector."
 	  (setq bits (logior bits (lsh sign-bit 7))))
 	bits))
 
+(defconst jdwp-float-exponent-bias 127)
 (defun jdwp-vec-to-float (vec)
   (let* ((int (jdwp-vec-to-int vec))
 		 (high (+ (* (elt vec 0) 256)
@@ -1064,7 +1065,7 @@ byte, which might be needed to fill out the vector."
 	  (0
 	   ;; Subnormal
 	   (setq result (/ (float mantissa) #x7fffff)
-			 exponent -126)
+			 exponent (- 1 jdwp-float-exponent-bias))
 	   (jdwp-debug "Converting %s %f %f" sign result exponent)
 	   ;; Need to use a floating point in expt to avoid integer overflow
 	   (setq result (* sign result (expt 2.0 exponent))))
@@ -1078,7 +1079,7 @@ byte, which might be needed to fill out the vector."
 	  (otherwise
 	   ;; Normalized number
 	   (setq result (+ 1.0 (/ (float mantissa) #x7fffff))
-			 exponent (- exponent 127))
+			 exponent (- exponent jdwp-float-exponent-bias))
 	   (jdwp-debug "Converting %s %f %f" sign result exponent)
 	   ;; Need to use a floating point in expt to avoid integer overflow
 	   (setq result (* sign result (expt 2.0 exponent)))
@@ -1183,6 +1184,53 @@ byte, which might be needed to fill out the vector."
 				   bits 8))
 		   result))))
 
+(defun jdwp-float-to-vec (float)
+  "Convert FLOAT into a vector for passing over jdwp."
+  (cond ((or (eq float 'NaN) (and (numberp float) (not (= float float))))
+		 ;; NaN
+		 (vector #x7f #x80 0 1))
+		((or (memq float '(+infinity -infinity))
+			 (not (zerop (* 0 float))))
+		 ;; +- infinity
+		 (let ((first-byte (if (numberp float)
+							   (if (> float 0) #x7f #xff)
+							 (if (eq float '+infinity) #x7f #xff))))
+		   (vector first-byte #x80 0 0)))
+		(t
+		 ;; Normal number
+		 (let* ((exponent (logb float))
+				(sign-bit (if (< float 0) 1 0))
+				(mantissa (abs (* float (expt 2.0 (- exponent)))))
+				(byte 3) (bits 7)
+				(result (make-vector 4 0))
+				(shifted-exponent (+ exponent jdwp-float-exponent-bias))
+				int-mantissa factor index)
+		   (if (< shifted-exponent 0)
+			   (progn
+				 ;; Subnormalized
+				 (aset result 0 (lsh sign-bit 7))
+				 (setq mantissa (* mantissa (expt 2.0 (1- jdwp-float-exponent-bias)))))
+
+			 ;; Remove the implicit leading 1 from the mantissa
+			 (setq mantissa (1- mantissa))
+			 ;; Set the exponent
+			 (let ((exp-high (lsh shifted-exponent -1))
+				   (exp-low (logand shifted-exponent #x01)))
+			   (aset result 1 (lsh exp-low 7))
+			   (aset result 0 exp-high))
+			 ;; Set the sign bit
+			 (aset result 0 (logior (aref result 0)
+									(lsh sign-bit 7))))
+		   ;; Extract the bits from the mantissa
+		   (while (> byte 0)
+			 (setq index (- 4 byte)
+				   factor (lsh 1 bits)
+				   int-mantissa (truncate (* mantissa factor)))
+			 (aset result index (logior (aref result index) int-mantissa))
+			 (setq mantissa (mod (* mantissa factor) 1)
+				   byte (1- byte)
+				   bits 8))
+		   result))))
 
 (defun jdwp-number-to-vec (number type)
   "Convert NUMBER to a vector of bytes.  TYPE is the type of the result."

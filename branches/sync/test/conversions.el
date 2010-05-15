@@ -50,3 +50,22 @@
   (assert-equal '[#xff #xff #xff #xff] (jdwp-integer-to-vec -1 4))
   (assert-equal '[#xff #xff #xff #xff #xff #xff #xff #xff]
 				(jdwp-integer-to-vec -1 8)))
+
+(deftest float-to-vec-to-float conversions-suite
+  "Test that the float/vec conversion functions are inverses"
+  (let ((pairs '(([#x3f #x80 0 0 ] . 1.0)
+				 ([#x40 #x00 0 0 ] . 2.0)
+				 ([#xc0 #x00 0 0 ] . -2.0)
+				 ([#x40 #x28 #xAE #x14] . 2.635624961331482)
+				 ([0 0 0 0] . 0.0)
+				 ([#x7f #x80 0 1] . NaN)
+				 ([#x7f #x80 0 0] . +infinity)
+				 ([#xff #x80 0 0] . -infinity)))
+		vec actual expected back-to-vec)
+	(mapc (lambda (pair)
+			(setq vec (car pair) expected (cdr pair)
+				  actual (jdwp-vec-to-float vec))
+			(assert-equal expected actual "conversion to float")
+			(setq back-to-vec (jdwp-float-to-vec actual))
+			(assert-equal vec back-to-vec (format "conversion back to vector of %s" actual)))
+		  pairs)))

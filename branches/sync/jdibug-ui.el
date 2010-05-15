@@ -496,6 +496,7 @@ And position the point at the line number."
   (jdibug-debug "jdibug-handle-class-prepare")
   (dolist (bp jdibug-breakpoints)
 	(when (equal (jdibug-breakpoint-source-file bp) (jdibug-class-signature-to-source-file (jdi-class-get-signature class)))
+	  (jdibug-debug "Found breakpoint in %s" (jdibug-breakpoint-source-file bp))
 	  (dolist (location (jdi-class-get-locations-of-line class (jdibug-breakpoint-line-number bp)))
 		(let ((er (jdi-event-request-manager-create-breakpoint (jdi-virtual-machine-event-request-manager (jdi-mirror-virtual-machine class)) location)))
 		  (jdi-event-request-enable er)
@@ -519,7 +520,7 @@ And position the point at the line number."
 
 (defun jdibug-handle-thread-start (thread)
   ;; We don't request that the thread is suspended in the event
-;;   request, so don't resume it.  That can cause problems with other
+;;   request, so don't resume it.  Doing so can cause problems with other
 ;;   events, like class-prepare, which do suspend it and cause the
 ;;   thread to be resumed before a breakpoint can be set.
 
@@ -1149,7 +1150,8 @@ execute BODY."
 (defun jdibug-remove-breakpoint (bp)
   (jdibug-disable-breakpoint bp)
   (setq jdibug-breakpoints (delete bp jdibug-breakpoints))
-  (delete-overlay (jdibug-breakpoint-overlay bp))
+  (when (jdibug-breakpoint-overlay bp)
+	(delete-overlay (jdibug-breakpoint-overlay bp)))
   (jdibug-refresh-breakpoints-buffer)
   (message "breakpoint removed"))
 
@@ -1187,6 +1189,7 @@ execute BODY."
 						   (string= (buffer-file-name buf) (jdibug-breakpoint-source-file bp)))
 						 (buffer-list))))
 	(if (and buffer (buffer-live-p buffer))
+		(jdibug-debug "Found buffer")
 		(with-current-buffer buffer
 		  (goto-line (or (jdibug-breakpoint-line-number bp) (jdibug-get-class-line-number)))
 		  (if (jdibug-breakpoint-overlay bp)

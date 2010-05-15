@@ -1,7 +1,8 @@
 (add-hook 'after-save-hook
 		  (lambda ()
-			(eval-current-buffer)
-			(elunit "jde-test-suite"))
+			(unless (and (boundp emacs-is-exiting) emacs-is-exiting)
+			  (eval-current-buffer)
+			  (elunit "jde-test-suite")))
 		  nil 'local)
 
 (require 'elunit)
@@ -15,6 +16,21 @@
 					   (jdibug-remove-all-watchpoints)))
   ;; :teardown-hooks (lambda () )
 )
+
+(deftest add-watchpoint-array watchpoints-suite
+  "Test that a watch point on a an array reference variable works"
+
+  (let* ((array-name  "floatArray")
+		(expr-name (concat array-name "[1]")))
+	(watch-expression-and-run-to-first-reference array-name)
+	(jdibug-add-watchpoint expr-name)
+
+	;; Step to the next line, which should cause the display to show the value
+	(jdibug-test-step-over-and-wait)
+	(jdibug-test-step-over-and-wait)
+
+	;; TODO: add an epsilon
+	(assert-watchpoint-display-value expr-name (regexp-quote "-3.4"))))
 
 (deftest add-watchpoint-var watchpoints-suite
   "Test that a watch point on a local variable works"
@@ -65,6 +81,47 @@
 
 	;; TODO: add an epsilon
 	(assert-watchpoint-display-value expr-name "6\\.4")))
+
+(deftest add-watchpoint-minus watchpoints-suite
+  "Test that a watch point on a multiplication works"
+
+  (let ((var-name  "dblVar")
+		(expr-name  "dblVar - intVar"))
+	(jdibug-add-watchpoint expr-name)
+	(watch-expression-and-run-to-first-reference var-name)
+
+	;; Check that the watchpoint buffer shows that the variable does not yet exist
+	(assert-watchpoint-display-unknown var-name)
+
+	;; Step to the next line, which should cause the display to show the value
+	(jdibug-test-step-over-and-wait)
+
+	;; TODO: add an epsilon
+	(assert-watchpoint-display-value expr-name "0\\.399999")))
+
+(deftest add-watchpoint-divide watchpoints-suite
+  "Test that a watch point on division works"
+
+  (let* ((var-name  "dblVar")
+		 (dbl-div-int  '("dblVar / intVar" . "1\\.13333"))
+		 (dbl-div-dbl  '("dblVar / f" . "2\\.83333"))
+		 (int-div-dbl  '("intVar / f" . "2\\.5\\|2.49999"))
+		 (int-div-int  '("intVar / twoAsInt". "1$"))
+		 (expr-list (list dbl-div-dbl dbl-div-int int-div-int int-div-dbl)))
+	(mapc (lambda (expr-cons)
+			(jdibug-add-watchpoint (car expr-cons)))
+		  expr-list)
+	(watch-expression-and-run-to-first-reference var-name)
+
+	;; Step to the next line, which should cause the display to show the value
+	(jdibug-test-step-over-and-wait)
+
+	;; TODO: add an epsilon
+	(mapc (lambda (pair)
+			(let ((expr-name (car pair))
+				  (expected-value (cdr pair)))
+			  (assert-watchpoint-display-value expr-name expected-value)))
+		  expr-list)))
 
 (deftest add-watchpoint-dot watchpoints-suite
   "Test that a watch point on a dot expression works"
@@ -120,5 +177,6 @@
 	 (format "Found %s in watchpoint buffer (%S)" var-name (buffer-string)))
 	(let* ((eol (save-excursion (end-of-line) (point)))
 		   (rest-of-line (buffer-substring-no-properties (point) eol)))
-	  (assert-match (concat ":.*" value) rest-of-line (format "Correct value in buffer(%S)" (buffer-string))))))
+	  (assert-match (concat ":.*\\(" value "\\)") rest-of-line
+					(format "Correct value in buffer(%S)" (buffer-string))))))
 

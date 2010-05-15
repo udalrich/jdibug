@@ -54,9 +54,9 @@
 ;; -----------------------------
 %type  <block>       ;;syntax "\\s(\\|\\s)" matchdatatype block
 
-;; %token <block>       PAREN_BLOCK "(LPAREN RPAREN)"
+%token <block>       PAREN_BLOCK "(LPAREN RPAREN)"
 ;; %token <block>       BRACE_BLOCK "(LBRACE RBRACE)"
-;; %token <block>       BRACK_BLOCK "(LBRACK RBRACK)"
+%token <block>       BRACK_BLOCK "(LBRACK RBRACK)"
 
 %token <open-paren>  LPAREN      "("
 %token <close-paren> RPAREN      ")"
@@ -1542,7 +1542,9 @@ method_invocation
 
 array_access
   : name LBRACK expression RBRACK
+	(FUNCTION-TAG 'array "array" (list $1 $3))
   | primary_no_new_array LBRACK expression RBRACK
+	(FUNCTION-TAG 'array "array" (list $1 $3))
 ;;   | array_creation_init LBRACK expression RBRACK
   ;
 

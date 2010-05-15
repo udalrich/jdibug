@@ -76,6 +76,20 @@
 													:type "dot"))
 								  parse)))
 
+(deftest parse-array-reference parsing-suite
+  "Test that parsing a[b] expressions works"
+  (let ((parse-constant (jdibug-expr-parse-expr "foo[3]"))
+		(parse-variable (jdibug-expr-parse-expr "foo[bar]")))
+	(assert-same-structure-prefix '(array function
+										  (:arguments (("foo" identifier)
+													   ("3" constant))))
+								  parse-constant)
+	(assert-same-structure-prefix '(array function
+										  (:arguments (("foo" identifier)
+													   ("bar" identifier))))
+								  parse-variable)))
+
+
 (deftest parse-plus parsing-suite
   "Test parsing an expression with addition"
   (let ((parse (jdibug-expr-parse-expr "foo + bar.baz")))

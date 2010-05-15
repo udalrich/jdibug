@@ -148,8 +148,6 @@ an unreasonable amount of time has passed."
 			  ;; while we are sleeping and then needs to
 			  ;; restart the timer.
 			  (let ((timer (symbol-value timer-symbol)))
-				(jdibug-info "Checking if %s is in %S"
-							 timer-symbol timer-list)
 			    (if (memq timer timer-list)
 					(sleep-for interval)
 			      (jdibug-debug "%s no longer running" timer-symbol)
@@ -177,7 +175,12 @@ an unreasonable amount of time has passed."
 ;; (debug-on-entry 'jdibug-test-connect-to-jvm)
 ;; (debug-on-entry 'jdibug-test-wait-for-refresh-timers)
 ;; (debug-on-entry 'jdibug-test-wait-until)
-;; (debug-on-entry 'jdibug-connect)
+;; (debug-on-entry 'watch-expression-and-run-to-first-reference)
 
-
-(elunit "jde-test-suite")
+;;(debug-on-entry 'jdi-class-get-locations-of-line)
+(let ((then (float-time))
+	  now delta)
+  (elunit "jde-test-suite")
+  (setq now (float-time)
+		delta (- now then))
+  (message "Running jde-test-suite took %f seconds" delta))

@@ -11,25 +11,27 @@ public class Main
 {
     public static void main(String[] args)
     {
-		Stuff stuff = new Stuff();
-		stuff.x = 7;
+        Stuff stuff = new Stuff();
+        stuff.x = 7;
 
-		System.out.println("Created stuff");
+        System.out.println("Created stuff");
+
+        int twoAsInt = 2;
 
         float f = 1.2f;
         int intVar = 3;
         double dblVar = 3.4;
-		System.out.println("Created dbl Var");
+        System.out.println("Created dbl Var");
 
-        float[] array = new float[10];
-        array[1] =-3.4f;
-        array[0] = Float.NaN;
-        array[3] = Float.POSITIVE_INFINITY;
-        array[4] = Float.NEGATIVE_INFINITY;
-        array[2] = f*f;
-        array[5] = 0f;
-        array[7] = (float) Math.pow(2, -130); // subnormal
-        System.out.println(Arrays.toString(array));
+        float[] floatArray = new float[10];
+        floatArray[1] =-3.4f;
+        floatArray[0] = Float.NaN;
+        floatArray[3] = Float.POSITIVE_INFINITY;
+        floatArray[4] = Float.NEGATIVE_INFINITY;
+        floatArray[2] = f*f;
+        floatArray[5] = 0f;
+        floatArray[7] = (float) Math.pow(2, -130); // subnormal
+        System.out.println(Arrays.toString(floatArray));
 
         int[] intArr = new int[] { 0, 32, -5432, Integer.MAX_VALUE,Integer.MIN_VALUE };
 
@@ -91,9 +93,9 @@ public class Main
 
     }
 
-	private static class Stuff
-	{
-		int x;
-		double y;
-	}
+    private static class Stuff
+    {
+        int x;
+        double y;
+    }
 }

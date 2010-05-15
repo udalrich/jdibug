@@ -130,6 +130,39 @@ Subclasses must override this method."
 			  (jdi-object-get-value first-value field))))
 	  (error nil))))
 
+;; Array access
+(defclass jdibug-eval-rule-array-element (jdibug-eval-rule-with-name)
+  ;; fields
+  ()
+  "Evaluation of a array-element construct (foo[bar])")
+
+(defmethod initialize-instance ((this jdibug-eval-rule-array-element) &rest fields)
+  "Constructor for jdibug-eval-rule-array-element instance"
+  (call-next-method)
+  (oset this :class 'function)
+  (oset this :name 'array))
+
+(defmethod jdibug-eval-rule-accept ((this jdibug-eval-rule-array-element) jdwp tree frame)
+  "Evaluate a rule for array[index]"
+  (let* ((attrs (semantic-tag-attributes tree))
+		 (args (plist-get attrs :arguments))
+		 (first-arg (car args))
+		 (second-arg (nth 1 args))
+		 (first-value (jdibug-expr-eval-expr jdwp first-arg frame))
+		 (second-value (jdibug-expr-eval-expr jdwp second-arg frame)))
+	(jdibug-debug "jdibug-expr-eval-expr: first value is a %s" (jdi-value-type first-value))
+	(if (and first-value (jdi-value-array-p first-value))
+		(if (and second-value (equal (jdi-value-type second-value) jdwp-tag-int))
+			(let ((emacs-index (jdi-primitive-emacs-value second-value)))
+			  (if (or (< emacs-index 0) (>= emacs-index (jdi-array-get-array-length first-value)))
+				  (format "index out of bounds: %s" emacs-index)
+				(car (jdi-array-get-values first-value emacs-index (1+ emacs-index)))))
+		  (format "array index must evaluate to an int: %s" (jdwp-type-name (jdi-value-type second-value))))
+	  (format "not an array: %s" (jdwp-type-name (jdi-value-type first-value))))))
+
+
+
+
 ;; Binary numerical operations
 (defclass jdibug-eval-rule-binary-numerical (jdibug-eval-rule-with-name)
   ((operation-name :initarg :operation-name
@@ -186,6 +219,23 @@ Subclasses must override this method."
 (defmethod eval-binary-expression ((this jdibug-eval-rule-mult) first second)
   (* first second))
 
+;; Division
+(defclass jdibug-eval-rule-div (jdibug-eval-rule-binary-numerical)
+  ;; fields
+  ()
+  "Evaluation of a division (foo / bar)")
+
+(defmethod initialize-instance ((this jdibug-eval-rule-div) &rest fields)
+  "Constructor for jdibug-eval-rule-mult instance"
+  (call-next-method)
+  (oset this :class 'function)
+  (oset this :name 'div)
+  (oset this :operation-name "divide"))
+
+
+(defmethod eval-binary-expression ((this jdibug-eval-rule-div) first second)
+  (/ first second))
+
 ;; Addition
 (defclass jdibug-eval-rule-plus (jdibug-eval-rule-binary-numerical)
   ;; fields
@@ -202,6 +252,25 @@ Subclasses must override this method."
 
 (defmethod eval-binary-expression ((this jdibug-eval-rule-plus) first second)
   (+ first second))
+
+
+
+;; subtraction
+(defclass jdibug-eval-rule-minus (jdibug-eval-rule-binary-numerical)
+  ;; fields
+  ()
+  "Evaluation of a subtraction (foo - bar)")
+
+(defmethod initialize-instance ((this jdibug-eval-rule-minus) &rest fields)
+  "Constructor for jdibug-eval-rule-mult instance"
+  (call-next-method)
+  (oset this :class 'function)
+  (oset this :name 'minus)
+  (oset this :operation-name "subtract"))
+
+
+(defmethod eval-binary-expression ((this jdibug-eval-rule-minus) first second)
+  (- first second))
 
 
 
