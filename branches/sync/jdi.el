@@ -604,9 +604,7 @@
   (jdi-debug "jdi-class-get-locations-of-line")
   (let ((result))
 	(dolist (method (jdi-class-get-methods class))
-	  (jdibug-debug "Checking method %s" (jdi-method-name method))
 	  (dolist (location (jdi-method-get-locations method))
-		(jdibug-debug "Checking if %d equals %d" line-number (jdi-location-line-number location))
 		(if (equal line-number (jdi-location-line-number location))
 			(push location result))))
 	result))
@@ -1416,7 +1414,7 @@ built-in numerical functions."
 		((eql type jdwp-tag-double)
 		 (jdwp-vec-to-double value))
 		(t
-		 (jdibug-error "Unknown type (%s) for value: %s" type jdi-value)
+		 (jdi-error "Unknown type (%s) for value: %s" type jdi-value)
 		 (error "%s is not a numerical type" (jdwp-type-name type))))))
 
 (provide 'jdi)

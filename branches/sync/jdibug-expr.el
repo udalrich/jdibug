@@ -40,6 +40,7 @@
 (require 'semantic-java)
 
 (elog-make-logger jdibug-expr)
+(elog-make-logger jdibug-expr-parse)
 
 (defconst jdibug-expr-bad-eval 'jdibug-expr-bad-eval
   "Symbol thrown when an evaluation fails")
@@ -120,7 +121,7 @@ Subclasses must override this method."
 		(let* ((first-value (jdibug-expr-eval-expr jdwp first-arg frame))
 			  (second-name (semantic-tag-name second-arg))
 			  (second-type (semantic-tag-class second-arg))
-			  class)
+			  class field)
 		  (when (and first-value (jdi-value-object-p first-value)
 					 (eql second-type 'identifier))
 			;; TODO: also handle array.length.  Do we need to handle class and thread also?
@@ -150,7 +151,7 @@ Subclasses must override this method."
 		 (second-arg (nth 1 args))
 		 (first-value (jdibug-expr-eval-expr jdwp first-arg frame))
 		 (second-value (jdibug-expr-eval-expr jdwp second-arg frame)))
-	(jdibug-debug "jdibug-expr-eval-expr: first value is a %s" (jdi-value-type first-value))
+	(jdibug-expr-debug "jdibug-expr-eval-expr: first value is a %s" (jdi-value-type first-value))
 	(if (and first-value (jdi-value-array-p first-value))
 		(if (and second-value (equal (jdi-value-type second-value) jdwp-tag-int))
 			(let ((emacs-index (jdi-primitive-emacs-value second-value)))
@@ -161,7 +162,32 @@ Subclasses must override this method."
 	  (format "not an array: %s" (jdwp-type-name (jdi-value-type first-value))))))
 
 
+;; Constants
+(defclass jdibug-eval-rule-constant (jdibug-eval-rule)
+  ()
+  "Rules representing constant values")
 
+(defmethod initialize-instance ((this jdibug-eval-rule-constant) &rest fields)
+  "Constructor for jdibug-eval-rule-constant instance"
+  (call-next-method)
+  (oset this :class 'constant))
+
+(defmethod jdibug-eval-rule-accept ((this jdibug-eval-rule-constant) jdwp tree frame)
+  "Evalutate a constant."
+  (jdibug-expr-debug "jdibug-eval-rule-accept: %S" tree)
+  (let* ((attrs (semantic-tag-attributes tree))
+		 (type (plist-get attrs :type))
+		 (value (semantic-tag-name tree)))
+	(case type
+	  ;; TODO: handle hex and float notation
+	  (number
+	   (let* ((jdwp-type (jdibug-expr-guess-type value))
+			  (value (string-to-number value))
+			  (jdwp-value (jdwp-number-to-vec value jdwp-type)))
+		 (make-jdi-primitive-value :type jdwp-type
+								   :value jdwp-value)))
+	  (otherwise
+	   (jdibug-expr-bad-eval "Uncertain how to evaluate %s" value)))))
 
 ;; Binary numerical operations
 (defclass jdibug-eval-rule-binary-numerical (jdibug-eval-rule-with-name)
@@ -175,7 +201,7 @@ Subclasses must override this method."
   (error "Subclasses must override eval-binary-expression: %s" this))
 
 (defmethod jdibug-eval-rule-accept ((this jdibug-eval-rule-binary-numerical) jdwp tree frame)
-  "Evalutate multiplication"
+  "Evalutate a binary rule."
   (let* ((attrs (semantic-tag-attributes tree))
 		 (args (plist-get attrs :arguments))
 		 (first-arg (car args))
@@ -197,7 +223,7 @@ Subclasses must override this method."
 		  (make-jdi-primitive-value :type result-type
 									:value vector))
 	  (jdibug-expr-bad-eval "Unable to %s a %s and a %s"
-							(operation-name this)
+							(jdibug-eval-rule-binary-numerical-operation-name this)
 							(jdwp-type-name first-type)
 							(jdwp-type-name second-type)))))
 
@@ -328,8 +354,8 @@ resolved within the context of FRAME.  The returned value is a jdi-value."
 					   jdibug-expr-eval-rule-list)))
 	(if rule
 		(jdibug-eval-rule-accept rule jdwp tree frame)
-	  (jdibug-error "Unable to match to any rule: %s" tree)
-	  (error "Unable to match to any rule: %s" tree))))
+	  (jdibug-expr-error "Unable to match to any rule: %s" tree)
+	  (jdibug-expr-bad-eval "Unable to match to any rule: %s" tree))))
 
 (defun jdibug-expr-parse-expr (expr)
   "Parse EXPR.  Returns either a tree of semantic parser
@@ -359,7 +385,7 @@ unsuccessful).  The failure string may not be very descriptive."
 		  ;; parsed multiple expressions or that there is unparsed
 		  ;; garbage at the end
 		  (progn
-			(jdibug-expr-debug "Parsed %s to %S" expr result)
+			(jdibug-expr-parse-debug "Parsed %s to %S" expr result)
 			(if (> (length result) 1)
 				(format "Multiple expressions in %s" expr)
 			  (let* ((tree (car result))
@@ -369,7 +395,7 @@ unsuccessful).  The failure string may not be very descriptive."
 						  expr
 						  (substring expr (semantic-tag-end tree)))
 				tree))))
-		(jdibug-expr-debug "Unable to parse %s")
+		(jdibug-expr-parse-debug "Unable to parse %s")
 		(format "Unable to parse %s" expr)))))
 
 (defun jdibug-expr-type-is-number-p (type)
@@ -396,5 +422,33 @@ in the list will be the result of the operation.")
 	(let ((first-index (position first jdibug-expr-merge-types-order))
 		  (second-index (position second jdibug-expr-merge-types-order)))
 	  (nth (max first-index second-index) jdibug-expr-merge-types-order))))
+
+
+(defun jdibug-expr-guess-type (value)
+  "Guess which jdwp type the string VALUE represents.  For example, '3' will return `jdwp-tag-int' while '3.' will return `jdwp-tag-double'"
+  (jdibug-expr-trace "jdibug-expr-guess-type: %S" value)
+  (cond
+   ;; Double
+   ((or (string-match "^[-+]?[0-9]+\\.[0-9]*$" value) ; explicit decimal point
+		(string-match "^[-+]?[0-9]*\\.[0-9]+$" value) ; explicit decimal point
+		(string-match "%[-+]?[0-9.]+[eE][-+]?[0-9]+$" value) ; scientific notation
+		)
+	jdwp-tag-double)
+   ;; Float
+   ((or (string-match "^[-+]?[0-9]+\\.[0-9]*[Ff]$" value) ; explicit decimal point
+		(string-match "^[-+]?[0-9]*\\.[0-9]+[Ff]$" value) ; explicit decimal point
+		(string-match "%[-+]?[0-9.]+[eE][-+]?[0-9]+[Ff]$" value) ; scientific notation
+		)
+	jdwp-tag-float)
+   ;; Long
+   ((string-match "^[-+]?[0-9]+[lL]$" value) jdwp-tag-long)
+
+   ;; Int
+   ((string-match "^[-+]?[0-9]+$" value) jdwp-tag-int)
+
+   ;; No way to specify a byte or short constant
+
+   (t (jdibug-expr-bad-eval "Unable to determine type of %s" value))))
+
 
 (provide 'jdibug-expr)

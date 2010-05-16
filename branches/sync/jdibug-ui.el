@@ -253,6 +253,9 @@ to populate the jdi-value-values of the jdi-value.")
 (add-hook 'jdi-thread-end-hooks 'jdibug-handle-thread-end)
 
 (defun jdibug-connect ()
+  "Create a new debugger and connect to a running process.  See
+`jdibug-connect-hosts' for where it will look for the debuggee
+processes"
   (interactive)
 
   ;; (unless (byte-code-function-p (symbol-function 'jdibug-connect))
@@ -1429,7 +1432,11 @@ locals and watchpoint buffers."
 			(if win (delete-window win)))
 		  (if (get-buffer buffer)
 			  (kill-buffer buffer)))
-		(list jdibug-locals-buffer-name jdibug-frames-buffer-name jdibug-breakpoints-buffer-name jdibug-threads-buffer-name)))
+		(list jdibug-locals-buffer-name
+			  jdibug-frames-buffer-name
+			  jdibug-breakpoints-buffer-name
+			  jdibug-threads-buffer-name
+			  jdibug-watchpoints-buffer-name)))
 
 (add-hook 'jdibug-connected-hook 'jdibug-debug-view-2)
 (add-hook 'jdibug-detached-hook 'jdibug-undebug-view)

@@ -17,13 +17,22 @@
 					 "/..")))
 (message "jdibug-test-root-dir: %s" jdibug-test-root-dir)
 
+(defvar jdibug-test-old-refresh-delay nil
+  "Saved valud of the refresh delay")
+
 (defsuite jde-test-suite nil
   :setup-hooks (list (lambda ()
+					   ;; Shorten the refresh delay so tests can run faster
+					   (unless jdibug-test-old-refresh-delay
+						 (setq jdibug-test-old-refresh-delay jdibug-refresh-delay
+							   jdibug-refresh-delay 0.1))
 				;; TODO figure out if there is already a process running and kill it
 				(setq jdibug-jde-test-Main-buffer
 					  (find-file (expand-file-name "java/src/com/jdibug/Main.java" jdibug-test-root-dir)))))
   :teardown-hooks (list (lambda()
 						  (jdibug-info "jde-test-suite teardown")
+						  (setq jdibug-refresh-delay jdibug-test-old-refresh-delay
+								jdibug-test-old-refresh-delay nil)
 						  (jdibug-exit-jvm)))
   )
 
