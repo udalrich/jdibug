@@ -357,6 +357,42 @@ on FIRST-TYPE and SECOND-TYPE"
   (>= first second))
 
 
+;; not equal to
+(defclass jdibug-eval-rule-not-equal-to
+  (jdibug-eval-rule-binary-numerical-to-boolean)
+  ;; fields
+  ()
+  "Evaluation of a not equal to (foo != bar)")
+
+(defmethod initialize-instance ((this jdibug-eval-rule-not-equal-to) &rest fields)
+  "Constructor for jdibug-eval-rule-not-equal-to instance"
+  (call-next-method)
+  (oset this :class 'function)
+  (oset this :name 'not-equal)
+  (oset this :operation-name "not equal"))
+
+
+(defmethod eval-binary-expression ((this jdibug-eval-rule-not-equal-to) first second)
+  (not (= first second)))
+
+;; equal to
+(defclass jdibug-eval-rule-equal-to (jdibug-eval-rule-binary-numerical-to-boolean)
+  ;; fields
+  ()
+  "Evaluation of a equal to (foo == bar)")
+
+(defmethod initialize-instance ((this jdibug-eval-rule-equal-to) &rest fields)
+  "Constructor for jdibug-eval-rule-equal-to instance"
+  (call-next-method)
+  (oset this :class 'function)
+  (oset this :name 'equal)
+  (oset this :operation-name "equal to"))
+
+
+(defmethod eval-binary-expression ((this jdibug-eval-rule-equal-to) first second)
+  (= first second))
+
+
 
 ;; Multiplication
 (defclass jdibug-eval-rule-mult (jdibug-eval-rule-binary-numerical)

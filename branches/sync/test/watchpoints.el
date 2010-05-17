@@ -1,7 +1,7 @@
 (add-hook 'after-save-hook
 		  (lambda ()
 			(unless (and (boundp emacs-is-exiting) emacs-is-exiting)
-			  (eval-current-buffer)
+			  (eval-buffer)
 			  (elunit "jde-test-suite")))
 		  nil 'local)
 
@@ -133,8 +133,11 @@
 		 (greater-than  '("intVar > twoAsInt" . "true"))
 		 (greater-equal-1  '("intVar >= twoAsInt". "true"))
 		 (greater-equal-2  '("intVar >= 3". "true"))
+		 (equal-to  '("intVar == twoAsInt". "false"))
+		 (not-equal-to  '("intVar != f". "true"))
 		 (expr-list (list less-than less-equal-1 less-equal-2
-						  greater-than greater-equal-1 greater-equal-2)))
+						  greater-than greater-equal-1 greater-equal-2
+						  equal-to not-equal-to)))
 	(mapc (lambda (expr-cons)
 			(jdibug-add-watchpoint (car expr-cons)))
 		  expr-list)
