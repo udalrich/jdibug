@@ -123,6 +123,32 @@
 			  (assert-watchpoint-display-value expr-name expected-value)))
 		  expr-list)))
 
+(deftest add-watchpoint-compare watchpoints-suite
+  "Test that a watch point on numerical comparisons works"
+
+  (let* ((var-name  "intVar")
+		 (less-than  '("intVar < twoAsInt" . "false"))
+		 (less-equal-1  '("twoAsInt <= intVar" . "true"))
+		 (less-equal-2  '("twoAsInt <= 2" . "true"))
+		 (greater-than  '("intVar > twoAsInt" . "true"))
+		 (greater-equal-1  '("intVar >= twoAsInt". "true"))
+		 (greater-equal-2  '("intVar >= 3". "true"))
+		 (expr-list (list less-than less-equal-1 less-equal-2
+						  greater-than greater-equal-1 greater-equal-2)))
+	(mapc (lambda (expr-cons)
+			(jdibug-add-watchpoint (car expr-cons)))
+		  expr-list)
+	(watch-expression-and-run-to-first-reference var-name)
+
+	;; Step to the next line, which should cause the display to show the value
+	(jdibug-test-step-over-and-wait)
+
+	(mapc (lambda (pair)
+			(let ((expr-name (car pair))
+				  (expected-value (cdr pair)))
+			  (assert-watchpoint-display-value expr-name expected-value)))
+		  expr-list)))
+
 (deftest add-watchpoint-dot watchpoints-suite
   "Test that a watch point on a dot expression works"
   (let ((var-name  "stuff.x"))

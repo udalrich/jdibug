@@ -20,7 +20,8 @@ EL_INIT=$(BUILD_CONFIG)/el_init.el
 EL_TEST_INIT=$(BUILD_CONFIG)/el_test_init.el
 
 BUILD=$(EMACS_ARGS) -l jdibug-build.el -f jdibug-build
-TEST=$(EMACS_ARGS) -l $(EL_TEST_INIT) -l $(TEST_DIR)/smoke-tests.el
+SMOKE_TEST=$(EMACS_ARGS) -l $(EL_TEST_INIT) -l $(TEST_DIR)/smoke-tests.el
+JDE_TEST=$(EMACS_ARGS) -l $(EL_TEST_INIT) -l $(TEST_DIR)/jde-tests.el
 
 
 
@@ -44,6 +45,10 @@ build: init
 .PHONY: test
 test: init
 	emacs $(TEST)
+
+.PHONY: jde-test
+jde-test: test
+	emacs $(JDE-TEST)
 
 .PHONY: init
 init:

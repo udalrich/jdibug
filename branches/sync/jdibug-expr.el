@@ -80,8 +80,7 @@ ARGS"
   "Use this rule to evaluate TREE in the context of the JDWP and the stack FRAME.  This should only be called if `jdibug-eval-rule-match' has passed with THIS and TREE.
 
 Subclasses must override this method."
-  (error "jdibug-eval-rule-accept was not overriden in %s"
-		 (object-class-name this)))
+  (jdibug-expr-abstract-method this))
 
 ;; Dot operations
 (defclass jdibug-eval-rule-dot (jdibug-eval-rule-with-name)
@@ -189,18 +188,19 @@ Subclasses must override this method."
 	  (otherwise
 	   (jdibug-expr-bad-eval "Uncertain how to evaluate %s" value)))))
 
-;; Binary numerical operations
-(defclass jdibug-eval-rule-binary-numerical (jdibug-eval-rule-with-name)
+;; Binary operations
+(defclass jdibug-eval-rule-binary (jdibug-eval-rule-with-name)
   ((operation-name :initarg :operation-name
 				   :type string))
   :abstract
   "Abstract class for rules representing binary numerical operations")
 
-(defmethod eval-binary-expression ((this jdibug-eval-rule-binary-numerical) first second)
-  "Perform the actual evaluation of FIRST and SECOND, which are emacs numbers."
-  (error "Subclasses must override eval-binary-expression: %s" this))
+(defmethod eval-binary-expression ((this jdibug-eval-rule-binary) first second)
+  "Perform the actual evaluation of FIRST and SECOND, which are emacs values."
+  (jdibug-expr-abstract-method this))
 
-(defmethod jdibug-eval-rule-accept ((this jdibug-eval-rule-binary-numerical) jdwp tree frame)
+(defmethod jdibug-eval-rule-accept ((this jdibug-eval-rule-binary)
+									jdwp tree frame)
   "Evalutate a binary rule."
   (let* ((attrs (semantic-tag-attributes tree))
 		 (args (plist-get attrs :arguments))
@@ -210,22 +210,152 @@ Subclasses must override this method."
 		 (second-value (jdibug-expr-eval-expr jdwp second-arg frame))
 		 (first-type (jdi-value-type first-value))
 		 (second-type (jdi-value-type second-value))
-		 (result-type (jdibug-expr-merge-types first-type second-type))
-		 product vector)
+		 (result-type (determine-result-type this first-type second-type))
+		 result)
 
-	;; Multiplication is only defined between numbers.
-	(if (and (jdibug-expr-type-is-number-p first-type)
-			 (jdibug-expr-type-is-number-p second-type))
+	;; Check that we have valid types for the operation
+	(jdibug-expr-debug "%s: checking if valid types %s %s" (object-class-name this) (jdwp-type-name first-type) (jdwp-type-name second-type))
+	(if (valid-types this first-type second-type)
 		(progn
-		  (setq product (eval-binary-expression this (jdi-primitive-emacs-value first-value)
-												(jdi-primitive-emacs-value second-value))
-				vector (jdwp-number-to-vec product result-type))
-		  (make-jdi-primitive-value :type result-type
-									:value vector))
+		  (setq result (eval-binary-expression this
+											   (jdi-primitive-emacs-value first-value)
+											   (jdi-primitive-emacs-value second-value)))
+		  (build-jdi-value this result result-type))
 	  (jdibug-expr-bad-eval "Unable to %s a %s and a %s"
-							(jdibug-eval-rule-binary-numerical-operation-name this)
+							(oref this operation-name)
 							(jdwp-type-name first-type)
 							(jdwp-type-name second-type)))))
+
+(defmethod valid-types ((this jdibug-eval-rule-binary) first-type second-type)
+  "Determine if the types are valid for this operation"
+  (jdibug-expr-abstract-method this))
+
+(defmethod determine-result-type ((this jdibug-eval-rule-binary) first-type second-type)
+  "Determine what type the result is when operatining on FIRST-TYPE and SECOND-TYPE"
+  (jdibug-expr-abstract-method this))
+
+(defmethod build-jdi-value ((this jdibug-eval-rule-binary) result result-type)
+  "Build a JDI value of type RESULT-TYPE from the RESULT value"
+  (jdibug-expr-abstract-method this))
+
+;; Binary numerical operations
+(defclass jdibug-eval-rule-binary-numerical (jdibug-eval-rule-binary)
+  nil ; fields
+  :abstract
+  "Abstract class for rules representing binary numerical operations")
+
+(defmethod determine-result-type ((this jdibug-eval-rule-binary-numerical)
+								  first-type second-type)
+  "Determine the resulting type of a numerical binary operation
+on FIRST-TYPE and SECOND-TYPE"
+  (jdibug-expr-merge-types first-type second-type))
+
+(defmethod valid-types ((this jdibug-eval-rule-binary-numerical)
+						first-type second-type)
+  "Numerical operations are valid if both types are numbers"
+  (and (jdibug-expr-type-is-number-p first-type)
+	   (jdibug-expr-type-is-number-p second-type)))
+
+(defmethod build-jdi-value ((this jdibug-eval-rule-binary-numerical)
+							result result-type)
+  "Build the jdi value from the RESULT returned from
+`eval-binary-expression' as a RESULT-TYPE"
+  (let ((vector (jdwp-number-to-vec result result-type)))
+	(make-jdi-primitive-value :type result-type
+							  :value vector)))
+
+;; Binary numerical operations that yield a boolean
+(defclass jdibug-eval-rule-binary-numerical-to-boolean
+  (jdibug-eval-rule-binary-numerical) ; super class
+  nil ; fields
+  :abstract
+  "Abstract class for logical operations on number (<, ==, etc)")
+
+(defmethod determine-result-type ((this jdibug-eval-rule-binary-numerical-to-boolean)
+								  first-type second-type)
+  "Determine the resulting type of a numerical binary operation
+on FIRST-TYPE and SECOND-TYPE"
+  jdwp-tag-boolean)
+
+(defmethod build-jdi-value ((this jdibug-eval-rule-binary-numerical-to-boolean)
+							result result-type)
+  "Build the jdi value from the RESULT returned from
+`eval-binary-expression' as a RESULT-TYPE"
+  (make-jdi-primitive-value :type result-type
+							  :value (if result 1 0)))
+
+;; Less than
+(defclass jdibug-eval-rule-less-than (jdibug-eval-rule-binary-numerical-to-boolean)
+  ;; fields
+  ()
+  "Evaluation of a less than (foo < bar)")
+
+(defmethod initialize-instance ((this jdibug-eval-rule-less-than) &rest fields)
+  "Constructor for jdibug-eval-rule-less-than instance"
+  (call-next-method)
+  (oset this :class 'function)
+  (oset this :name 'less-than)
+  (oset this :operation-name "less than"))
+
+
+(defmethod eval-binary-expression ((this jdibug-eval-rule-less-than) first second)
+  (< first second))
+
+
+
+;; Less than or equal
+(defclass jdibug-eval-rule-less-equal (jdibug-eval-rule-binary-numerical-to-boolean)
+  ;; fields
+  ()
+  "Evaluation of a less than or equal (foo <= bar)")
+
+(defmethod initialize-instance ((this jdibug-eval-rule-less-equal) &rest fields)
+  "Constructor for jdibug-eval-rule-less-equal instance"
+  (call-next-method)
+  (oset this :class 'function)
+  (oset this :name 'less-equal)
+  (oset this :operation-name "less than"))
+
+
+(defmethod eval-binary-expression ((this jdibug-eval-rule-less-equal) first second)
+  (<= first second))
+
+;; Greater than
+(defclass jdibug-eval-rule-greater-than (jdibug-eval-rule-binary-numerical-to-boolean)
+  ;; fields
+  ()
+  "Evaluation of a greater than (foo > bar)")
+
+(defmethod initialize-instance ((this jdibug-eval-rule-greater-than) &rest fields)
+  "Constructor for jdibug-eval-rule-greater-than instance"
+  (call-next-method)
+  (oset this :class 'function)
+  (oset this :name 'greater-than)
+  (oset this :operation-name "greater than"))
+
+
+(defmethod eval-binary-expression ((this jdibug-eval-rule-greater-than) first second)
+  (> first second))
+
+
+
+;; Greater than or equal
+(defclass jdibug-eval-rule-greater-equal (jdibug-eval-rule-binary-numerical-to-boolean)
+  ;; fields
+  ()
+  "Evaluation of a greater than or equal (foo >= bar)")
+
+(defmethod initialize-instance ((this jdibug-eval-rule-greater-equal) &rest fields)
+  "Constructor for jdibug-eval-rule-greater-equal instance"
+  (call-next-method)
+  (oset this :class 'function)
+  (oset this :name 'greater-equal)
+  (oset this :operation-name "greater than"))
+
+
+(defmethod eval-binary-expression ((this jdibug-eval-rule-greater-equal) first second)
+  (>= first second))
+
 
 
 ;; Multiplication
@@ -260,6 +390,7 @@ Subclasses must override this method."
 
 
 (defmethod eval-binary-expression ((this jdibug-eval-rule-div) first second)
+  (jdibug-expr-debug "eval-binary-expression(div): %s %s" first second)
   (/ first second))
 
 ;; Addition
@@ -298,6 +429,67 @@ Subclasses must override this method."
 (defmethod eval-binary-expression ((this jdibug-eval-rule-minus) first second)
   (- first second))
 
+;; Boolean binary operation (&&, ||, etc)
+
+(defclass jdibug-eval-rule-binary-boolean (jdibug-eval-rule-binary)
+  nil ; fields
+  :abstract
+  "Abstract class for rules representing binary boolean operations")
+
+(defmethod determine-result-type ((this jdibug-eval-rule-binary-boolean)
+								  first-type second-type)
+  "Determine the resulting type of a boolean binary operation
+on FIRST-TYPE and SECOND-TYPE.  Returns `jdwp-tag-boolean'"
+  jdwp-tag-boolean)
+
+(defmethod valid-types ((this jdibug-eval-rule-binary-boolean)
+						first-type second-type)
+  "Boolean operations are valid if both types are booleans"
+  (and (equal jdwp-tag-boolean first-type)
+	   (equal jdwp-tag-boolean second-type)))
+
+(defmethod build-jdi-value ((this jdibug-eval-rule-binary-boolean)
+							result result-type)
+  "Build the jdi value from the RESULT returned from
+`eval-binary-expression' as a RESULT-TYPE"
+  (make-jdi-primitive-value :type result-type
+							:value (if result-type 1 0)))
+
+;; Logical and
+(defclass jdibug-eval-rule-logand (jdibug-eval-rule-binary-boolean)
+  ;; fields
+  ()
+  "Evaluation of a logical and (foo || bar)")
+
+(defmethod initialize-instance ((this jdibug-eval-rule-logand) &rest fields)
+  "Constructor for jdibug-eval-rule-mult instance"
+  (call-next-method)
+  (oset this :class 'function)
+  (oset this :name 'logand)
+  (oset this :operation-name "logical and"))
+
+
+(defmethod eval-binary-expression ((this jdibug-eval-rule-logand) first second)
+  (and first second))
+
+
+
+;; Logical or
+(defclass jdibug-eval-rule-logor (jdibug-eval-rule-binary-boolean)
+  ;; fields
+  ()
+  "Evaluation of a logical or (foo && bar)")
+
+(defmethod initialize-instance ((this jdibug-eval-rule-logor) &rest fields)
+  "Constructor for jdibug-eval-rule-mult instance"
+  (call-next-method)
+  (oset this :class 'function)
+  (oset this :name 'logor)
+  (oset this :operation-name "logical or"))
+
+
+(defmethod eval-binary-expression ((this jdibug-eval-rule-logor) first second)
+  (or first second))
 
 
 ;; Variable reference
@@ -449,6 +641,10 @@ in the list will be the result of the operation.")
    ;; No way to specify a byte or short constant
 
    (t (jdibug-expr-bad-eval "Unable to determine type of %s" value))))
+
+(defun jdibug-expr-abstract-method (this)
+  "'Implementation' for abstract methods.  Throws an error if actually called."
+    (error "Subclasses must override %s: %s" eieio-generic-call-methodname (object-class-name this)))
 
 
 (provide 'jdibug-expr)

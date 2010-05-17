@@ -4,8 +4,9 @@
 
 ** Added expression watchpoints.
 The *JDIbug-Watchpoints* window now displays expressions.  Current
-support is minimal: only multiplication, addition and field access via
-dot notation is supported.  More should be added soon.
+support is minimal: only multiplication, division, addition,
+subtraction, array element access, constant numbers and field access
+via dot notation is supported.  More should be added soon.
 
 * 0.3 (2010-04-28)
 

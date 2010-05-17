@@ -120,7 +120,7 @@ used"
 	  (jde-run 1)
 	  ;; Wait for it to start
 	  (save-excursion
-		(while (and (< count 10) (not started))
+		(while (and (< count 100) (not started))
 		  (sleep-for 1)
 		  (setq buffer (get-buffer run-buffer)
 				count (1+ count))
