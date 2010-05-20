@@ -623,7 +623,7 @@ unsuccessful).  The failure string may not be very descriptive."
 						  expr
 						  (substring expr (semantic-tag-end tree)))
 				tree))))
-		(jdibug-expr-parse-debug "Unable to parse %s")
+		(jdibug-expr-parse-debug "Unable to parse %s" expr)
 		(format "Unable to parse %s" expr)))))
 
 (defun jdibug-expr-type-is-number-p (type)
