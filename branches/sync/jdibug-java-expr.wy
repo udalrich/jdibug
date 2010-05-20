@@ -1479,7 +1479,9 @@ argument_list_opt
 
 argument_list
   : expression
+  (list $1)
   | argument_list COMMA expression
+  (list $1 $3)
   ;
 
 array_creation_uninit
@@ -1532,6 +1534,7 @@ method_invocation
  ;; `A((B)<C,D>E());', which could be either an invocation on E or two
  ;; boolean comparisons.
   | primary DOT IDENTIFIER LPAREN argument_list_opt RPAREN
+  (FUNCTION-TAG $3 $3 $5 :this $1)
 ;;   | primary DOT type_arguments IDENTIFIER LPAREN argument_list_opt RPAREN
 ;;   | name DOT type_arguments IDENTIFIER LPAREN argument_list_opt RPAREN
   | SUPER DOT IDENTIFIER LPAREN argument_list_opt RPAREN
