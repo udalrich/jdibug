@@ -1,5 +1,5 @@
 MAJOR_VERSION=0
-MINOR_VERSION=4
+MINOR_VERSION=4-alpha
 VERSION=$(MAJOR_VERSION).$(MINOR_VERSION)
 
 #BUILD_DIR=$(PWD)/build
@@ -44,7 +44,7 @@ build: init
 
 .PHONY: test
 test: init
-	emacs $(TEST)
+	emacs $(SMOKE_TEST)
 
 .PHONY: jde-test
 jde-test: test

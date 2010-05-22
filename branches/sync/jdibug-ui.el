@@ -177,6 +177,7 @@ When the user resume, we will switch to this thread and location.")
 (suppress-keymap jdibug-breakpoints-mode-map t)
 (define-key jdibug-breakpoints-mode-map "e" 'jdibug-breakpoints-toggle)
 (define-key jdibug-breakpoints-mode-map "d" 'jdibug-breakpoints-delete)
+(define-key jdibug-breakpoints-mode-map "c" 'jdibug-breakpoints-add-condition)
 (define-key jdibug-breakpoints-mode-map "\C-m" 'jdibug-breakpoints-goto)
 (define-key jdibug-breakpoints-mode-map [mouse-1] 'jdibug-breakpoints-goto)
 
@@ -222,7 +223,11 @@ to populate the jdi-value-values of the jdi-value.")
   ;; list jdi-event-request, this is a list because we might be installing 2 breakpoints for a single vm
   ;; because it have two class loaders, or we have two different vm!
   event-requests
+
+  ;; condition.  If non-nil, only step if the condition evaluates to true.  The value s
+  condition
 )
+
 
 (defstruct jdibug-watchpoint
   ;; Basic expression to evaluate
@@ -448,26 +453,56 @@ And position the point at the line number."
 										line-number
 										t))))
 
-(defun jdibug-handle-breakpoint (thread location)
+(defun jdibug-handle-breakpoint (thread location request-id)
   (jdibug-debug "jdibug-handle-breakpoint: active-frames is %s"
 				(and jdibug-active-frame (jdi-frame-id jdibug-active-frame)))
 
-  (if (null jdibug-active-frame)
+  ;; Check if this is a conditional breakpoint with an unsatisfied condition
+  (if (jdibug-breakpoint-condition-p thread location request-id)
 	  (progn
-		(jdibug-goto-location location)
-		(setq jdibug-active-frame (car (jdi-thread-get-frames thread)))
-		(jdibug-refresh-locals-buffer)
-		(jdibug-refresh-watchpoints-buffer)
-;; 	(jdibug-debug "setting jdibug-active-thread to %s in jdibug-handle-breakpoint"
-;; 			   thread)
+		(if (null jdibug-active-frame)
+			(progn
+			  (jdibug-goto-location location)
+			  (setq jdibug-active-frame (car (jdi-thread-get-frames thread)))
+			  (jdibug-refresh-locals-buffer)
+			  (jdibug-refresh-watchpoints-buffer)
+			  ;; 	(jdibug-debug "setting jdibug-active-thread to %s in jdibug-handle-breakpoint"
+			  ;; 			   thread)
 
-		(setq jdibug-active-thread thread))
-	(setq jdibug-others-suspended (append jdibug-others-suspended (list `(,thread . ,location)))))
+			  (setq jdibug-active-thread thread))
+		  (setq jdibug-others-suspended (append jdibug-others-suspended (list `(,thread . ,location)))))
 
-  (jdibug-refresh-frames-buffer)
-  (jdibug-refresh-threads-buffer)
+		(jdibug-refresh-frames-buffer)
+		(jdibug-refresh-threads-buffer)
 
-  (run-hooks 'jdibug-breakpoint-hit-hook))
+		(run-hooks 'jdibug-breakpoint-hit-hook))
+	;; Condition not satisfied, so continue
+	(jdibug-trace "Condition not satisfied so resuming thread")
+	(jdi-thread-resume thread)))
+
+(defun jdibug-breakpoint-condition-p (thread location request-id)
+  "Check if the breakpoint corresponding to REQUEST-ID that has
+been hit in THREAD at LOCATION either has no condition or that
+the condition is satisfied."
+  (let ((bp (find-if (lambda (bp)
+					   (find-if (lambda (er)
+								  (= (jdi-event-request-id er) request-id))
+								(jdibug-breakpoint-event-requests bp)))
+					 jdibug-breakpoints))
+		condition)
+	(unless bp (error "Unable to find breakpoint with request id %d" request-id))
+	(setq condition (jdibug-breakpoint-condition bp))
+	(if condition
+		(let* ((frame (car (jdi-thread-get-frames thread)))
+			   (jdwp (jdi-virtual-machine-jdwp (jdi-frame-virtual-machine frame)))
+			   (result (catch jdibug-expr-bad-eval (jdibug-expr-eval-expr jdwp condition frame))))
+		  ;; We pass only if the result is a boolean that is true
+		  (when (jdi-value-p result)
+			(if (= (jdi-value-type result) jdwp-tag-boolean)
+				(not (equal (jdi-primitive-value-value result) 0))
+			  (jdibug-warn "Breakpoint condition is not a boolean but a %s" (jdwp-type-name (jdi-value-type)))
+			  nil)))
+	  t)))
 
 (defun jdibug-handle-step (thread location)
   (jdibug-debug "jdibug-handle-step")
@@ -1217,6 +1252,20 @@ execute BODY."
 			(jdibug-disable-breakpoint bp))
 		(message ":action enable breakpoint")
 		(jdibug-enable-breakpoint bp)))))
+
+(defun jdibug-breakpoints-add-condition (condition)
+  (interactive "sCondition for breakpoint: ")
+  (jdwp-uninterruptibly
+	(let* ((bp (get-text-property (point) 'breakpoint))
+		   (parse (jdibug-expr-parse-expr condition)))
+	  (cond
+	   ((consp parse)
+		(setf (jdibug-breakpoint-condition bp) parse)
+		(message "Set condition on breakpoint to %s" condition))
+	 ((stringp parse)
+	  (message "Unable to parse %s because %s" condition parse))
+	 (t (error "Unknown return from jdibug-expr-parse-expr: %s" parse))))))
+
 
 (defun jdibug-breakpoints-delete ()
   (interactive)

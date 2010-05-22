@@ -82,6 +82,9 @@
 		 jdibug-toggle-breakpoint
 		 :help "Cycle breakpoint through set, disabled and not set."]
 
+		["Add Watchpoint"
+		 jdibug-add-watchpoint
+		 :help "Evaluate an expression whenever the debuggee is suspended." ]
 		"-"
 
 		["Refresh all windows"

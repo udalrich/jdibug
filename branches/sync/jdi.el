@@ -1166,6 +1166,7 @@ list whose nth element is the array element at index FIRST + n"
 		 (class-id (bindat-get-field event :u :location :class-id))
 		 (method-id (bindat-get-field event :u :location :method-id))
 		 (line-code-index (bindat-get-field event :u :location :index))
+		 (request-id (bindat-get-field event :u :request-id))
 
 		 (class (jdi-virtual-machine-get-class-create vm class-id))
 		 (method (make-jdi-method :virtual-machine vm
@@ -1185,7 +1186,7 @@ list whose nth element is the array element at index FIRST + n"
 	(setf (jdi-virtual-machine-suspended-frames vm) (nreverse (cons frame (jdi-virtual-machine-suspended-frames vm))))
 
 	(setf (jdi-virtual-machine-suspended-thread-id vm) (bindat-get-field event :u :thread))
-	(run-hook-with-args 'jdi-breakpoint-hooks thread location)))
+	(run-hook-with-args 'jdi-breakpoint-hooks thread location request-id)))
 
 (defun jdi-handle-step-event (jdwp event)
   (jdi-debug "jdi-handle-step-event")

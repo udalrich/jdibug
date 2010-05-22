@@ -178,7 +178,7 @@ an unreasonable amount of time has passed."
 	   (setq	count (1+ count)))
 	 (assert-that ,var ,message)))
 
-
+(load "breakpoints.el")
 (load "watchpoints.el")
 
 ;; (debug-on-entry 'jdibug-test-connect-to-jvm)

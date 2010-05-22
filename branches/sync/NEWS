@@ -4,9 +4,20 @@
 
 ** Added expression watchpoints.
 The *JDIbug-Watchpoints* window now displays expressions.  Current
-support is minimal: only multiplication, division, addition,
-subtraction, array element access, constant numbers and field access
-via dot notation is supported.  More should be added soon.
+support is moderate:
+***  Multiplication, division, addition, subtraction
+***  Logical and, or
+***  Numerical comparisons (<,>,<=,>=,==,!=)
+***  Array element access
+***  Constant numbers
+***  Field access via dot notation (a.b.c)
+More should be added soon.
+
+** Added conditional breakpoints.
+Any valid expression for a watchpoint that evaluates to a boolean can
+be added as condition to breakpoint.  The check on a boolean value is
+made at runtime.  To add a conditional breakpoint, create a breakpoint
+normally.  Select it in the breakpoints buffer and type "c".
 
 * 0.3 (2010-04-28)
 
