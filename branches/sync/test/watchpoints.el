@@ -165,6 +165,17 @@
 	(jdibug-test-wait-for-refresh-timers)
 	(assert-watchpoint-display-value var-name "7")))
 
+(deftest add-watchpoint-method watchpoints-suite
+  "Test that a watch point on a dot expression works"
+  (let ((var-name  "stuff.x")
+		(expr "stuff.toString()"))
+	(jdibug-add-watchpoint "stuff.toString()")
+	(watch-expression-and-run-to-first-reference var-name)
+
+	;; Check that the watchpoint buffer shows the string value
+	(assert-watchpoint-display-value expr "\"com.jdibug.Main$Stuff@")))
+
+
 (defun watch-expression-and-run-to-first-reference (var-name)
   (jdibug-test-connect-to-jvm)
 

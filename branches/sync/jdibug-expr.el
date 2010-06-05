@@ -155,10 +155,50 @@ Subclasses must override this method."
 		(if (and second-value (equal (jdi-value-type second-value) jdwp-tag-int))
 			(let ((emacs-index (jdi-primitive-emacs-value second-value)))
 			  (if (or (< emacs-index 0) (>= emacs-index (jdi-array-get-array-length first-value)))
-				  (format "index out of bounds: %s" emacs-index)
+				  (jdibug-expr-bad-eval "index out of bounds: %s" emacs-index)
 				(car (jdi-array-get-values first-value emacs-index (1+ emacs-index)))))
-		  (format "array index must evaluate to an int: %s" (jdwp-type-name (jdi-value-type second-value))))
-	  (format "not an array: %s" (jdwp-type-name (jdi-value-type first-value))))))
+		  (jdibug-expr-bad-eval "array index must evaluate to an int: %s" (jdwp-type-name (jdi-value-type second-value))))
+	  (jdibug-expr-bad-eval "not an array: %s" (jdwp-type-name (jdi-value-type first-value))))))
+
+
+;; Method invocation
+(defclass jdibug-eval-rule-method-invocation (jdibug-eval-rule)
+  ;; fields
+  ()
+  "Evaluation of a method-invocation construct (foo[bar])")
+
+(defmethod initialize-instance ((this jdibug-eval-rule-method-invocation) &rest fields)
+  "Constructor for jdibug-eval-rule-method-invocation instance"
+  (call-next-method)
+  (oset this :class 'function))
+
+(defmethod jdibug-eval-rule-match ((this jdibug-eval-rule-method-invocation) tree)
+  "Test to see if TREE matches against THIS rule.  It will match
+if the super method matches and the name in tree is a string."
+  (and (call-next-method)
+	   (stringp (semantic-tag-name tree))))
+
+(defmethod jdibug-eval-rule-accept ((this jdibug-eval-rule-method-invocation) jdwp tree frame)
+  "Evaluate a rule for object.call(...)"
+  (let* ((attrs (semantic-tag-attributes tree))
+		 (args (plist-get attrs :arguments))
+		 (object (plist-get attrs :this))
+		 (thread (jdi-frame-thread frame))
+		 (object-value (jdibug-expr-eval-expr jdwp object frame))
+		 (method-name (semantic-tag-name tree))
+		 arg-values method)
+	(jdibug-expr-debug "method-invocation: this is a %s" (jdi-value-type object-value))
+	(if (and object-value (jdi-value-object-p object-value))
+		(progn
+		  ;; Evaluate each argument
+		  (setq arg-values
+				(mapcar (lambda (arg)
+						  (jdibug-expr-eval-expr jdwp arg frame))
+						args))
+		  ;; TODO: better method matching when the method is overloaded
+		  (setq method method-name)
+		  (jdi-object-invoke-method object-value thread method arg-values nil))
+	  (jdibug-expr-bad-eval "not an object: %s" (jdwp-type-name (jdi-value-type object-value))))))
 
 
 ;; Constants
@@ -621,7 +661,7 @@ unsuccessful).  The failure string may not be very descriptive."
 			  (if semantic-unmatched-syntax-cache
 				  (format "Unable to parse %s at %s"
 						  expr
-						  (substring expr (semantic-tag-end tree)))
+						  (substring expr (1- (semantic-tag-end tree))))
 				tree))))
 		(jdibug-expr-parse-debug "Unable to parse %s" expr)
 		(format "Unable to parse %s" expr)))))

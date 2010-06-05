@@ -1334,7 +1334,7 @@ This handles the event later, once we are connected."
 											(bindat-get-field reply :return-value :u :value)))))
 
 (defun jdi-object-invoke-method (object thread method arguments options)
-  "Invoke the method on the value on the thread, if method is a string, it will pick the first method that matches the method-name."
+  "Invoke the method on the value on the thread, if method is a string, it will pick the first method that matches the method-name.  OPTIONS is currently ignored."
   (jdi-debug "jdi-object-invoke-method")
   (when (stringp method)
 	(setq method (find-if (lambda (obj)

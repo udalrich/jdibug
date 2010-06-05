@@ -257,7 +257,7 @@ to populate the jdi-value-values of the jdi-value.")
 (add-hook 'jdi-thread-start-hooks 'jdibug-handle-thread-start)
 (add-hook 'jdi-thread-end-hooks 'jdibug-handle-thread-end)
 
-(defun jdibug-connect ()
+(defun jdibug-connect nil
   "Create a new debugger and connect to a running process.  See
 `jdibug-connect-hosts' for where it will look for the debuggee
 processes"

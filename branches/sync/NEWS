@@ -11,6 +11,7 @@ support is moderate:
 ***  Array element access
 ***  Constant numbers
 ***  Field access via dot notation (a.b.c)
+***  Method calls (foo.bar(baz)) (only tested for no-arg methods)
 More should be added soon.
 
 ** Added conditional breakpoints.

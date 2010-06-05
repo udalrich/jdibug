@@ -289,7 +289,7 @@ Takes the same ARGS as `error'."
 (defun assert-equal (expected actual &optional message)
   "Fails if EXPECTED is not equal to ACTUAL."
   (unless (equal expected actual)
-    (fail "%s%s expected to be %s"
+    (fail "%s%S expected to be %S"
 		  (if message (format "%s: " message) "")
 		  actual expected)))
 

@@ -79,7 +79,8 @@
 (deftest parse-array-reference parsing-suite
   "Test that parsing a[b] expressions works"
   (let ((parse-constant (jdibug-expr-parse-expr "foo[3]"))
-		(parse-variable (jdibug-expr-parse-expr "foo[bar]")))
+		(parse-variable (jdibug-expr-parse-expr "foo[bar]"))
+		(parse-dot-expr (jdibug-expr-parse-expr "foo.quz[bar]")))
 	(assert-same-structure-prefix '(array function
 										  (:arguments (("foo" identifier)
 													   ("3" constant))))
@@ -87,7 +88,13 @@
 	(assert-same-structure-prefix '(array function
 										  (:arguments (("foo" identifier)
 													   ("bar" identifier))))
-								  parse-variable)))
+								  parse-variable)
+	(assert-same-structure-prefix '(array function
+										  (:arguments  ((dot function
+															 (:arguments (("foo" identifier)
+																		  ("quz" identifier))))
+														("bar" identifier))))
+								  parse-dot-expr)))
 
 
 (deftest parse-plus parsing-suite
@@ -108,28 +115,43 @@
   (let ((parse (jdibug-expr-parse-expr " foo * bar.baz")))
 	(jdibug-expr-info "result is %s" parse)
 	(assert-same-structure-prefix '(mult function
-										 (:arguments (("foo")
+										 (:arguments (("foo" identifier)
 													  (dot function
-														   (:arguments (("bar")
-																		("baz"))
+														   (:arguments (("bar" identifier)
+																		("baz" identifier))
 																	   :type "dot")))
 													 :type "multiplicative_expression type"))
 								  parse)))
 
+(deftest parse-method-call parsing-suite
+  "Test passing of method calls; foo.bar(), a.b.c(d,e.f,g), etc"
 
-(defun assert-same-structure-prefix (expected actual)
+
+  (let ((pairs '(("foo.bar()"  . ("bar" function (:this ("foo" identifier)
+														;; No :arguments, since nil values are skipped
+														:type)))))
+		expr parse expected)
+	(mapc (lambda (pair)
+			(setq expr (car pair)
+				  expected (cdr pair)
+				  parse (jdibug-expr-parse-expr expr))
+			(assert-same-structure-prefix expected parse "method call"))
+		  pairs)))
+
+(defun assert-same-structure-prefix (expected actual &optional message)
   "Assert that ACTUAL has the same structure as EXPECTED.  Lists
 in ACTUAL may have additional members that are ignored."
   (if (not (and expected actual))
 	  ;; At least one is nil, so both must be nil
-	  (assert-equal expected actual)
+	  (assert-equal expected actual message)
 	(if (listp expected)
 		(progn
-		  (assert-that (listp actual))
+		  (assert-that (listp actual) (format "%s: %s is a list" message actual))
 		  (loop for index from 0 below (length expected)
-				do (assert-that (> (length actual) index))
+				do (assert-that (> (length actual) index) (format "%s: %s is long enough (%d)" message actual index))
 				(assert-same-structure-prefix (nth index expected)
-											  (nth index actual))))
+											  (nth index actual)
+											  message)))
 	  (assert-equal expected actual))))
 
 (message "Loaded parsing.el")
