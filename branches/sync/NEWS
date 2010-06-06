@@ -2,6 +2,8 @@
 
 * 0.4 (Current)
 
+** Added simple function to start a program and attach a debugger.  See `jdibug-run'.
+
 ** Added expression watchpoints.
 The *JDIbug-Watchpoints* window now displays expressions.  Current
 support is moderate:
