@@ -225,6 +225,7 @@ literal
 primitive_type
   : numeric_type
   | BOOLEAN
+	(TYPE-TAG $1 $1 nil nil)
   ;
 
 numeric_type
@@ -234,15 +235,22 @@ numeric_type
 
 integral_type
   : BYTE
+	(TYPE-TAG $1 $1 nil nil)
   | SHORT
+	(TYPE-TAG $1 $1 nil nil)
   | INT
+	(TYPE-TAG $1 $1 nil nil)
   | LONG
+	(TYPE-TAG $1 $1 nil nil)
   | CHAR
+	(TYPE-TAG $1 $1 nil nil)
   ;
 
 floating_point_type
   : FLOAT
+	(TYPE-TAG $1 $1 nil nil)
   | DOUBLE
+	(TYPE-TAG $1 $1 nil nil)
   ;
 
 reference_type
@@ -309,6 +317,7 @@ primary
 ;; primary_no_new_array
   : literal
   | THIS
+	(TAG 'this 'identifier)
  ;; TODO: figure out how to add this in without conflicts
  ;;  | LPAREN name RPAREN
 ;;   | LPAREN expression_no_name RPAREN
@@ -322,9 +331,12 @@ primary
   | dot_expression
   | simple_name
   | VOID DOT CLASS
+	(TAG 'void 'class)
  ;; "Type DOT CLASS", but expanded.
   | primitive_type DOT CLASS
+	(TAG $1 'class)
   | primitive_type dims DOT CLASS
+	(TAG $1 'class)
  ;; TODO: add these back in.  They probably need to be merged into the rule that holds field access and method invocations.
 ;;   | name_with_opt_package DOT CLASS
 ;;   | name_with_opt_package dims DOT CLASS
@@ -473,14 +485,18 @@ unary_expression
 ;; 	preincrement_expression
  ;;   | predecrement_expression |
    PLUS unary_expression
+	(progn $2)
   | MINUS unary_expression
+	(FUNCTION-TAG 'unary-minus "negation" (list $2))
   | unary_expression_not_plus_minus
   ;
 
 unary_expression_not_plus_minus
   : postfix_expression
   | COMP unary_expression
+	(FUNCTION-TAG 'complement "complement" (list $2))
   | NOT unary_expression
+	(FUNCTION-TAG 'not "negation" (list $2))
 ;;   | cast_expression
   ;
 
@@ -491,8 +507,12 @@ unary_expression_not_plus_minus
 ;; The following `cast_expression' production solves that.
 cast_expression
   : LPAREN primitive_type dims_opt RPAREN unary_expression
+	(FUNCTION-TAG 'cast "cast" (list $2 $4))
   | LPAREN name_with_opt_package RPAREN unary_expression_not_plus_minus
+	(FUNCTION-TAG 'cast "cast" (list $2 $4))
   | LPAREN name_with_opt_package dims RPAREN unary_expression_not_plus_minus
+	(FUNCTION-TAG 'cast-array "cast" (list $2 $5) :dims $3)
+
 ;;   | LPAREN name LT type_argument_list_1 dims_opt RPAREN
 ;;     unary_expression_not_plus_minus
 ;;   | LPAREN name LT type_argument_list_1 DOT
@@ -521,8 +541,11 @@ additive_expression
 shift_expression
   : additive_expression
   | shift_expression LSHIFT additive_expression
+	(FUNCTION-TAG 'left-shift "left shift" (list $1 $3))
   | shift_expression RSHIFT additive_expression
+	(FUNCTION-TAG 'right-shift "right shift" (list $1 $3))
   | shift_expression URSHIFT additive_expression
+	(FUNCTION-TAG 'unsigned-right-shift "unsigned right shift" (list $1 $3))
   ;
 
 relational_expression
@@ -543,6 +566,8 @@ relational_expression
 instanceof_expression
   : relational_expression
   | instanceof_expression INSTANCEOF reference_type
+	(FUNCTION-TAG 'instance-of "instance of" (list $1 $3))
+
   ;
 
 equality_expression
@@ -556,16 +581,19 @@ equality_expression
 and_expression
   : equality_expression
   | and_expression AND equality_expression
+	(FUNCTION-TAG 'bitand "bitwise and" (list $1 $3))
   ;
 
 exclusive_or_expression
   : and_expression
   | exclusive_or_expression XOR and_expression
+	(FUNCTION-TAG 'bitxor "bitwise xor" (list $1 $3))
   ;
 
 inclusive_or_expression
   : exclusive_or_expression
   | inclusive_or_expression OR exclusive_or_expression
+	(FUNCTION-TAG 'bitior "bitwise ior" (list $1 $3))
   ;
 
 conditional_and_expression
@@ -584,6 +612,7 @@ conditional_expression
   : conditional_or_expression
   | conditional_or_expression QUESTION expression
     COLON conditional_expression
+	(FUNCTION-TAG 'question "question colon" (list $1 $3 $5))
   ;
 
 
