@@ -31,6 +31,7 @@
 (require 'easymenu)
 (require 'cc-mode)
 (require 'jdibug-ui)
+(require 'jdibug-run)
 
 (defvar jdibug-menu-spec
   (list "JDIbug"
@@ -61,6 +62,12 @@
 		 :help "Resume execution of the current thread."]
 
 		"-"
+
+		["Run and connect"
+		 jdibug-run
+		 :active (and (not (jdibug-connected-p))
+					  jdibug-run-main-class)
+		 :help "Start a new process and connect to it."]
 
 		["Connect"
 		 jdibug-connect

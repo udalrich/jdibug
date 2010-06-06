@@ -5,6 +5,7 @@
     "jdi"
     "jdibug-ui"
     "jdibug-expr"
+	"jdibug-run"
 	"jdibug-menu"))
 
 
