@@ -12,6 +12,125 @@
   ;; :teardown-hook (lambda () )
 )
 
+(deftest parse-this-super parsing-suite
+  "Test parsing of this and super and other strange stuff"
+  (let ((pairs '(("this.x" . (dot function (:arguments ((this identifier)
+													   ("x" identifier)))))
+				 ("java.lang.String.class" . (class function (:arguments
+															  ((dot function
+																	(:arguments
+																	 ((dot function
+																		   (:arguments
+																			(("java" identifier)
+																			 ("lang" identifier))))
+																	  ("String" identifier))))))))
+				 ("void.class" . (void class))
+				 ("int[].class" . ((dims function (:arguments (("int" type) "[]")))  class))))
+		expr parse expected)
+	(mapc (lambda (pair)
+			(setq expr (car pair)
+				  expected (cdr pair)
+				  parse (jdibug-expr-parse-expr expr))
+			(assert-same-structure-prefix expected parse expr))
+		  pairs)))
+
+(deftest parse-complicated parsing-suite
+  "Parse complicated expressions"
+  (let ((pairs '(("foo.bar(3 + x[this.size()]) / ( 2 - -3 >>> (a ^ b))" .
+				  (div function (:arguments
+								 (("bar" function (:this ("foo" identifier)
+														 :arguments ((plus function
+																		   (:arguments (("3" constant)
+																						(array function
+																							   (:arguments (("x" identifier)
+																											("size" function
+																											 (:this (this identifier)))))))))
+														 )))
+								  (unsigned-right-shift
+								   function
+								   (:arguments ((minus function (:arguments (("2" constant)
+																			 (unary-minus function
+																						  (:arguments (("3" constant)))))))
+												(bitxor function (:arguments (("a" identifier)
+																			  ("b" identifier)))))))))))
+				 ("java.lang.String.class.getName()" .
+				  ("getName" function (:this (class function
+													(:arguments ((dot function
+																	 (:arguments ((dot function
+																					   (:arguments (("java" identifier)
+																									("lang" identifier))))
+																				  ("String" identifier))))))))))))
+		expr parse expected)
+	(mapc (lambda (pair)
+			(setq expr (car pair)
+				  expected (cdr pair)
+				  parse (jdibug-expr-parse-expr expr))
+			(assert-same-structure-prefix expected parse expr))
+		  pairs)))
+
+
+(deftest parse-question parsing-suite
+  "Test parsing of ?:"
+  (let ((pairs '(("a?b:c" . (question function (:arguments (("a" identifier)
+															("b" identifier)
+															("c" identifier)))))))
+		expr parse expected)
+	(mapc (lambda (pair)
+			(setq expr (car pair)
+				  expected (cdr pair)
+				  parse (jdibug-expr-parse-expr expr))
+			(assert-same-structure-prefix expected parse "bit operation"))
+		  pairs)))
+
+(deftest parse-shift parsing-suite
+  "Test parsing of shift operators"
+  (let ((pairs '(("a << b" . (left-shift function (:arguments (("a" identifier)
+														  ("b" identifier)))))
+				 ("a >> b" . (right-shift function (:arguments (("a" identifier)
+														  ("b" identifier)))))
+				 ("a >>> b" . (unsigned-right-shift function
+													(:arguments (("a" identifier)
+																 ("b" identifier)))))))
+		expr parse expected)
+	(mapc (lambda (pair)
+			(setq expr (car pair)
+				  expected (cdr pair)
+				  parse (jdibug-expr-parse-expr expr))
+			(assert-same-structure-prefix expected parse "bit operation"))
+		  pairs)))
+
+(deftest parse-bitops parsing-suite
+  "Test parsing of bit operators"
+  (let ((pairs '(("a & b" . (bitand function (:arguments (("a" identifier)
+														  ("b" identifier)))))
+				 ("a | b" . (bitor function (:arguments (("a" identifier)
+														  ("b" identifier)))))
+				 ("a ^ b" . (bitxor function (:arguments (("a" identifier)
+														  ("b" identifier)))))))
+		expr parse expected)
+	(mapc (lambda (pair)
+			(setq expr (car pair)
+				  expected (cdr pair)
+				  parse (jdibug-expr-parse-expr expr))
+			(assert-same-structure-prefix expected parse "bit operation"))
+		  pairs)))
+
+(deftest parse-logicalop parsing-suite
+  "Test parsing of bit operators"
+  (let ((pairs '(("a && b" . (logand function (:arguments (("a" identifier)
+														  ("b" identifier)))))
+				 ("a || b" . (logor function (:arguments (("a" identifier)
+														  ("b" identifier)))))
+				 ;; No logical exclusive or
+				 ))
+		expr parse expected)
+	(mapc (lambda (pair)
+			(setq expr (car pair)
+				  expected (cdr pair)
+				  parse (jdibug-expr-parse-expr expr))
+			(assert-same-structure-prefix expected parse "bit operation"))
+		  pairs)))
+
 (deftest parse-constant parsing-suite
   "Test parsing an expressions with numerical constants"
   (let ((parse-int (jdibug-expr-parse-expr "3"))
@@ -129,7 +248,14 @@
 
   (let ((pairs '(("foo.bar()"  . ("bar" function (:this ("foo" identifier)
 														;; No :arguments, since nil values are skipped
-														:type)))))
+														:type)))
+				 ("foo.bar(x)"  . ("bar" function (:this ("foo" identifier)
+														 :arguments (("x" identifier))
+														:type)))
+				 ("foo.bar(x, y)"  . ("bar" function (:this ("foo" identifier)
+															:arguments (("x" identifier)
+																		("y" identifier))
+															:type)))))
 		expr parse expected)
 	(mapc (lambda (pair)
 			(setq expr (car pair)

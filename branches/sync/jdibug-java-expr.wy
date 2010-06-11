@@ -322,6 +322,7 @@ primary
  ;;  | LPAREN name RPAREN
 ;;   | LPAREN expression_no_name RPAREN
   | LPAREN expression RPAREN
+	(progn $2)
 ;;   | class_instance_creation_expression
 ;;   | field_access
 ;;   | method_invocation
@@ -336,7 +337,7 @@ primary
   | primitive_type DOT CLASS
 	(TAG $1 'class)
   | primitive_type dims DOT CLASS
-	(TAG $1 'class)
+	(TAG (FUNCTION-TAG 'dims "dims" (list $1 $2)) 'class)
  ;; TODO: add these back in.  They probably need to be merged into the rule that holds field access and method invocations.
 ;;   | name_with_opt_package DOT CLASS
 ;;   | name_with_opt_package dims DOT CLASS
@@ -448,6 +449,9 @@ dot_expression
 ;; 	(if $4
 ;; 		(FUNCTION-TAG $3 $3 (cdr $4) :this $1)
 ;; 	  (FUNCTION-TAG 'dot "dot" `(,$1 ,$3)))
+
+  | primary DOT CLASS
+	(FUNCTION-TAG 'class "class" (list $1))
 
   | array_access
 ;;   | name_with_opt_package DOT THIS
@@ -593,7 +597,7 @@ exclusive_or_expression
 inclusive_or_expression
   : exclusive_or_expression
   | inclusive_or_expression OR exclusive_or_expression
-	(FUNCTION-TAG 'bitior "bitwise ior" (list $1 $3))
+	(FUNCTION-TAG 'bitor "bitwise or" (list $1 $3))
   ;
 
 conditional_and_expression

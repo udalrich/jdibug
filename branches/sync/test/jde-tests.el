@@ -127,7 +127,7 @@ used"
 		  (when buffer
 			(set-buffer buffer)
 			(goto-char (point-min))
-			(setq started (search-forward "Listening for transport dt_socket at address: "))))
+			(setq started (search-forward "Listening for transport dt_socket at address: " nil t))))
 		(assert-that started "jvm started"))
 	  ;; Start jdibug
 	  (setq jdibug-test-connected nil)
