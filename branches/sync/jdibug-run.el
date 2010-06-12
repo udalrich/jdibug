@@ -69,15 +69,14 @@ set which enable to JDIbug to connect and `jdibug-run-jvm-args'
 and the application arguments are `jdibug-run-application-args'"
   (interactive)
 
-  (unless (stringp jdibug-run-main-class)
-	(error "jdibug-run-main-class must be a string"))
-
-  (let* ((name (concat "*" jdibug-run-main-class "*"))
+  (let* ((main-class (jdibug-run-get-main-class))
+		(name (concat "*" main-class "*"))
 		(buffer (get-buffer-create name))
 		(args (append (jdibug-run-server-args)
-					  jdibug-run-jvm-args
-					  (list jdibug-run-main-class)
+					  (jdibug-run-get-jvm-args)
+					  (list main-class)
 					  jdibug-run-application-args)))
+
 	;; Remove any old output from the buffer
 	(pop-to-buffer buffer)
 	(erase-buffer)
@@ -117,5 +116,44 @@ server.  It uses the port of the first entry in the
 	(list "-Xdebug"
 		  (format "-Xrunjdwp:transport=dt_socket,address=%s,server=y,suspend=y"
 				  port))))
+
+(defun jdibug-run-get-main-class ()
+  "Returns main class to run, which is `jdibug-run-main-class' or one from
+current buffer."
+  (if (and (stringp jdibug-run-main-class)
+	   (not (string= "" jdibug-run-main-class)))
+      jdibug-run-main-class
+	(if (fboundp 'jde-parse-get-buffer-class)
+		(jde-parse-get-buffer-class)
+	  (error "Unable to determine main class"))))
+
+(defun jdibug-run-get-jvm-args ()
+  "Returns args which will be passed to JVM."
+  (append (jdibug-run-classpath-arg)
+		  jdibug-run-jvm-args))
+
+
+;; copy of jde-db-classpath-arg method
+(defun jdibug-run-classpath-arg ()
+  "Generate the -classpath command line argument for jdibug."
+
+  ;; Set the classpath option. Use the local
+  ;; classpath, if set; otherwise, the global
+  ;; classpath.
+  (let* ((db-option-classpath (if (boundp 'jde-db-option-classpath)
+								  jde-db-option-classpath))
+		 (global-classpath (if (boundp 'jde-global-classpath)
+							   jde-global-classpath))
+		 (classpath
+		  (if db-option-classpath
+			  db-option-classpath
+			global-classpath))
+		(symbol
+		 (if db-option-classpath
+			 'jde-db-option-classpath
+		   'jde-global-classpath)))
+    (if classpath
+		(if (fboundp 'jde-build-classpath)
+			(list "-classpath" (jde-build-classpath classpath symbol))))))
 
 (provide 'jdibug-run)
