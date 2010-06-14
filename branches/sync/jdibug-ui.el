@@ -118,7 +118,9 @@ jdibug-source-paths will be ignored if this is set to t."
 
 (require 'bindat)
 (require 'elog)
+(require 'jdwp)
 (require 'jdi)
+(require 'jdibug-expr)
 (require 'tree-mode)
 
 (elog-make-logger jdibug)
@@ -257,7 +259,7 @@ to populate the jdi-value-values of the jdi-value.")
 (add-hook 'jdi-thread-start-hooks 'jdibug-handle-thread-start)
 (add-hook 'jdi-thread-end-hooks 'jdibug-handle-thread-end)
 
-(defun jdibug-connect nil
+(defun jdibug-connect ()
   "Create a new debugger and connect to a running process.  See
 `jdibug-connect-hosts' for where it will look for the debuggee
 processes"
@@ -500,7 +502,7 @@ the condition is satisfied."
 		  (when (jdi-value-p result)
 			(if (= (jdi-value-type result) jdwp-tag-boolean)
 				(not (equal (jdi-primitive-value-value result) 0))
-			  (jdibug-warn "Breakpoint condition is not a boolean but a %s" (jdwp-type-name (jdi-value-type)))
+			  (jdibug-warn "Breakpoint condition is not a boolean but a %s" (jdwp-type-name (jdi-value-type result)))
 			  nil)))
 	  t)))
 
@@ -798,6 +800,28 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 	  (string< (jdi-field-name o1) (jdi-field-name o2))
 	(> (jdi-field-mod-bits o1) (jdi-field-mod-bits o2))))
 
+(defmacro jdibug-refresh-buffer-now (buffer retry-func must-be-suspended &rest body)
+  "Standard boilerplate for updating BUFFER.  If we cannot update
+now, call RETRY-FUNC to schedule another try later.  Otherwise,
+execute BODY."
+  (declare (indent 3))
+  `(when (or (jdwp-accepting-process-output-p)
+			jdwp-uninterruptibly-running-p
+			jdwp-sending-command
+			(null (catch 'jdwp-input-pending
+					(jdwp-uninterruptibly
+					  (let ((jdwp-throw-on-input-pending t))
+						(when (buffer-live-p ,buffer)
+						  (with-current-buffer ,buffer
+							(let ((inhibit-read-only t))
+							  (erase-buffer))
+
+							(if (and ,must-be-suspended (null jdibug-active-thread))
+								(insert "Not suspended")
+							  ,@body)))))
+					  t)))
+	(,retry-func)))
+
 (defun jdibug-refresh-locals-buffer ()
   (if (timerp jdibug-refresh-locals-buffer-timer)
 	  (cancel-timer jdibug-refresh-locals-buffer-timer))
@@ -871,27 +895,6 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
 		   (insert (format "Unknown data structure: %s" value))))
 	(insert "\n")))
 
-(defmacro jdibug-refresh-buffer-now (buffer retry-func must-be-suspended &rest body)
-  "Standard boilerplate for updating BUFFER.  If we cannot update
-now, call RETRY-FUNC to schedule another try later.  Otherwise,
-execute BODY."
-  (declare (indent 3))
-  `(when (or (jdwp-accepting-process-output-p)
-			jdwp-uninterruptibly-running-p
-			jdwp-sending-command
-			(null (catch 'jdwp-input-pending
-					(jdwp-uninterruptibly
-					  (let ((jdwp-throw-on-input-pending t))
-						(when (buffer-live-p ,buffer)
-						  (with-current-buffer ,buffer
-							(let ((inhibit-read-only t))
-							  (erase-buffer))
-
-							(if (and ,must-be-suspended (null jdibug-active-thread))
-								(insert "Not suspended")
-							  ,@body)))))
-					  t)))
-	(,retry-func)))
 
 (defun jdibug-frame-notify (button &rest ignore)
   (jdibug-debug "jdibug-frame-notify")
@@ -1095,16 +1098,17 @@ execute BODY."
 		(message "Class: %s" (jdi-class-signature (jdi-value-get-reference-type value)))))))
 
 (defun jdibug-get-source-paths ()
-  (if (and jdibug-use-jde-source-paths
-		   (boundp 'jde-sourcepath)
-		   (fboundp 'jde-normalize-path))
-	  (if (fboundp 'jde-expand-wildcards-and-normalize)
-		  (jde-expand-wildcards-and-normalize jde-sourcepath 'jde-sourcepath)
-		(mapcar
-		 (lambda (path)
-		   (jdibug-normalize-path path 'jde-sourcepath t))
-		 jde-sourcepath))
-	jdibug-source-paths))
+  (or (and jdibug-use-jde-source-paths
+		   (if (boundp 'jde-sourcepath)
+			   (if (fboundp 'jde-normalize-path)
+				   (if (fboundp 'jde-expand-wildcards-and-normalize)
+					   (jde-expand-wildcards-and-normalize jde-sourcepath
+														   'jde-sourcepath)
+					 (mapcar
+					  (lambda (path)
+						(jdibug-normalize-path path 'jde-sourcepath t))
+					  jde-sourcepath)))))
+	  jdibug-source-paths))
 
 (defun jdibug-file-in-source-paths-p (file)
   (jdibug-debug "jdibug-file-in-source-paths-p:%s" file)
@@ -1710,12 +1714,16 @@ special cases like infinity."
 (defun jdibug-normalize-path (path symbol cygwin-p)
   "Process PATH and SYMBOL like `jde-normalize-path'.  If CYGWIN-P, leave the result in cygwin form."
   ;; If we want to leave paths in cygwin form, bind the converter to a
-  ;; function that does nothing
+  ;; function that does nothing.  Also, if the jdee functions are not
+  ;; available, do nothing.
   (let ((jde-cygwin-path-converter
-		 (if cygwin-p
-			 (list (lambda (path) path))
-		   jde-cygwin-path-converter)))
-	(jde-normalize-path path symbol)))
+		 (or (if (boundp 'jde-cygwin-path-converter)
+				 (unless cygwin-p
+				   jde-cygwin-path-converter))
+			 (list (lambda (path) path)))))
+	(if (fboundp 'jde-normalize-path)
+		(jde-normalize-path path symbol)
+	  (error "jde-normalize-path is not available"))))
 
 (defun jdibug-refresh-threads-buffer ()
   (if (timerp jdibug-refresh-threads-buffer-timer)

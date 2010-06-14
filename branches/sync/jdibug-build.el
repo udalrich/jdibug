@@ -3,8 +3,8 @@
 	"elog"
 	"jdwp"
     "jdi"
-    "jdibug-ui"
     "jdibug-expr"
+    "jdibug-ui"
 	"jdibug-run"
 	"jdibug-menu"))
 

@@ -1498,13 +1498,13 @@ cannot be byte compiled.
 			   (add-to-list 'jdwp-uninterruptibly-waiting
 							(lambda () ,@body)))
 		 'jdwp-deferred)
-	 (prog1
-		 (let ((jdwp-uninterruptibly-running-p t))
-		   ,@body)
-	   ;; If something is waiting, run it
-	   (when jdwp-uninterruptibly-waiting
-		 (let ((func (pop jdwp-uninterruptibly-waiting)))
-		   (jdwp-uninterruptibly (apply func nil)))))))
+	 (let ((jdwp-uninterruptibly-running-p t))
+	   (prog1
+		   (progn ,@body)
+		 ;; If something is waiting, run it
+		 (while jdwp-uninterruptibly-waiting
+		   (let ((func (pop jdwp-uninterruptibly-waiting)))
+			 (apply func nil)))))))
 
 
 (defun jdwp-type-name (type)
