@@ -138,8 +138,8 @@ jdibug-source-paths will be ignored if this is set to t."
   "the thread that is suspended")
 
 (defvar jdibug-others-suspended nil
-  "When a breakpoint event happens and we are already on a breakpoint. The (thread . location) will be pushed into this list.
-When the user resume, we will switch to this thread and location.")
+  "When a breakpoint event happens and we are already on a breakpoint. The (thread location request-id) will be pushed into this list.
+When the user resumes, we will switch to this thread and location.")
 
 (defvar jdibug-current-line-overlay nil)
 
@@ -472,7 +472,7 @@ And position the point at the line number."
 			  ;; 			   thread)
 
 			  (setq jdibug-active-thread thread))
-		  (setq jdibug-others-suspended (append jdibug-others-suspended (list `(,thread . ,location)))))
+		  (setq jdibug-others-suspended (append jdibug-others-suspended (list `(,thread ,location ,request-id)))))
 
 		(jdibug-refresh-frames-buffer)
 		(jdibug-refresh-threads-buffer)
@@ -1361,7 +1361,7 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
 
 	  (if jdibug-others-suspended
 		  (let ((other (pop jdibug-others-suspended)))
-			(jdibug-handle-breakpoint (car other) (cdr other))))
+			(apply 'jdibug-handle-breakpoint other)))
 
 	  (message "JDIbug resumed"))))
 

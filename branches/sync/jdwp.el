@@ -895,7 +895,7 @@
       (if (not (= error-code 0))
 		  (progn
 			(jdwp-error "jdwp-process-reply: received error:%d:%s for id:%d command:%s" error-code (jdwp-error-string error-code) id (getf protocol :name))
-			(if (memq error-code jdwp-ignore-error) nil (error "%s" error-code)))
+			(if (memq error-code jdwp-ignore-error) nil (error "%s" (jdwp-error-string error-code))))
 		(if reply-spec
 			(let ((reply-data   (bindat-unpack reply-spec (jdwp-packet-data packet))))
 			  (jdwp-traffic-info "reply: %s" reply-data)

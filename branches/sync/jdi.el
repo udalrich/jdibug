@@ -1402,9 +1402,7 @@ This handles the event later, once we are connected."
 (add-hook 'jdwp-event-hooks 'jdi-handle-event)
 
 (defun jdi-primitive-emacs-value (jdi-value)
-  "Convert a jdi-primitive JDI-VALUE, which my be a vector of bytes,
-into something that is numberp and can be used with emacs
-built-in numerical functions."
+  "Convert a jdi-primitive JDI-VALUE into the corresponding emacs form."
   (let ((type (jdi-value-type jdi-value))
 		(value (jdi-primitive-value-value jdi-value)))
 	(cond
@@ -1414,6 +1412,8 @@ built-in numerical functions."
 		 (jdwp-vec-to-float value))
 		((eql type jdwp-tag-double)
 		 (jdwp-vec-to-double value))
+		((eql type jdwp-tag-boolean)
+		 (not (= 0 value)))
 		(t
 		 (jdi-error "Unknown type (%s) for value: %s" type jdi-value)
 		 (error "%s is not a numerical type" (jdwp-type-name type))))))

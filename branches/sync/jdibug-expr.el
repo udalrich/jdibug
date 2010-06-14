@@ -51,6 +51,11 @@ data is STRING, which is passed to `format' and supplied with
 ARGS"
   (throw jdibug-expr-bad-eval (apply #'format string args)))
 
+(defun jdibug-expr-build-numerical-jdi-value (result result-type)
+  "Convert emacs value RESULT into a JDI structure of type RESULT-TYPE"
+  (let ((vector (jdwp-number-to-vec result result-type)))
+	(make-jdi-primitive-value :type result-type
+							  :value vector)))
 (defclass jdibug-eval-rule ()
   ;; fields
   ((class :initarg :class
@@ -228,6 +233,44 @@ if the super method matches and the name in tree is a string."
 	  (otherwise
 	   (jdibug-expr-bad-eval "Uncertain how to evaluate %s" value)))))
 
+;; Unary minus
+(defclass jdibug-eval-rule-unary-minus (jdibug-eval-rule-with-name)
+  ;; fields
+  ()
+  "Numerical negation: - 3"
+  )
+
+(defmethod initialize-instance ((this jdibug-eval-rule-unary-minus) &rest fields)
+  "Constructor for jdibug-eval-rule-mult instance"
+  (call-next-method)
+  (oset this :class 'function)
+  (oset this :name 'unary-minus))
+
+(defmethod jdibug-eval-rule-accept ((this jdibug-eval-rule-unary-minus)
+									jdwp tree frame)
+  "Evalutate a binary rule."
+  (let* ((attrs (semantic-tag-attributes tree))
+		 (args (plist-get attrs :arguments))
+		 (first-arg (car args))
+		 (first-value (jdibug-expr-eval-expr jdwp first-arg frame))
+		 (first-type (jdi-value-type first-value))
+		 result)
+
+	;; Check that we have valid types for the operation
+	(jdibug-expr-debug "%s: checking if valid types %s" (object-class-name this) (jdwp-type-name first-type))
+	(if (jdibug-expr-type-is-number-p first-type)
+		(progn
+		  (setq result (- (jdi-primitive-emacs-value first-value)))
+		  (jdibug-expr-build-numerical-jdi-value result first-type))
+	  (jdibug-expr-bad-eval "Unable to negate a %s"
+							(jdwp-type-name first-type)))))
+
+(defmethod valid-types ((this jdibug-eval-rule-unary-minus)
+						first-type)
+  "Numerical operations are valid if on numbers"
+  (jdibug-expr-type-is-number-p first-type))
+
+
 ;; Binary operations
 (defclass jdibug-eval-rule-binary (jdibug-eval-rule-with-name)
   ((operation-name :initarg :operation-name
@@ -300,9 +343,7 @@ on FIRST-TYPE and SECOND-TYPE"
 							result result-type)
   "Build the jdi value from the RESULT returned from
 `eval-binary-expression' as a RESULT-TYPE"
-  (let ((vector (jdwp-number-to-vec result result-type)))
-	(make-jdi-primitive-value :type result-type
-							  :value vector)))
+  (jdibug-expr-build-numerical-jdi-value result result-type))
 
 ;; Binary numerical operations that yield a boolean
 (defclass jdibug-eval-rule-binary-numerical-to-boolean
@@ -529,7 +570,7 @@ on FIRST-TYPE and SECOND-TYPE.  Returns `jdwp-tag-boolean'"
   "Build the jdi value from the RESULT returned from
 `eval-binary-expression' as a RESULT-TYPE"
   (make-jdi-primitive-value :type result-type
-							:value (if result-type 1 0)))
+							:value (if result 1 0)))
 
 ;; Logical and
 (defclass jdibug-eval-rule-logand (jdibug-eval-rule-binary-boolean)
