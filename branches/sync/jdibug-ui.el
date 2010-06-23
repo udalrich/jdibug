@@ -293,19 +293,20 @@ processes"
 		(toggle-read-only 1))
 
 	  (setq jdibug-virtual-machines
-			(mapcar (lambda (connect-host-and-port)
-					  (let* ((host (nth 0 (split-string connect-host-and-port ":")))
-							 (port (string-to-number (nth 1 (split-string connect-host-and-port ":"))))
-							 (jdwp (make-jdwp))
-							 (vm (make-jdi-virtual-machine :host host :port port :jdwp jdwp)))
-						(jdibug-message (format "%s:%s" host port) t)
-						(condition-case err
-							(progn
-							  (jdi-virtual-machine-connect vm)
-							  (jdibug-message "(connected)" t)
-							  vm)
-						  (file-error (jdibug-message "(failed)" t) nil))))
-					jdibug-connect-hosts))
+			(remove nil
+					(mapcar (lambda (connect-host-and-port)
+							  (let* ((host (nth 0 (split-string connect-host-and-port ":")))
+									 (port (string-to-number (nth 1 (split-string connect-host-and-port ":"))))
+									 (jdwp (make-jdwp))
+									 (vm (make-jdi-virtual-machine :host host :port port :jdwp jdwp)))
+								(jdibug-message (format "%s:%s" host port) t)
+								(condition-case err
+									(progn
+									  (jdi-virtual-machine-connect vm)
+									  (jdibug-message "(connected)" t)
+									  vm)
+								  (file-error (jdibug-message "(failed)" t) nil))))
+							jdibug-connect-hosts)))
 
 	  (if (find-if 'identity jdibug-virtual-machines)
 		  (let* ((bps jdibug-breakpoints)
