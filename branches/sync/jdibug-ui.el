@@ -228,7 +228,7 @@ to populate the jdi-value-values of the jdi-value.")
 
   ;; condition.  If non-nil, only step if the condition evaluates to true.  The value s
   condition
-)
+  )
 
 
 (defstruct jdibug-watchpoint
@@ -338,44 +338,44 @@ processes"
 	(run-hooks 'jdibug-detached-hook)))
 
 (defun jdibug-cleanup-on-disconnect nil
-	(if jdibug-current-line-overlay
-		(delete-overlay jdibug-current-line-overlay))
-	(mapc (lambda (bp)
-			(if (jdibug-breakpoint-overlay bp)
-				(delete-overlay (jdibug-breakpoint-overlay bp)))
-			(setf (jdibug-breakpoint-status bp) 'unresolved))
-		  jdibug-breakpoints)
+  (if jdibug-current-line-overlay
+	  (delete-overlay jdibug-current-line-overlay))
+  (mapc (lambda (bp)
+		  (if (jdibug-breakpoint-overlay bp)
+			  (delete-overlay (jdibug-breakpoint-overlay bp)))
+		  (setf (jdibug-breakpoint-status bp) 'unresolved))
+		jdibug-breakpoints)
 
-	(and (timerp jdibug-refresh-locals-buffer-timer)
-		 (cancel-timer jdibug-refresh-locals-buffer-timer))
+  (and (timerp jdibug-refresh-locals-buffer-timer)
+	   (cancel-timer jdibug-refresh-locals-buffer-timer))
 
-	(and (timerp jdibug-refresh-watchpoints-buffer-timer)
-		 (cancel-timer jdibug-refresh-watchpoints-buffer-timer))
+  (and (timerp jdibug-refresh-watchpoints-buffer-timer)
+	   (cancel-timer jdibug-refresh-watchpoints-buffer-timer))
 
-	(and (timerp jdibug-refresh-frames-buffer-timer)
-		 (cancel-timer jdibug-refresh-frames-buffer-timer))
+  (and (timerp jdibug-refresh-frames-buffer-timer)
+	   (cancel-timer jdibug-refresh-frames-buffer-timer))
 
-	(and (timerp jdibug-refresh-threads-buffer-timer)
-		 (cancel-timer jdibug-refresh-threads-buffer-timer))
+  (and (timerp jdibug-refresh-threads-buffer-timer)
+	   (cancel-timer jdibug-refresh-threads-buffer-timer))
 
-	(kill-buffer jdibug-locals-buffer)
-	(kill-buffer jdibug-watchpoints-buffer)
-	(kill-buffer jdibug-frames-buffer)
-	(kill-buffer jdibug-threads-buffer)
+  (kill-buffer jdibug-locals-buffer)
+  (kill-buffer jdibug-watchpoints-buffer)
+  (kill-buffer jdibug-frames-buffer)
+  (kill-buffer jdibug-threads-buffer)
 
-	(setq jdibug-locals-tree    nil
-		  jdibug-locals-buffer  nil
+  (setq jdibug-locals-tree    nil
+		jdibug-locals-buffer  nil
 
-		  jdibug-frames-tree    nil
-		  jdibug-frames-buffer  nil
+		jdibug-frames-tree    nil
+		jdibug-frames-buffer  nil
 
-		  jdibug-threads-buffer nil
-		  jdibug-threads-tree   nil
+		jdibug-threads-buffer nil
+		jdibug-threads-tree   nil
 
-		  jdibug-watchpoints-buffer nil
+		jdibug-watchpoints-buffer nil
 
-		  jdibug-active-thread  nil
-		  jdibug-active-frame   nil))
+		jdibug-active-thread  nil
+		jdibug-active-frame   nil))
 
 (defun jdibug-exit-jvm ()
   "End the debugging session and kill all attached JVMs."
@@ -510,8 +510,8 @@ the condition is satisfied."
 (defun jdibug-handle-step (thread location)
   (jdibug-debug "jdibug-handle-step")
 
-;; 	(jdibug-debug "setting jdibug-active-thread to %s in jdibug-handle-step"
-;; 			   thread)
+  ;; 	(jdibug-debug "setting jdibug-active-thread to %s in jdibug-handle-step"
+  ;; 			   thread)
 
   (setq jdibug-active-thread thread)
 
@@ -561,11 +561,11 @@ the condition is satisfied."
 
 (defun jdibug-handle-thread-start (thread)
   ;; We don't request that the thread is suspended in the event
-;;   request, so don't resume it.  Doing so can cause problems with other
-;;   events, like class-prepare, which do suspend it and cause the
-;;   thread to be resumed before a breakpoint can be set.
+  ;;   request, so don't resume it.  Doing so can cause problems with other
+  ;;   events, like class-prepare, which do suspend it and cause the
+  ;;   thread to be resumed before a breakpoint can be set.
 
-;; (jdi-thread-resume thread)
+  ;; (jdi-thread-resume thread)
   (jdibug-refresh-frames-buffer)
   (jdibug-refresh-threads-buffer))
 
@@ -613,13 +613,14 @@ the condition is satisfied."
   :group 'jdibug)
 
 (defun jdibug-expand-method-node (tree)
-  (jdibug-debug "jdibug-expand-method-node")
-  (let ((value (widget-get tree :jdi-value))
-		(method (widget-get tree :jdi-method)))
-	(let ((result-value (jdi-value-invoke-method value jdibug-active-thread method nil nil)))
-	  (let ((result-string (jdibug-value-get-string result-value)))
-		(jdibug-debug "running method %s returned %s" (jdi-method-name method) result-string)
-		(list (jdibug-make-tree-from-value "result" result-value result-string))))))
+  (jdwp-uninterruptibly
+	(jdibug-debug "jdibug-expand-method-node")
+	(let* ((value (widget-get tree :jdi-value))
+		   (method (widget-get tree :jdi-method))
+		   (result-value (jdi-value-invoke-method value jdibug-active-thread method nil nil))
+		   (result-string (jdibug-value-get-string result-value)))
+	  (jdibug-debug "running method %s returned %s" (jdi-method-name method) result-string)
+	  (list (jdibug-make-tree-from-value "result" result-value result-string)))))
 
 (defun jdibug-make-method-node (value method)
   (let ((display (format "%s: %s" (jdi-method-name method) (jdi-method-signature method))))
