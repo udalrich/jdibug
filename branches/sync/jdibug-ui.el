@@ -56,7 +56,7 @@
 
 (defcustom jdibug-source-paths nil
   "Paths of the source codes. This will be ignored if
-jdibug-use-jde-source-paths is t."
+`jdibug-use-jde-source-paths' is t."
   :group 'jdibug
   :type 'list)
 
@@ -70,7 +70,7 @@ need not be refreshed."
 
 (defcustom jdibug-use-jde-source-paths t
   "Set to t to use the jde-sourcepath as the source paths.
-jdibug-source-paths will be ignored if this is set to t."
+`jdibug-source-paths' will be ignored if this is set to t."
   :group 'jdibug
   :type 'boolean)
 
@@ -1177,7 +1177,10 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
 
 (defun jdibug-disable-breakpoint (bp)
   (mapc (lambda (er)
-		  (jdi-event-request-disable er))
+		  (condition-case err
+			  (jdi-event-request-disable er)
+			(error (jdibug-error "Unable to disable breakpoint: %s" (cdr err)))
+			))
 		(jdibug-breakpoint-event-requests bp))
   (setf (jdibug-breakpoint-status bp) 'disabled)
   (jdibug-breakpoint-update bp)
@@ -1275,7 +1278,10 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
 
 (defun jdibug-breakpoints-delete ()
   (interactive)
-  (message "jdibug-breakpoints-delete (not yet implemented)"))
+  (jdwp-uninterruptibly
+	(let ((bp (get-text-property (point) 'breakpoint)))
+	  (jdibug-remove-breakpoint bp))))
+
 
 (defun jdibug-breakpoints-goto ()
   (interactive)

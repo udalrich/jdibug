@@ -1240,9 +1240,12 @@ list whose nth element is the array element at index FIRST + n"
   (let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
 		 (thread (jdi-virtual-machine-get-object-create vm (make-jdi-thread
 															:id (bindat-get-field event :u :thread)))))
-	(jdi-debug "jdi-handle-thread-start:%s" (jdi-thread-id thread))
-	(jdi-debug "thread status: %s %d" (jdi-thread-get-status thread)
-			   (jdi-thread-get-suspend-count thread))
+	(condition-case nil
+		(progn
+		  (jdi-debug "jdi-handle-thread-start:%s" (jdi-thread-id thread))
+		  (jdi-debug "thread status: %s %d" (jdi-thread-get-status thread)
+					 (jdi-thread-get-suspend-count thread)))
+	  (error nil))
 	(run-hook-with-args 'jdi-thread-start-hooks thread)))
 
 (defun jdi-handle-thread-end (jdwp event)
