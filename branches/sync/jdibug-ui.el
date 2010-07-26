@@ -538,13 +538,20 @@ the condition is satisfied."
   (dolist (bp jdibug-breakpoints)
 	(when (equal (jdibug-breakpoint-source-file bp) (jdibug-class-signature-to-source-file (jdi-class-get-signature class)))
 	  (jdibug-debug "Found breakpoint in %s" (jdibug-breakpoint-source-file bp))
-	  (dolist (location (jdi-class-get-locations-of-line class (jdibug-breakpoint-line-number bp)))
-		(let ((er (jdi-event-request-manager-create-breakpoint (jdi-virtual-machine-event-request-manager (jdi-mirror-virtual-machine class)) location)))
-		  (jdi-event-request-enable er)
-		  (push er (jdibug-breakpoint-event-requests bp))))
-	  (setf (jdibug-breakpoint-status bp) 'enabled)
-	  (jdibug-breakpoint-update bp)
-	  (jdibug-refresh-breakpoints-buffer)))
+	  (let (found)
+		(dolist (location (jdi-class-get-locations-of-line class (jdibug-breakpoint-line-number bp)))
+		  (setq found t)
+		  (let ((er (jdi-event-request-manager-create-breakpoint (jdi-virtual-machine-event-request-manager (jdi-mirror-virtual-machine class)) location)))
+			(jdi-event-request-enable er)
+			(push er (jdibug-breakpoint-event-requests bp))))
+		(if found
+			(progn
+			  (setf (jdibug-breakpoint-status bp) 'enabled)
+			  (jdibug-breakpoint-update bp)
+			  (jdibug-refresh-breakpoints-buffer))
+		  ;; We didn't find the breakpoint, so it might be in an inner class
+		  (jdi-request-event-prepare-inner-classes class)))))
+
   (jdibug-debug "jdibug-handle-class-prepare finishing, resuming thread, thread status is %s" (jdi-thread-get-status thread))
   (jdi-thread-resume thread))
 

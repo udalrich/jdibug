@@ -91,7 +91,9 @@
   interfaces
   interfaces-count ;; we use this to see whether the interfaces field have been resolved or not
   ;; list of jdi-method
-  methods)
+  methods
+  ;; list of nested classes
+  nested-classes)
 
 (defstruct (jdi-interface (:include jdi-reference-type)))
 
@@ -232,6 +234,7 @@
 	(make-jdi-event-request :virtual-machine (jdi-mirror-virtual-machine thread) :data data)))
 
 (defun jdi-event-request-manager-create-class-prepare (erm vm signature)
+  (jdi-debug "jdi-event-request-manager-create-class-prepare %s" signature)
   (let ((data `((:event-kind     . ,jdwp-event-class-prepare)
 				(:suspend-policy . ,jdwp-suspend-policy-event-thread)
 				(:modifiers      . 1)
@@ -520,6 +523,17 @@
 		(setf (jdi-class-signature class) (jdwp-get-string reply :signature)
 			  (jdi-class-generic-signature class) (jdwp-get-string reply :generic-signature))))))
 
+(defun jdi-class-get-nested-classes (class)
+  "Return the (possibly cached) list of nested classes for this class.  Note: this is not implemented in the default 1.6 JVM."
+  (jdi-debug "jdi-class-get-nested-classes")
+  (or (jdi-class-nested-classes class)
+	  (let ((reply (jdwp-send-command (jdi-mirror-jdwp class) "nested-classes" `((:ref-type . ,(jdi-class-id class))))))
+		(setf (jdi-class-methods class)
+			  (loop for nested in (bindat-get-field reply :nested)
+					collect nested
+					do (jdi-debug "jdi-class-get-nested-classes:id=%s" nested))))))
+
+
 (defun jdi-method-get-signature (method)
   (jdi-debug "jdi-method-get-signature")
   (if (jdi-method-signature method)
@@ -564,21 +578,35 @@
   "Set breakpoint and return a list of jdi-event-request"
 
   (jdi-debug "jdi-virtual-machine-set-breakpoint:signature=%s:line=%s" signature line)
-  (let ((result))
-	(let ((classes (jdi-virtual-machine-get-classes-by-signature vm signature)))
-	  (if classes
-		  (dolist (class classes)
-			(dolist (location (jdi-class-get-locations-of-line class line))
-			  (let ((er (jdi-event-request-manager-create-breakpoint (jdi-virtual-machine-event-request-manager vm) location)))
-				(jdi-event-request-enable er)
-				(push er result)))))
+  (let (result
+		(classes (jdi-virtual-machine-get-classes-by-signature vm signature)))
+	(if classes
+		;; TODO: if we don't find the location here, check the inner classes
+		(dolist (class classes)
+		  (dolist (location (jdi-class-get-locations-of-line class line))
+			(let ((er (jdi-event-request-manager-create-breakpoint
+					   (jdi-virtual-machine-event-request-manager vm)
+					   location)))
+			  (jdi-event-request-enable er)
+			  (push er result)))))
 
-	  ;; the class might be loaded again by another class loader
-	  ;; so we install the class prepare event anyway
-	  (let ((er (jdi-event-request-manager-create-class-prepare (jdi-virtual-machine-event-request-manager vm) vm (car (jdi-jni-to-print signature)))))
-		(jdi-event-request-enable er)))
-
+	;; the class might be loaded again by another class loader
+	;; so we install the class prepare event anyway
+	(let ((er (jdi-event-request-manager-create-class-prepare (jdi-virtual-machine-event-request-manager vm) vm (car (jdi-jni-to-print signature)))))
+	  (jdi-event-request-enable er))
 	result))
+
+(defun jdi-request-event-prepare-inner-classes (class)
+  "Request prepare events for the inner classes of CLASS"
+  (jdi-debug "jdi-request-event-prepare-inner-classes %s" (jdi-class-signature class))
+  (let* ((vm (jdi-mirror-virtual-machine class))
+		 (signature (jdi-class-signature class))
+		 (er (jdi-event-request-manager-create-class-prepare
+			  (jdi-virtual-machine-event-request-manager vm)
+			  vm
+			  (concat (car (jdi-jni-to-print signature)) "$*"))))
+	(jdi-event-request-enable er)))
+
 
 (defun jdi-virtual-machine-has-generic-p (vm)
   (>= (jdi-virtual-machine-jdwp-minor vm) 5))

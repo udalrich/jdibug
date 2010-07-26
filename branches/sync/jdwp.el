@@ -524,6 +524,14 @@
 				   :command      7
 				   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
 				   :reply-spec   ((:source-file   struct jdwp-string-spec)))
+	(:name         "nested-types"
+				   :command-set  2
+				   :command      8
+				   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
+				   :reply-spec   ((:num-nested    u32)
+								  (:nested        repeat (:num-nested)
+												  (:ref-type-tag (eval jdwp-reference-type-id-size))
+												  (:id vec (eval jdwp-field-id-size)))))
 	(:name         "interfaces"
 				   :command-set  2
 				   :command      10
@@ -1447,13 +1455,15 @@ This method does not consume the packet, the caller can know by checking jdwp-pa
 (defun jdwp-signal-hook (error-symbol data)
   (jdwp-info "debug-on-error=%s jdwp-signal-count=%s" debug-on-error jdwp-signal-count)
   (setq jdwp-signal-count (1+ jdwp-signal-count))
-  (if (< jdwp-signal-count 5)
-	  (jdwp-error "jdwp-signal-hook:%s:%s\n%s\n" error-symbol data
-				  (with-output-to-string (backtrace)))
-	(if (< jdwp-signal-count 50)
-		(jdwp-error "jdwp-signal-hook:%s:%s (backtrace suppressed)"
-					error-symbol data)
-	  (let ((signal-hook-function nil)) (error error-symbol data)))))
+  (if jdwp-error-flag
+	  (if (< jdwp-signal-count 5)
+		  (jdwp-error "jdwp-signal-hook:%s:%s\n%s\n" error-symbol data
+					  (with-output-to-string (backtrace)))
+		(if (< jdwp-signal-count 50)
+			(jdwp-error "jdwp-signal-hook:%s:%s (backtrace suppressed)"
+						error-symbol data)
+		  (let ((signal-hook-function nil)) (error error-symbol data))))
+	(let ((signal-hook-function nil)) (error error-symbol data))))
 
 
 (defun jdwp-run-with-timer (secs repeat function &rest args)

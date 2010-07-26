@@ -23,9 +23,17 @@
 
   (assert-local-display-value "index" "4"))
 
+(deftest nested-class-breakpoint breakpoints-suite
+  "Test that breakpoints in nested classes work."
+
+  (jdibug-test-set-breakpoint-and-run "doStuff();")
+
+  ;; Should be at an anonymous inner class
+  (assert-frames-display-value "Main\\$[0-9]+\\.run"))
+
 
 (defun jdibug-test-set-breakpoint-and-run (expr &optional cond)
-  "Set a breakpoint at the first location of EXPR.  Make it conditionalon COND.
+  "Set a breakpoint at the first location of EXPR.  Make it conditional on COND.
 Run until a breakpoint is hit."
 
   (jdibug-test-connect-to-jvm)
@@ -63,4 +71,14 @@ Run until a breakpoint is hit."
 		   (rest-of-line (buffer-substring-no-properties (point) eol)))
 	  (assert-match (concat ":.*\\(" value "\\)") rest-of-line
 					(format "Correct value in buffer(%S)" (buffer-string))))))
+
+(defun assert-frames-display-value (regexp)
+  "Assert that REGEXP is displayed in the frames window."
+
+  (save-excursion
+	(set-buffer jdibug-frames-buffer)
+	(goto-char (point-min))
+	(assert-that
+	 (search-forward-regexp regexp nil t)
+	   (format "Found %s in locals buffer (%S)" regexp (buffer-string)))))
 

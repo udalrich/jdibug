@@ -178,6 +178,7 @@ an unreasonable amount of time has passed."
 	   (setq	count (1+ count)))
 	 (assert-that ,var ,message)))
 
+(load "locals.el")
 (load "breakpoints.el")
 (load "watchpoints.el")
 
