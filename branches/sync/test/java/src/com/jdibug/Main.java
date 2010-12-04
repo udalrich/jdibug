@@ -1,6 +1,7 @@
 package com.jdibug; // Generated package name
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -41,9 +42,11 @@ public class Main
 
         Main main = new Main();
         main.submitJobs();
-
+		System.out.println("submitJobs returned");
         Gui gui = new Gui();
         gui.drawStuff();
+
+		System.out.println("Main.main finished");
     }
 
     private void submitJobs()
@@ -51,17 +54,23 @@ public class Main
         ExecutorService service = Executors.newFixedThreadPool(2);
         List<Future<?>> results = new ArrayList<Future<?>>();
 
-         for (int index = 0; index < 10; ++index)
-        {
-            results.add(service.submit(new Runnable()
-                {
-                    @Override
-                    public void run()
-                    {
-                        doStuff();
-                    }
-                }));
-        }
+		Collection<Runnable> tasks = new ArrayList<Runnable>();
+		for (int index = 0; index < 10; ++index)
+		{
+			tasks.add(new Runnable()
+				{
+					@Override
+					public void run()
+					{
+						doStuff();
+					}
+				});
+		}
+
+		for (Runnable runnable: tasks)
+		{
+            results.add(service.submit(runnable));
+		}
 
         for (Future<?> result: results)
         {

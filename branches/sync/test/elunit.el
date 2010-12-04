@@ -114,6 +114,9 @@
 (defvar elunit-done-running-hook nil
   "Runs when the tests are finished; passed a test count and a failure count.")
 
+(defconst elunit-report-buffer-name "*elunit report*"
+  "Name of the buffer where the report is generated")
+
 (defun elunit-clear ()
   "Clear overlays from buffer."
   (interactive) (remove-overlays))
@@ -190,6 +193,10 @@ arguments."
                       nil nil elunit-default-suite)))
 
   (elunit-clear)
+  (save-excursion
+	(when (get-buffer elunit-report-buffer-name)
+	  (set-buffer elunit-report-buffer-name)
+	  (erase-buffer)))
   (elunit-run-suite (symbol-value (intern suite)))
   (message "%d tests with %d problems."
            elunit-test-count (length elunit-failures)))
@@ -333,7 +340,7 @@ Takes the same ARGS as `error'."
 
 
 (defun elunit-report (test-count failure-count)
-  (switch-to-buffer "*elunit report*")
+  (switch-to-buffer elunit-report-buffer-name)
   (goto-char (point-max))
   (insert (format "Suite: %s\n" elunit-default-suite))
   (insert (format "Total tests run: %d   Total failures: %d"

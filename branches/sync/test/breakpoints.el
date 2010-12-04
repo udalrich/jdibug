@@ -19,7 +19,7 @@
 (deftest conditional-breakpoint breakpoints-suite
   "Test that a conditional breakpoint eventually suspends the program and does so on the correct iteration."
 
-  (jdibug-test-set-breakpoint-and-run "results.add" "index > 3")
+  (jdibug-test-set-breakpoint-and-run "tasks.add" "index > 3")
 
   (assert-local-display-value "index" "4"))
 
@@ -31,16 +31,28 @@
   ;; Should be at an anonymous inner class
   (assert-frames-display-value "Main\\$[0-9]+\\.run"))
 
+(deftest nested-class-breakpoint-after-load breakpoints-suite
+  "Test that breakpoints in nested classes work when the breakpoint is set
+after the class is loaded."
 
-(defun jdibug-test-set-breakpoint-and-run (expr &optional cond)
+  (jdibug-test-set-breakpoint-and-run "service.submit")
+
+  (jdibug-test-set-breakpoint-and-run "doStuff();" nil 'no-connect)
+
+  ;; Should be at an anonymous inner class
+  (assert-frames-display-value "Main\\$[0-9]+\\.run"))
+
+
+(defun jdibug-test-set-breakpoint-and-run (expr &optional cond no-connect)
   "Set a breakpoint at the first location of EXPR.  Make it conditional on COND.
-Run until a breakpoint is hit."
+Run until a breakpoint is hit. Do not connect to jvm if NO-CONNECT."
 
   (jdibug-test-connect-to-jvm)
 
   ;; Set a breakpoint on the line where we define the variable
   (goto-char (point-min))
-  (search-forward expr)
+  (assert-that (search-forward expr)
+			   (format "Found '%s' to set breakpoint" expr))
   (jdibug-toggle-breakpoint)
   (when cond
 	(let* ((line-number (line-number-at-pos))
