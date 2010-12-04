@@ -1157,6 +1157,9 @@ byte, which might be needed to fill out the vector."
 							   (if (> double 0) #x7f #xff)
 							 (if (eq double '+infinity) #x7f #xff))))
 		   (vector first-byte #xf0 0 0  0 0 0 0)))
+		;; zero.  TODO: handle negative zero
+		((zerop double)
+		 '[0 0 0 0   0 0 0 0])
 		(t
 		 ;; Normal number
 		 (let* ((exponent (logb double))
@@ -1205,6 +1208,9 @@ byte, which might be needed to fill out the vector."
 							   (if (> float 0) #x7f #xff)
 							 (if (eq float '+infinity) #x7f #xff))))
 		   (vector first-byte #x80 0 0)))
+		;; Zero.  TODO: handle negative zero
+		((zerop float)
+		 '[0 0 0 0])
 		(t
 		 ;; Normal number
 		 (let* ((exponent (logb float))

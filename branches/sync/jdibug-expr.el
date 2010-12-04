@@ -681,7 +681,9 @@ unsuccessful).  The failure string may not be very descriptive."
 	 semantic-lex-number-expression semantic-java-number-regexp
 	 semantic-lex-depth nil
 	 semantic-lex-analyzer 'jdibug-java-expr-lexer
-
+	 ;; Turn of the built in java tag expander, since our tags have an
+	 ;; inconsistent format.
+	 semantic-tag-expand-function nil
 	 ;; svn after save hook won't work here
 	 after-save-hook nil)
 	(semantic-lex-init)

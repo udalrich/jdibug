@@ -527,11 +527,12 @@
   "Return the (possibly cached) list of nested classes for this class.  Note: this is not implemented in the default 1.6 JVM."
   (jdi-debug "jdi-class-get-nested-classes")
   (or (jdi-class-nested-classes class)
-	  (let ((reply (jdwp-send-command (jdi-mirror-jdwp class) "nested-classes" `((:ref-type . ,(jdi-class-id class))))))
-		(setf (jdi-class-methods class)
-			  (loop for nested in (bindat-get-field reply :nested)
-					collect nested
-					do (jdi-debug "jdi-class-get-nested-classes:id=%s" nested))))))
+      (let ((reply (jdwp-send-command (jdi-mirror-jdwp class) "nested-classes"
+				      `((:ref-type . ,(jdi-class-id class))))))
+	(setf (jdi-class-methods class)
+	      (loop for nested in (bindat-get-field reply :nested)
+		    collect nested
+		    do (jdi-debug "jdi-class-get-nested-classes:id=%s" nested))))))
 
 
 (defun jdi-method-get-signature (method)

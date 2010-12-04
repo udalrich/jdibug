@@ -1108,16 +1108,16 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
 
 (defun jdibug-get-source-paths ()
   (or (and jdibug-use-jde-source-paths
-		   (if (boundp 'jde-sourcepath)
-			   (if (fboundp 'jde-normalize-path)
-				   (if (fboundp 'jde-expand-wildcards-and-normalize)
-					   (jde-expand-wildcards-and-normalize jde-sourcepath
-														   'jde-sourcepath)
-					 (mapcar
-					  (lambda (path)
-						(jdibug-normalize-path path 'jde-sourcepath t))
-					  jde-sourcepath)))))
-	  jdibug-source-paths))
+	   (if (boundp 'jde-sourcepath)
+	       (if (fboundp 'jde-normalize-path)
+		   (if (fboundp 'jde-expand-wildcards-and-normalize)
+		       (jde-expand-wildcards-and-normalize jde-sourcepath
+							   'jde-sourcepath)
+		     (mapcar
+		      (lambda (path)
+			(jdibug-normalize-path path 'jde-sourcepath t))
+		      jde-sourcepath)))))
+      jdibug-source-paths))
 
 (defun jdibug-file-in-source-paths-p (file)
   (jdibug-debug "jdibug-file-in-source-paths-p:%s" file)
