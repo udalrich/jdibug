@@ -40,6 +40,7 @@
   (save-excursion
 	(set-buffer jdibug-locals-buffer)
 	;; Click to expand stuff
+	(goto-char (point-min))
 	(search-forward "stuff:")
 	(search-backward "[+]")
 	(widget-button-press (point))

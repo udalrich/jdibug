@@ -26,14 +26,18 @@
 					   (unless jdibug-test-old-refresh-delay
 						 (setq jdibug-test-old-refresh-delay jdibug-refresh-delay
 							   jdibug-refresh-delay 0.1))
-				;; TODO figure out if there is already a process running and kill it
-				(setq jdibug-jde-test-Main-buffer
-					  (find-file (expand-file-name "java/src/com/jdibug/Main.java" jdibug-test-root-dir)))))
+					   (let ((process (get-buffer-process "*com.jdibug.Main*")))
+						 (when process
+						   (kill-process process)))
+					   (setq jdibug-jde-test-Main-buffer
+							 (find-file (expand-file-name "java/src/com/jdibug/Main.java" jdibug-test-root-dir)))))
   :teardown-hooks (list (lambda()
 						  (jdibug-info "jde-test-suite teardown")
 						  (setq jdibug-refresh-delay jdibug-test-old-refresh-delay
 								jdibug-test-old-refresh-delay nil)
-						  (jdibug-exit-jvm)))
+						  (jdibug-exit-jvm)
+						  (jdwp-traffic-info "Test Finished")
+						  ))
   )
 
 (defvar jdibug-test-breakpoint-hit nil)
@@ -48,7 +52,7 @@
 
   ;; Wait for the flag to be set
   (let* ((interval 0.1)
-		 (max-count (/ 30 interval))
+		 (max-count (/ 10 interval))
 		 (count 0))
 	(while (and (not jdibug-test-breakpoint-hit) (< count max-count))
 	  (setq count (1+ count))
@@ -114,8 +118,13 @@ used"
 		buffer started)
 	(save-excursion
 	  ;; Kill any currently running process
-	  (when (get-buffer run-buffer)
-		(kill-buffer run-buffer))
+	  (let* ((buffer (get-buffer run-buffer))
+			 (process (get-buffer-process buffer)))
+		(when buffer
+		  (when process
+			(set-process-query-on-exit-flag process nil))
+		  (kill-buffer buffer)))
+
 	  ;; Start the JVM
 	  (jde-run 1)
 	  ;; Wait for it to start
@@ -188,9 +197,16 @@ an unreasonable amount of time has passed."
 ;; (debug-on-entry 'watch-expression-and-run-to-first-reference)
 
 ;;(debug-on-entry 'jdi-class-get-locations-of-line)
+
+;;(debug-on-entry 'fail)
+
 (let ((then (float-time))
 	  now delta)
+  ;; (debug-on-entry 'jdibug-handle-breakpoint)
+  ;; (debug-on-entry 'jdibug-test-set-breakpoint-and-run)
+  ;; (debug)
   (elunit "jde-test-suite")
   (setq now (float-time)
 		delta (- now then))
+  (raise-frame)
   (message "Running jde-test-suite took %f seconds" delta))
