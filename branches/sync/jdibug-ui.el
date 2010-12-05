@@ -27,10 +27,12 @@
 ;; http://code.google.com/p/jdibug/
 
 ;; If you are using JDEE, you only need to customize two variables
-;;     jdibug-connect-host
-;; which is the hostname that you want to connect to
-;;     jdibug-connect-port
-;; which is the port that you want to connect to
+;;     jdibug-connect-hosts
+;; which is a list of  hostname:port that you want to connect to.
+;; Also ensure the
+;;		jdibug-use-jde-source-paths
+;; is set to t.  This causes jdibug to use the jde sourcepath.
+;;
 ;;
 ;; After that, make sure you have loaded the JDEE project with the
 ;; property variables (namely jde-sourcepath)
@@ -56,7 +58,7 @@
 
 (defcustom jdibug-source-paths nil
   "Paths of the source codes. This will be ignored if
-`jdibug-use-jde-source-paths' is t."
+`jdibug-use-jde-source-paths' is t.  This must be a list like '(\"~/src\") not astring like \"~/src\""
   :group 'jdibug
   :type 'list)
 
@@ -427,7 +429,8 @@ And position the point at the line number."
 		;; file is already open in a buffer, just show it
 		(progn
 		  (jdibug-raise-window win)
-		  (goto-line line-number)
+		  (goto-char (point-min))
+		  (forward-line (1- line-number))
 		  (if highlight
 			  (with-current-buffer buffer-name
 				(jdibug-highlight-current-line line-number))))
@@ -441,7 +444,8 @@ And position the point at the line number."
 				(select-window win)
 				(find-file file-name)
 				(jdibug-raise-window win)
-				(goto-line line-number)
+				(goto-char (point-min))
+				(forward-line (1- line-number))
 				(if highlight
 					(with-current-buffer (window-buffer win)
 					  (jdibug-highlight-current-line line-number))))
@@ -582,7 +586,8 @@ the condition is satisfied."
 
 (defun jdibug-highlight-current-line (line-number)
   (jdibug-debug "jdibug-highlight-current-line:%d:current-buffer=%s" line-number (current-buffer))
-  (goto-line line-number)
+  (goto-char (point-min))
+  (forward-line (1- line-number))
   (beginning-of-line)
   (if jdibug-current-line-overlay
       (delete-overlay jdibug-current-line-overlay))
@@ -1117,7 +1122,9 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
 		      (lambda (path)
 			(jdibug-normalize-path path 'jde-sourcepath t))
 		      jde-sourcepath)))))
-      jdibug-source-paths))
+	  (if (stringp jdibug-source-paths)
+		  (error "jdibug-source-paths must be a list of strings, not a single string")
+		jdibug-source-paths)))
 
 (defun jdibug-file-in-source-paths-p (file)
   (jdibug-debug "jdibug-file-in-source-paths-p:%s" file)
@@ -1245,7 +1252,9 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
 	(when (and buffer (buffer-live-p buffer))
 	  (jdibug-debug "Found buffer")
 	  (with-current-buffer buffer
-		(goto-line (or (jdibug-breakpoint-line-number bp) (jdibug-get-class-line-number)))
+		(goto-char (point-min))
+		(forward-line (or (jdibug-breakpoint-line-number bp)
+						 (jdibug-get-class-line-number)))
 		(if (jdibug-breakpoint-overlay bp)
 			(delete-overlay (jdibug-breakpoint-overlay bp)))
 		(setf (jdibug-breakpoint-overlay bp) (make-overlay (point) (1+ (line-end-position))))
@@ -1325,7 +1334,8 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
 								 (or (jdibug-breakpoint-line-number bp)
 									 "class"))))
 				(insert (propertize str 'breakpoint bp))))))
-		(goto-line orig-line))))
+		(goto-char (point-min))
+		(forward-line orig-line))))
 
 (defun jdibug-send-step (depth)
   (jdibug-debug "jdibug-send-step")

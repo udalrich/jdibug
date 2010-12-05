@@ -1,5 +1,5 @@
 MAJOR_VERSION=0
-MINOR_VERSION=4-beta-1
+MINOR_VERSION=4
 VERSION=$(MAJOR_VERSION).$(MINOR_VERSION)
 
 #BUILD_DIR=$(PWD)/build
@@ -35,9 +35,17 @@ CYGWIN=[ "${OSTYPE}" = cygwin ]
 all: build test dist
 
 .PHONY: dist
-dist: build
+dist: build doc
 	cd $(BUILD_DIR) && tar cvf $(BUILD_NAME).tar $(BUILD_NAME)
 	bzip2 $(BUILD_DIR)/$(BUILD_NAME).tar
+
+.PHONY: doc
+doc: init
+	makeinfo --output=$(BUILD_DIR)/$(BUILD_NAME)/jdibug.info jdibug.texi
+	makeinfo --html --no-split jdibug.texi
+	mkdir $(BUILD_DIR)/$(BUILD_NAME)/images
+	cp -r images/*.* $(BUILD_DIR)/$(BUILD_NAME)/images
+	cp README.txt NEWS $(BUILD_DIR)/$(BUILD_NAME)
 
 .PHONY: build
 build: init
@@ -49,7 +57,7 @@ build: init
 	emacs $(BUILD)
 
 .PHONY: test
-test: init
+test: init build
 	emacs $(SMOKE_TEST)
 
 .PHONY: jde-test

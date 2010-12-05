@@ -42,6 +42,7 @@
 	(set-buffer jdibug-locals-buffer)
 	;; Click to expand stuff
 	(goto-char (point-min))
+	(jdibug-test-info "About to search for stuff:")
 	(search-forward "stuff:")
 	(search-backward "[+]")
 	(widget-button-press (point))
