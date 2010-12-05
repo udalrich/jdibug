@@ -45,9 +45,7 @@
 
 (eval-when-compile
   (setq jdi-unit-testing t)
-  (defvar jdibug-active-thread)
-  (load "cl-seq")
-  (load "cl-extra"))
+  (defvar jdibug-active-thread))
 
 (defstruct jdi-mirror
   virtual-machine)
@@ -93,7 +91,9 @@
   interfaces
   interfaces-count ;; we use this to see whether the interfaces field have been resolved or not
   ;; list of jdi-method
-  methods)
+  methods
+  ;; list of nested classes
+  nested-classes)
 
 (defstruct (jdi-interface (:include jdi-reference-type)))
 
@@ -234,6 +234,7 @@
 	(make-jdi-event-request :virtual-machine (jdi-mirror-virtual-machine thread) :data data)))
 
 (defun jdi-event-request-manager-create-class-prepare (erm vm signature)
+  (jdi-debug "jdi-event-request-manager-create-class-prepare %s" signature)
   (let ((data `((:event-kind     . ,jdwp-event-class-prepare)
 				(:suspend-policy . ,jdwp-suspend-policy-event-thread)
 				(:modifiers      . 1)
@@ -522,6 +523,18 @@
 		(setf (jdi-class-signature class) (jdwp-get-string reply :signature)
 			  (jdi-class-generic-signature class) (jdwp-get-string reply :generic-signature))))))
 
+(defun jdi-class-get-nested-classes (class)
+  "Return the (possibly cached) list of nested classes for this class.  Note: this is not implemented in the default 1.6 JVM."
+  (jdi-debug "jdi-class-get-nested-classes")
+  (or (jdi-class-nested-classes class)
+      (let ((reply (jdwp-send-command (jdi-mirror-jdwp class) "nested-classes"
+				      `((:ref-type . ,(jdi-class-id class))))))
+	(setf (jdi-class-methods class)
+	      (loop for nested in (bindat-get-field reply :nested)
+		    collect nested
+		    do (jdi-debug "jdi-class-get-nested-classes:id=%s" nested))))))
+
+
 (defun jdi-method-get-signature (method)
   (jdi-debug "jdi-method-get-signature")
   (if (jdi-method-signature method)
@@ -566,21 +579,35 @@
   "Set breakpoint and return a list of jdi-event-request"
 
   (jdi-debug "jdi-virtual-machine-set-breakpoint:signature=%s:line=%s" signature line)
-  (let ((result))
-	(let ((classes (jdi-virtual-machine-get-classes-by-signature vm signature)))
-	  (if classes
-		  (dolist (class classes)
-			(dolist (location (jdi-class-get-locations-of-line class line))
-			  (let ((er (jdi-event-request-manager-create-breakpoint (jdi-virtual-machine-event-request-manager vm) location)))
-				(jdi-event-request-enable er)
-				(push er result)))))
+  (let (result
+		(classes (jdi-virtual-machine-get-classes-by-signature vm signature)))
+	(if classes
+		;; TODO: if we don't find the location here, check the inner classes
+		(dolist (class classes)
+		  (dolist (location (jdi-class-get-locations-of-line class line))
+			(let ((er (jdi-event-request-manager-create-breakpoint
+					   (jdi-virtual-machine-event-request-manager vm)
+					   location)))
+			  (jdi-event-request-enable er)
+			  (push er result)))))
 
-	  ;; the class might be loaded again by another class loader
-	  ;; so we install the class prepare event anyway
-	  (let ((er (jdi-event-request-manager-create-class-prepare (jdi-virtual-machine-event-request-manager vm) vm (car (jdi-jni-to-print signature)))))
-		(jdi-event-request-enable er)))
-
+	;; the class might be loaded again by another class loader
+	;; so we install the class prepare event anyway
+	(let ((er (jdi-event-request-manager-create-class-prepare (jdi-virtual-machine-event-request-manager vm) vm (car (jdi-jni-to-print signature)))))
+	  (jdi-event-request-enable er))
 	result))
+
+(defun jdi-request-event-prepare-inner-classes (class)
+  "Request prepare events for the inner classes of CLASS"
+  (jdi-debug "jdi-request-event-prepare-inner-classes %s" (jdi-class-signature class))
+  (let* ((vm (jdi-mirror-virtual-machine class))
+		 (signature (jdi-class-signature class))
+		 (er (jdi-event-request-manager-create-class-prepare
+			  (jdi-virtual-machine-event-request-manager vm)
+			  vm
+			  (concat (car (jdi-jni-to-print signature)) "$*"))))
+	(jdi-event-request-enable er)))
+
 
 (defun jdi-virtual-machine-has-generic-p (vm)
   (>= (jdi-virtual-machine-jdwp-minor vm) 5))
@@ -822,6 +849,9 @@
 
 (defun jdi-value-object-p (value)
   (equal (jdi-value-type value) jdwp-tag-object))
+
+(defun jdi-value-array-p (value)
+  (equal (jdi-value-type value) jdwp-tag-array))
 
 (defun jdi-generic-signature-to-print (generic-signature)
   (setq generic-signature (replace-regexp-in-string "^<" "" generic-signature))
@@ -1125,27 +1155,35 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 										(jdwp-get-string field :generic-signature)
 										(bindat-get-field field :mod-bits))))))
 
-(defun jdi-array-get-values (array)
+(defun jdi-array-get-values (array &optional first last)
+  "Get the values of ARRAY from FIRST (inclusive) to
+LAST (exclusive).  If FIRST or LAST are not supplied, they
+default to 0 and the length of the array.
+
+Returns nil if array is the null object.  Otherwise, it returns a
+list whose nth element is the array element at index FIRST + n"
   (jdi-debug "jdi-array-get-values:object-id=%s" (jdi-object-id array))
 
   (unless (equal (jdi-object-id array) [0 0 0 0 0 0 0 0])
-	(let ((array-length (jdi-array-get-array-length array)))
-	  (when (> array-length 0)
+	(let (array-length)
+	  (setq first (or first 0)
+			last (or last (jdi-array-get-array-length array)))
+	  (when (> last first)
 		(let* ((reply (jdwp-send-command (jdi-mirror-jdwp array) "array-get-values"
 										 `((:array-object . ,(jdi-object-id array))
-										   (:first-index . 0)
-										   (:length . ,array-length))))
+										   (:first-index . ,first)
+										   (:length . ,(- last first)))))
 			   (reply-array (jdwp-unpack-arrayregion (jdi-mirror-jdwp array) reply)))
 		  (jdi-trace "got array-get-values:%s" reply-array)
 		  (if (or (= (bindat-get-field reply-array :type) jdwp-tag-object)
 				  (= (bindat-get-field reply-array :type) jdwp-tag-array))
 			  (loop for value-reply in (bindat-get-field reply-array :value)
-					for i from 0 to (- array-length 1)
+					for i from first to (1- last)
 					collect (jdi-virtual-machine-get-value-create (jdi-mirror-virtual-machine array)
 																  (bindat-get-field value-reply :value :type)
 																  (bindat-get-field value-reply :value :u :value)))
 			(loop for value-reply in (bindat-get-field reply-array :value)
-				  for i from 0 to (- array-length 1)
+				  for i from first to (1- last)
 				  collect (jdi-virtual-machine-get-value-create (jdi-mirror-virtual-machine array)
 																(bindat-get-field reply-array :type)
 																(bindat-get-field value-reply :value)))))))))
@@ -1157,6 +1195,7 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 		 (class-id (bindat-get-field event :u :location :class-id))
 		 (method-id (bindat-get-field event :u :location :method-id))
 		 (line-code-index (bindat-get-field event :u :location :index))
+		 (request-id (bindat-get-field event :u :request-id))
 
 		 (class (jdi-virtual-machine-get-class-create vm class-id))
 		 (method (make-jdi-method :virtual-machine vm
@@ -1176,7 +1215,7 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 	(setf (jdi-virtual-machine-suspended-frames vm) (nreverse (cons frame (jdi-virtual-machine-suspended-frames vm))))
 
 	(setf (jdi-virtual-machine-suspended-thread-id vm) (bindat-get-field event :u :thread))
-	(run-hook-with-args 'jdi-breakpoint-hooks thread location)))
+	(run-hook-with-args 'jdi-breakpoint-hooks thread location request-id)))
 
 (defun jdi-handle-step-event (jdwp event)
   (jdi-debug "jdi-handle-step-event")
@@ -1230,9 +1269,12 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
   (let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
 		 (thread (jdi-virtual-machine-get-object-create vm (make-jdi-thread
 															:id (bindat-get-field event :u :thread)))))
-	(jdi-debug "jdi-handle-thread-start:%s" (jdi-thread-id thread))
-	(jdi-debug "thread status: %s %d" (jdi-thread-get-status thread)
-			   (jdi-thread-get-suspend-count thread))
+	(condition-case nil
+		(progn
+		  (jdi-debug "jdi-handle-thread-start:%s" (jdi-thread-id thread))
+		  (jdi-debug "thread status: %s %d" (jdi-thread-get-status thread)
+					 (jdi-thread-get-suspend-count thread)))
+	  (error nil))
 	(run-hook-with-args 'jdi-thread-start-hooks thread)))
 
 (defun jdi-handle-thread-end (jdwp event)
@@ -1324,7 +1366,7 @@ This handles the event later, once we are connected."
 											(bindat-get-field reply :return-value :u :value)))))
 
 (defun jdi-object-invoke-method (object thread method arguments options)
-  "Invoke the method on the value on the thread, if method is a string, it will pick the first method that matches the method-name."
+  "Invoke the method on the value on the thread, if method is a string, it will pick the first method that matches the method-name.  OPTIONS is currently ignored."
   (jdi-debug "jdi-object-invoke-method")
   (when (stringp method)
 	(setq method (find-if (lambda (obj)
@@ -1391,5 +1433,21 @@ This handles the event later, once we are connected."
 
 (add-hook 'jdwp-event-hooks 'jdi-handle-event)
 
+(defun jdi-primitive-emacs-value (jdi-value)
+  "Convert a jdi-primitive JDI-VALUE into the corresponding emacs form."
+  (let ((type (jdi-value-type jdi-value))
+		(value (jdi-primitive-value-value jdi-value)))
+	(cond
+		((memq type (list jdwp-tag-short jdwp-tag-byte jdwp-tag-int jdwp-tag-long))
+		 (jdwp-vec-to-int value))
+		((eql type jdwp-tag-float)
+		 (jdwp-vec-to-float value))
+		((eql type jdwp-tag-double)
+		 (jdwp-vec-to-double value))
+		((eql type jdwp-tag-boolean)
+		 (not (= 0 value)))
+		(t
+		 (jdi-error "Unknown type (%s) for value: %s" type jdi-value)
+		 (error "%s is not a numerical type" (jdwp-type-name type))))))
 
 (provide 'jdi)

@@ -139,6 +139,19 @@
 (defconst jdwp-tag-thread-group 103)
 (defconst jdwp-tag-class-loader 108)
 
+(defconst jdwp-tag-constants
+  (let (values)
+	(mapatoms
+	 (lambda (atom)
+	   (let ((name (symbol-name atom)))
+		 (when (and (string-match "^jdwp-tag-\\(.+\\)$" name)
+					(not (string-equal name "jdwp-tag-constants")))
+		   (push (cons (symbol-value atom)
+					   (match-string 1 name))
+				 values)))))
+	values)
+  "Map from jdwp type constants to printable names")
+
 (defconst jdwp-type-tag-class     1)
 (defconst jdwp-type-tag-interface 2)
 (defconst jdwp-type-tag-array     3)
@@ -511,6 +524,14 @@
 				   :command      7
 				   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
 				   :reply-spec   ((:source-file   struct jdwp-string-spec)))
+	(:name         "nested-types"
+				   :command-set  2
+				   :command      8
+				   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
+				   :reply-spec   ((:num-nested    u32)
+								  (:nested        repeat (:num-nested)
+												  (:ref-type-tag (eval jdwp-reference-type-id-size))
+												  (:id vec (eval jdwp-field-id-size)))))
 	(:name         "interfaces"
 				   :command-set  2
 				   :command      10
@@ -881,8 +902,9 @@
 	  (jdwp-trace "jdwp-process-reply packet-header:%s" packet)
       (if (not (= error-code 0))
 		  (progn
+			(jdwp-traffic-info "reply(error): %s %s" (jdwp-packet-data packet) packet)
 			(jdwp-error "jdwp-process-reply: received error:%d:%s for id:%d command:%s" error-code (jdwp-error-string error-code) id (getf protocol :name))
-			(if (memq error-code jdwp-ignore-error) nil (error "%s" error-code)))
+			(if (memq error-code jdwp-ignore-error) nil (error "%s" (jdwp-error-string error-code))))
 		(if reply-spec
 			(let ((reply-data   (bindat-unpack reply-spec (jdwp-packet-data packet))))
 			  (jdwp-traffic-info "reply: %s" reply-data)
@@ -988,7 +1010,9 @@
   (jdwp-vec-to-int (apply 'bindat-get-field s fields)))
 
 (defun jdwp-vec-to-int (vec)
-  "Converts a vector presentation into an integer."
+  "Converts a vector representation VEC into an integer.  This will
+fail for large values that require more bits than emacs uses to
+store an integer."
   (let ((result 0)
 		(i 0))
     (while (< i (length vec))
@@ -997,6 +1021,46 @@
       (incf i))
     result))
 
+(defun jdwp-integer-to-vec (number length)
+  "Converts an integer NUMBER (int or long in java terms) to a vector of bytes.  The returned value with have LENGTH elements."
+  (let* ((result (make-vector length 0))
+		 (negative (< number 0))
+		(mask #xff)
+		bits index prev-bits)
+	(loop for index from 0 below length do
+		  (setq bits (logand mask (1+ (logand mask (1- number)))))
+		  ;; If this is the last byte in the emacs representation,
+		  ;; fill it out from 28 to 32 bits.
+		  (setq bits (jdwp-patch-bits bits index length negative prev-bits)
+				prev-bits bits)
+		  (aset result (- length index 1) bits)
+		  (setq number (lsh number -8)))
+	result))
+
+(defun jdwp-patch-bits (bits index length negative prev-bits)
+  "Patch BITS to be the correct bits for byte INDEX of a LENGTH
+byte integer rather than an emacs 28 bit integer.  If NEGATIVE,
+the number is negative.  PREV-BITS are the bits from the previous
+byte, which might be needed to fill out the vector."
+  (let* ((last-byte (eql index (1- length)))
+		(sign-bit (if (and negative last-byte) 1 0))
+		(must-fill (>= index 3))
+		fill-bit first-bit last-bit bit-index)
+	(when must-fill
+	  (setq first-bit (if (eql index 3) 4 0)
+			last-bit (if last-byte 7 8))
+	  ;; Duplicate the highest order bit that is not the sign bit
+	  (setq fill-bit
+			(if (eql index 3)
+				(lsh (logand bits #x08) -3)
+			  (lsh (logand prev-bits #x80) -7)))
+	  (loop for bit-index from first-bit below last-bit do
+			(setq bits (logior bits (lsh fill-bit bit-index)))))
+	(when last-byte
+	  (setq bits (logior bits (lsh sign-bit 7))))
+	bits))
+
+(defconst jdwp-float-exponent-bias 127)
 (defun jdwp-vec-to-float (vec)
   (let* ((int (jdwp-vec-to-int vec))
 		 (high (+ (* (elt vec 0) 256)
@@ -1010,7 +1074,7 @@
 	  (0
 	   ;; Subnormal
 	   (setq result (/ (float mantissa) #x7fffff)
-			 exponent -126)
+			 exponent (- 1 jdwp-float-exponent-bias))
 	   (jdwp-debug "Converting %s %f %f" sign result exponent)
 	   ;; Need to use a floating point in expt to avoid integer overflow
 	   (setq result (* sign result (expt 2.0 exponent))))
@@ -1024,13 +1088,14 @@
 	  (otherwise
 	   ;; Normalized number
 	   (setq result (+ 1.0 (/ (float mantissa) #x7fffff))
-			 exponent (- exponent 127))
+			 exponent (- exponent jdwp-float-exponent-bias))
 	   (jdwp-debug "Converting %s %f %f" sign result exponent)
 	   ;; Need to use a floating point in expt to avoid integer overflow
 	   (setq result (* sign result (expt 2.0 exponent)))
 	   (jdwp-debug " to %f" result)
 	   result))))
 
+(defconst jdwp-double-exponent-bias 1023)
 (defun jdwp-vec-to-double (vec)
   (jdwp-debug "jdwp-vec-to-double %s" vec)
   (let* ((short-high (jdwp-vec-to-int (subseq vec 0 2)))
@@ -1060,7 +1125,7 @@
 					   (* mantissa-low (expt 2.0 -52))))
 	   (jdwp-debug "Converting %s %f %f" sign result exponent)
 										; Need to use a floating point in expt to avoid integer overflow
-	   (setq result (* sign result (expt 2.0 (- exponent 1023))))
+	   (setq result (* sign result (expt 2.0 (- exponent jdwp-double-exponent-bias))))
 	   (jdwp-debug " to %f" result)
 	   result))))
 
@@ -1079,6 +1144,124 @@
 
 	;;  (elunit "jdwp-suite")
 	))
+
+(defun jdwp-double-to-vec (double)
+  "Convert DOUBLE into a vector for passing over jdwp."
+  (cond ((or (eq double 'NaN) (and (numberp double) (not (= double double))))
+		 ;; NaN
+		 (vector #x7f #xf0 0 0  0 0 0 1))
+		((or (memq double '(+infinity -infinity))
+			 (not (zerop (* 0 double))))
+		 ;; +- infinity
+		 (let ((first-byte (if (numberp double)
+							   (if (> double 0) #x7f #xff)
+							 (if (eq double '+infinity) #x7f #xff))))
+		   (vector first-byte #xf0 0 0  0 0 0 0)))
+		;; zero.  TODO: handle negative zero
+		((zerop double)
+		 '[0 0 0 0   0 0 0 0])
+		(t
+		 ;; Normal number
+		 (let* ((exponent (logb double))
+				(sign-bit (if (< double 0) 1 0))
+				(mantissa (abs (* double (expt 2.0 (- exponent)))))
+				(byte 7) (bits 4)
+				(result (make-vector 8 0))
+				(shifted-exponent (+ exponent jdwp-double-exponent-bias))
+				int-mantissa factor index)
+		   (if (< shifted-exponent 0)
+			   (progn
+				 ;; Subnormalized
+				 (aset result 0 (lsh sign-bit 7))
+				 (setq mantissa (* mantissa (expt 2.0 (1- jdwp-double-exponent-bias)))))
+
+			 ;; Remove the implicit leading 1 from the mantissa
+			 (setq mantissa (1- mantissa))
+			 ;; Set the exponent
+			 (let ((exp-high (lsh shifted-exponent -4))
+				   (exp-low (logand shifted-exponent #x0f)))
+			   (aset result 1 (lsh exp-low 4))
+			   (aset result 0 exp-high))
+			 ;; Set the sign bit
+			 (aset result 0 (logior (aref result 0)
+									(lsh sign-bit 7))))
+		   ;; Extract the bits from the mantissa
+		   (while (> byte 0)
+			 (setq index (- 8 byte)
+				   factor (lsh 1 bits)
+				   int-mantissa (truncate (* mantissa factor)))
+			 (aset result index (logior (aref result index) int-mantissa))
+			 (setq mantissa (mod (* mantissa factor) 1)
+				   byte (1- byte)
+				   bits 8))
+		   result))))
+
+(defun jdwp-float-to-vec (float)
+  "Convert FLOAT into a vector for passing over jdwp."
+  (cond ((or (eq float 'NaN) (and (numberp float) (not (= float float))))
+		 ;; NaN
+		 (vector #x7f #x80 0 1))
+		((or (memq float '(+infinity -infinity))
+			 (not (zerop (* 0 float))))
+		 ;; +- infinity
+		 (let ((first-byte (if (numberp float)
+							   (if (> float 0) #x7f #xff)
+							 (if (eq float '+infinity) #x7f #xff))))
+		   (vector first-byte #x80 0 0)))
+		;; Zero.  TODO: handle negative zero
+		((zerop float)
+		 '[0 0 0 0])
+		(t
+		 ;; Normal number
+		 (let* ((exponent (logb float))
+				(sign-bit (if (< float 0) 1 0))
+				(mantissa (abs (* float (expt 2.0 (- exponent)))))
+				(byte 3) (bits 7)
+				(result (make-vector 4 0))
+				(shifted-exponent (+ exponent jdwp-float-exponent-bias))
+				int-mantissa factor index)
+		   (if (< shifted-exponent 0)
+			   (progn
+				 ;; Subnormalized
+				 (aset result 0 (lsh sign-bit 7))
+				 (setq mantissa (* mantissa (expt 2.0 (1- jdwp-float-exponent-bias)))))
+
+			 ;; Remove the implicit leading 1 from the mantissa
+			 (setq mantissa (1- mantissa))
+			 ;; Set the exponent
+			 (let ((exp-high (lsh shifted-exponent -1))
+				   (exp-low (logand shifted-exponent #x01)))
+			   (aset result 1 (lsh exp-low 7))
+			   (aset result 0 exp-high))
+			 ;; Set the sign bit
+			 (aset result 0 (logior (aref result 0)
+									(lsh sign-bit 7))))
+		   ;; Extract the bits from the mantissa
+		   (while (> byte 0)
+			 (setq index (- 4 byte)
+				   factor (lsh 1 bits)
+				   int-mantissa (truncate (* mantissa factor)))
+			 (aset result index (logior (aref result index) int-mantissa))
+			 (setq mantissa (mod (* mantissa factor) 1)
+				   byte (1- byte)
+				   bits 8))
+		   result))))
+
+(defun jdwp-number-to-vec (number type)
+  "Convert NUMBER to a vector of bytes.  TYPE is the type of the result."
+  (cond
+   ((eql type jdwp-tag-int)
+	(jdwp-integer-to-vec number 4))
+   ((eql type jdwp-tag-long)
+	(jdwp-integer-to-vec number 8))
+   ((memq type (list jdwp-tag-byte jdwp-tag-short))
+	number)
+   ((eql type jdwp-tag-float)
+	(jdwp-float-to-vec number))
+   ((eql type jdwp-tag-double)
+	(jdwp-double-to-vec number))
+   (t
+	(error "Unknown type of number: %s" (jdwp-type-name type)))))
 
 (defun jdwp-get-protocol (name)
   (find-if (lambda (p)
@@ -1278,13 +1461,15 @@ This method does not consume the packet, the caller can know by checking jdwp-pa
 (defun jdwp-signal-hook (error-symbol data)
   (jdwp-info "debug-on-error=%s jdwp-signal-count=%s" debug-on-error jdwp-signal-count)
   (setq jdwp-signal-count (1+ jdwp-signal-count))
-  (if (< jdwp-signal-count 5)
-	  (jdwp-error "jdwp-signal-hook:%s:%s\n%s\n" error-symbol data
-				  (with-output-to-string (backtrace)))
-	(if (< jdwp-signal-count 50)
-		(jdwp-error "jdwp-signal-hook:%s:%s (backtrace suppressed)"
-					error-symbol data)
-	  (let ((signal-hook-function nil)) (error error-symbol data)))))
+  (if jdwp-error-flag
+	  (if (< jdwp-signal-count 5)
+		  (jdwp-error "jdwp-signal-hook:%s:%s\n%s\n" error-symbol data
+					  (with-output-to-string (backtrace)))
+		(if (< jdwp-signal-count 50)
+			(jdwp-error "jdwp-signal-hook:%s:%s (backtrace suppressed)"
+						error-symbol data)
+		  (let ((signal-hook-function nil)) (error error-symbol data))))
+	(let ((signal-hook-function nil)) (error error-symbol data))))
 
 
 (defun jdwp-run-with-timer (secs repeat function &rest args)
@@ -1300,7 +1485,9 @@ This method does not consume the packet, the caller can know by checking jdwp-pa
   "Execute BODY, not allowing interrupts also wrapped in this
 macro to run until after BODY finishes.
 
-If BODY is executed immediately, the return value is the return value of BODY.  If execution is deferred, the return value is 'jdwp-deferred.
+If BODY is executed immediately, the return value is the return
+value of BODY.  If execution is deferred, the return value is
+'jdwp-deferred.
 
 BODY might also not be evaluated
 until after this returns, if another uninterruptable call is in
@@ -1317,7 +1504,9 @@ Variables that have complicated structure may require explicit quoting:
 	   (eval `(jdwp-uninterruptibly
 				(setq string (concat string (format \"%s\" (quote ,extra)))))))
 
-It is best if this is placed at a high level where
+It is best if these types of constructs are placed at a high
+level where the evaled block is simple, as the resulting code
+cannot be byte compiled.
 "
   (declare (indent defun))
   `(if jdwp-uninterruptibly-running-p
@@ -1326,15 +1515,19 @@ It is best if this is placed at a high level where
 			   (add-to-list 'jdwp-uninterruptibly-waiting
 							(lambda () ,@body)))
 		 'jdwp-deferred)
-	 (prog1
-		 (let ((jdwp-uninterruptibly-running-p t))
-		   ,@body)
-	   ;; If something is waiting, run it
-	   (when jdwp-uninterruptibly-waiting
-		 (let ((func (pop jdwp-uninterruptibly-waiting)))
-		   (jdwp-uninterruptibly (apply func nil)))))))
+	 (let ((jdwp-uninterruptibly-running-p t))
+	   (prog1
+		   (progn ,@body)
+		 ;; If something is waiting, run it
+		 (while jdwp-uninterruptibly-waiting
+		   (let ((func (pop jdwp-uninterruptibly-waiting)))
+			 (apply func nil)))))))
 
 
+(defun jdwp-type-name (type)
+  "Get a printable name for the jdwp TYPE"
+  (or (cdr (assoc type jdwp-tag-constants))
+	  (format "jdwp type %s" type)))
 
 (provide 'jdwp)
 
