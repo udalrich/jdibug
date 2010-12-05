@@ -4,7 +4,9 @@
 (require 'elunit)
 (require 'jde)
 (require 'jdibug)
+(require 'elog)
 
+(elog-make-logger jdibug-test)
 
 (defvar jdibug-jde-test-Main-buffer nil
   "Buffer with the source for the Main.java for testing")
@@ -32,7 +34,7 @@
 					   (setq jdibug-jde-test-Main-buffer
 							 (find-file (expand-file-name "java/src/com/jdibug/Main.java" jdibug-test-root-dir)))))
   :teardown-hooks (list (lambda()
-						  (jdibug-info "jde-test-suite teardown")
+						  (jdibug-test-info "jde-test-suite teardown")
 						  (setq jdibug-refresh-delay jdibug-test-old-refresh-delay
 								jdibug-test-old-refresh-delay nil)
 						  (jdibug-exit-jvm)
@@ -76,13 +78,13 @@ finished.  Also wait for all of the buffers to finish updating."
   (jdibug-step-over)
 
   ;; Wait for the flag to be set
-  (jdibug-info "Waiting for step to finish")
+  (jdibug-test-info "Waiting for step to finish")
   (let* ((interval 0.1) (max-count (/ 30 interval)) (count 0))
 	(while (and (not jdibug-test-step-hit) (< count max-count))
 	  (setq count (1+ count))
 	  (sleep-for interval)))
 
-  (jdibug-info "Step finished")
+  (jdibug-test-info "Step finished")
   (assert-that jdibug-test-step-hit "step hit")
 
   (jdibug-test-wait-for-refresh-timers))
@@ -93,6 +95,7 @@ finished.  Also wait for all of the buffers to finish updating."
 
 (defvar jdibug-test-connected nil)
 (defun jdibug-test-connected-hook (&rest ignore)
+  (jdibug-test-info "connected: %s" ignore)
   (setq jdibug-test-connected t)
   (remove-hook 'jdibug-connected-hook #'jdibug-test-connected-hook))
 
@@ -134,9 +137,11 @@ used"
 		  (setq buffer (get-buffer run-buffer)
 				count (1+ count))
 		  (when buffer
+			(jdibug-test-info "checking if running: %d %s" count buffer)
 			(set-buffer buffer)
 			(goto-char (point-min))
-			(setq started (search-forward "Listening for transport dt_socket at address: " nil t))))
+			(setq started (search-forward "Listening for transport dt_socket at address: " nil t)))
+		  (jdibug-test-info "checked if running: %s" started))
 		(assert-that started "jvm started"))
 	  ;; Start jdibug
 	  (setq jdibug-test-connected nil)
@@ -153,7 +158,7 @@ used"
 (defun jdibug-test-wait-for-refresh-timers nil
   "Wait until all of the buffer refresh timers have finished, or
 an unreasonable amount of time has passed."
-  (jdibug-debug "Waiting for timers: %s" timer-list)
+  (jdibug-test-debug "Waiting for timers: %s" timer-list)
   (mapc (lambda (timer-symbol)
 		  (let* ((count 0)
 				 (interval 0.1)
@@ -168,7 +173,7 @@ an unreasonable amount of time has passed."
 			  (let ((timer (symbol-value timer-symbol)))
 			    (if (memq timer timer-list)
 					(sleep-for interval)
-			      (jdibug-debug "%s no longer running" timer-symbol)
+			      (jdibug-test-debug "%s no longer running" timer-symbol)
 			      (setq done t)))
 			  (setq count (1+ count)))
 			  (assert-that done (format "Refresh timer never ran: %S" timer-symbol))))
@@ -176,7 +181,7 @@ an unreasonable amount of time has passed."
 		    jdibug-refresh-locals-buffer-timer
 		    jdibug-refresh-watchpoints-buffer-timer
 		    jdibug-refresh-frames-buffer-timer))
-  (jdibug-debug "Waiting for timers finished"))
+  (jdibug-test-debug "Waiting for timers finished"))
 
 (defmacro jdibug-test-wait-until (var message)
   "Wait until VAR becomes true."
@@ -184,6 +189,7 @@ an unreasonable amount of time has passed."
   `(let* ((count 0) (interval 0.1) (max-count (/ 10 interval)))
 	 (while (and (< count max-count) (not ,var))
 	   (sleep-for interval)
+	   (jdibug-test-info "Waiting %d for %s: %s" count var ,var)
 	   (setq	count (1+ count)))
 	 (assert-that ,var ,message)))
 
@@ -204,7 +210,7 @@ an unreasonable amount of time has passed."
 	  now delta)
   ;; (debug-on-entry 'jdibug-handle-breakpoint)
   ;; (debug-on-entry 'jdibug-test-set-breakpoint-and-run)
-  ;; (debug)
+  ;;  (debug)
   (elunit "jde-test-suite")
   (setq now (float-time)
 		delta (- now then))

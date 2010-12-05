@@ -24,7 +24,8 @@
   (assert-local-display-value "index" "4"))
 
 (deftest nested-class-breakpoint breakpoints-suite
-  "Test that breakpoints in nested classes work."
+  "Test that breakpoints in nested classes work when set before
+inner or outer class is loaded."
 
   (jdibug-test-set-breakpoint-and-run "doStuff();")
 
@@ -42,6 +43,16 @@ after the class is loaded."
   ;; Should be at an anonymous inner class
   (assert-frames-display-value "Main\\$[0-9]+\\.run"))
 
+(deftest nested-class-breakpoint-after-load-of-outer breakpoints-suite
+  "Test that breakpoints in nested classes work when the outer
+class is loaded but not the inner class"
+
+  (jdibug-test-set-breakpoint-and-run "twoAsInt")
+
+  (jdibug-test-set-breakpoint-and-run "doStuff();" nil 'no-connect)
+
+  ;; Should be at an anonymous inner class
+  (assert-frames-display-value "Main\\$[0-9]+\\.run"))
 
 (defun jdibug-test-set-breakpoint-and-run (expr &optional cond no-connect)
   "Set a breakpoint at the first location of EXPR.  Make it conditional on COND.
