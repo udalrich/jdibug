@@ -31,6 +31,7 @@
 (require 'easymenu)
 (require 'cc-mode)
 (require 'jdibug-ui)
+(require 'jdibug-run)
 
 (defvar jdibug-menu-spec
   (list "JDIbug"
@@ -62,6 +63,12 @@
 
 		"-"
 
+		["Run and connect"
+		 jdibug-run
+		 :active (and (not (jdibug-connected-p))
+					  jdibug-run-main-class)
+		 :help "Start a new process and connect to it."]
+
 		["Connect"
 		 jdibug-connect
 		 :active (not (jdibug-connected-p))
@@ -82,6 +89,9 @@
 		 jdibug-toggle-breakpoint
 		 :help "Cycle breakpoint through set, disabled and not set."]
 
+		["Add Watchpoint"
+		 jdibug-add-watchpoint
+		 :help "Evaluate an expression whenever the debuggee is suspended." ]
 		"-"
 
 		["Refresh all windows"
@@ -93,6 +103,7 @@
 (defun jdibug-refresh-all-windows ()
   "Refresh all of the dedicated window used by the debugger to display output"
   (interactive)
+  (jdibug-refresh-watchpoints-buffer-now)
   (jdibug-refresh-threads-buffer-now)
   (jdibug-refresh-locals-buffer-now)
   (jdibug-refresh-frames-buffer-now))

@@ -1,6 +1,33 @@
 * JDIbug News                  -*- outline -*-
 
-* 0.3 (Current)
+* 0.4 (2010-12-05)
+
+** Added simple function to start a program and attach a debugger.
+See `jdibug-run'.
+
+** Added expression watchpoints.
+The *JDIbug-Watchpoints* window now displays expressions.  Current
+support is moderate:
+***  Multiplication, division, addition, subtraction
+***  Logical and, or
+***  Numerical comparisons (<,>,<=,>=,==,!=)
+***  Array element access
+***  Constant numbers
+***  Field access via dot notation (a.b.c)
+***  Method calls (foo.bar(baz)) (only tested for no-arg methods)
+More should be added soon.
+
+** Added conditional breakpoints.
+Any valid expression for a watchpoint that evaluates to a boolean can
+be added as condition to breakpoint.  The check on a boolean value is
+made at runtime.  To add a conditional breakpoint, create a breakpoint
+normally.  Select it in the breakpoints buffer and type "c".
+
+** Added support for breakpoints in inner classes.
+In previous version, breakpoints in inner classes where ignored.  They
+now work in both anonymous and named inner classes.
+
+* 0.3 (2010-04-28)
 
 ** Supports multi dimensional array
 Now supports displaying/expanding of multi dimensional array.

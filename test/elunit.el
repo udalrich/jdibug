@@ -69,6 +69,9 @@
 ;; mode-unit.el (http://www.emacswiki.org/cgi-bin/wiki/ModeUnit)
 ;; useful as it is designed to help test whole Emacs modes.
 
+;; This version has been modified to support jdibug.
+
+
 ;; TODO:
 
 ;; - improve readability of failure reports
@@ -111,6 +114,9 @@
 (defvar elunit-done-running-hook nil
   "Runs when the tests are finished; passed a test count and a failure count.")
 
+(defconst elunit-report-buffer-name "*elunit report*"
+  "Name of the buffer where the report is generated")
+
 (defun elunit-clear ()
   "Clear overlays from buffer."
   (interactive) (remove-overlays))
@@ -118,7 +124,11 @@
 ;;; Defining tests
 
 (defmacro* defsuite (suite-name suite-ancestor &key setup-hooks teardown-hooks)
-  "Define a suite, which may be hierarchical."
+  "Define a suite, which may be hierarchical.  SETUP-HOOKS and
+TEARDOWN-HOOKS, if not nil, must be a list.  The first element is
+a function to call before/after the suite runs.  The remaining
+elements of the list (if any) are passed to the function as
+arguments."
   `(progn
      (setq ,suite-name (make-test-suite :name ',suite-name
                                       :setup-hooks ,setup-hooks
@@ -132,14 +142,21 @@
 (defmacro deftest (name suite &rest body)
   "Define a test NAME in SUITE with BODY."
   `(save-excursion
-     ;; TODO: Use backtrace info to get line number
-     (search-backward (concat "deftest " (symbol-name ',name)) nil t)
-     (let ((line (line-number-at-pos))
-           (file buffer-file-name))
-       (elunit-delete-test ',name ,suite)
-       (push (make-test :name ',name :body (lambda () ,@body)
-                        :file file :line line)
-             (test-suite-tests ,suite)))))
+	 ;; In theory, we should use load-file-name only if load-in-progress,
+	 ;; but it appears that load-in-progress is not set when loading a file
+	 ;; from the command line in a non-interactive session.
+	 (let ((file (or load-file-name buffer-file-name))
+		   (def-regexp (concat "deftest\\s-+"
+							   (symbol-name ',name)))
+		   line test)
+	   (find-file file)
+	   (goto-char (point-min))
+	   (search-forward-regexp def-regexp nil t)
+	   (setq line (line-number-at-pos))
+	   (setq test (make-test :name ',name :body (lambda () ,@body)
+							 :file file :line line))
+	   (elunit-delete-test ',name ,suite)
+       (push test (test-suite-tests ,suite)))))
 
 (defun elunit-get-test (name suite)
   "Return a test given a NAME and SUITE."
@@ -175,6 +192,10 @@
                       nil nil elunit-default-suite)))
 
   (elunit-clear)
+  (save-excursion
+	(when (get-buffer elunit-report-buffer-name)
+	  (set-buffer elunit-report-buffer-name)
+	  (erase-buffer)))
   (elunit-run-suite (symbol-value (intern suite)))
   (message "%d tests with %d problems."
            elunit-test-count (length elunit-failures)))
@@ -193,7 +214,11 @@
     (if (test-suite-teardown-hooks suite)
         (apply #'funcall (test-suite-teardown-hooks suite))))
   (dolist (child-suite (test-suite-children suite))
-    (elunit-run-suite child-suite))
+    (if (test-suite-setup-hooks suite)
+        (apply #'funcall (test-suite-setup-hooks suite)))
+    (elunit-run-suite child-suite)
+    (if (test-suite-teardown-hooks suite)
+        (apply #'funcall (test-suite-teardown-hooks suite))))
   (run-hook-with-args 'elunit-done-running-hook
                       elunit-test-count (length elunit-failures)))
 
@@ -257,20 +282,22 @@ Takes the same ARGS as `error'."
 ;; These are preferred over stuff like (assert (equal [...] because
 ;; they use the `fail' function, which reports errors nicely.
 
-(defun assert-that (actual)
+(defun assert-that (actual &optional message)
   "Fails if ACTUAL is nil."
   (unless actual
-    (fail "%s expected to be non-nil" actual)))
+    (fail "%s expected to be non-nil" message)))
 
 (defun assert-nil (actual)
   "Fails if ACTUAL is non-nil."
   (when actual
     (fail "%s expected to be nil" actual)))
 
-(defun assert-equal (expected actual)
+(defun assert-equal (expected actual &optional message)
   "Fails if EXPECTED is not equal to ACTUAL."
   (unless (equal expected actual)
-    (fail "%s expected to be %s" actual expected)))
+    (fail "%s%S expected to be %S"
+		  (if message (format "%s: " message) "")
+		  actual expected)))
 
 (defun assert-not-equal (expected actual)
   "Fails if EXPECTED is equal to ACTUAL."
@@ -282,10 +309,12 @@ Takes the same ARGS as `error'."
   (unless (member elt list)
     (fail "%s expected to include %s" list elt)))
 
-(defun assert-match (regex string)
+(defun assert-match (regex string &optional message)
   "Fails if REGEX does not match STRING."
   (unless (string-match regex string)
-    (fail "%s expected to match %s" string regex)))
+    (fail "%s%s expected to match %s"
+		  (if message (concat message ": ") "")
+		  string regex)))
 
 (defmacro assert-error (&rest body)
   "Fails if BODY does not signal an error."
@@ -307,6 +336,25 @@ Takes the same ARGS as `error'."
   `(assert-equal (eval ,form)
                      (progn ,@body
                        (eval ,form))))
+
+
+(defun elunit-report (test-count failure-count)
+  (switch-to-buffer elunit-report-buffer-name)
+  (goto-char (point-max))
+  (insert (format "Suite: %s\n" elunit-default-suite))
+  (insert (format "Total tests run: %d   Total failures: %d"
+				  test-count failure-count))
+  (newline)
+  (mapc (lambda (test)
+		  (insert (format "  Test %20s %20s:%-5d \n"
+						  (test-name test)
+						  (test-file test)
+						  (test-line test)))
+		  (insert (format "     %s\n" (test-message test)))
+		  (insert (format "     %s\n" (test-problem test))))
+		  elunit-failures))
+(when (not noninteractive)
+  (add-hook 'elunit-done-running-hook 'elunit-report))
 
 (provide 'elunit)
 ;;; elunit.el ends here
