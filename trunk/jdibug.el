@@ -3,16 +3,18 @@
 (require 'tree-mode)
 (require 'jdwp)
 (require 'jdi)
+(require 'jdibug-expr)
 (require 'jdibug-ui)
+(require 'jdibug-run)
 (require 'jdibug-menu)
 
-(defvar jdibug-major-version "@major-version@"
+(defconst jdibug-major-version "@major-version@"
   "Major version of this release")
 
-(defvar jdibug-minor-version "@minor-version@"
+(defconst jdibug-minor-version "@minor-version@"
   "Minor version of this release")
 
-(defvar jdibug-version (concat jdibug-major-version "." jdibug-minor-version)
+(defconst jdibug-version (concat jdibug-major-version "." jdibug-minor-version)
   "Version of this release")
 
 
