@@ -38,6 +38,12 @@ public class Main
 
         List<String> list = Arrays.asList("foo", "bar");
 
+		// Large array for testing display of sub-arrays
+		Object[] largeArray = new Object[20000];
+		largeArray[17] = floatArray;
+		largeArray[173] = list;
+
+
         System.out.println(list);
 
         Main main = new Main();
