@@ -70,6 +70,22 @@ need not be refreshed."
   :group 'jdibug
   :type 'float)
 
+(defcustom jdibug-locals-max-array-size 20
+  "The maximum number of entries shown when expanding an array.
+Expanding large numbers of arrays is slow.  Setting this to a
+reasonably small number allows the arrays to be expanded quickly.
+This limit can be violated due to the effects of `jdibug-locals-min-sub-array-size'."
+  :group 'jdibug
+  :type 'integer)
+
+(defcustom jdibug-locals-min-sub-array-size 5
+  "The minium number of entries shown when expanding an
+sub-array.  This prevents the subarrays from being exceedingly
+short and will create subarrays longer than
+`jdibug-locals-max-array-size'."
+  :group 'jdibug
+  :type 'integer)
+
 (defcustom jdibug-use-jde-source-paths t
   "Set to t to use the jde-sourcepath as the source paths.
 `jdibug-source-paths' will be ignored if this is set to t."
@@ -757,13 +773,51 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 				  collect (jdibug-make-tree-from-field-value f v))
 			(list (jdibug-make-methods-node value)))))
 
-(defun jdibug-value-expander-array (value)
-  (let* ((values (jdi-array-get-values value))
-		 (strings (mapcar 'jdibug-value-get-string values)))
-	(loop for v in values
-		  for s in strings
-		  for i from 0 by 1
-		  collect (jdibug-make-tree-from-value (format "[%s]" i) v s))))
+(defun jdibug-value-expander-array (value &optional first last)
+  (let* ((first (or first 0))
+		 (last (or last (jdi-array-get-array-length value)))
+		 (num-display (- last first)))
+    (if (<= num-display (* jdibug-locals-max-array-size jdibug-locals-min-sub-array-size))
+		;; Short array, so display all of the values
+		(loop with values = (jdi-array-get-values value first last)
+			  with strings = (mapcar 'jdibug-value-get-string values)
+			  for v in values
+			  for s in strings
+			  for i from first by 1
+			  collect (jdibug-make-tree-from-value (format "[%s]" i) v s))
+	  ;; Long array, so create pseudo nodes for subarrays
+	  (loop with step = (max (/ num-display jdibug-locals-max-array-size) jdibug-locals-min-sub-array-size)
+			for start from first below last by step
+			for end = (min last (+ start step))
+			  collect (jdibug-make-array-subtree value start end)))))
+
+(defun jdibug-make-array-subtree (value start end)
+  "Create a pseudo node representing a subset of the array VALUE
+from START (inclusive) to END (exclusive)"
+  (let ((display (format "[%d-%d]" start (1- end))))
+	`(tree-widget
+	  :node (push-button
+		 :tag ,display
+		 :format "%[%t%]\n")
+	  :open nil
+	  :args nil
+	  :jdi-value ,value
+	  :jdi-start ,start
+	  :jdi-end ,end
+	  :expander jdibug-array-subtree-expander
+	  :dynargs jdibug-array-subtree-expander)))
+
+(defun jdibug-array-subtree-expander (tree)
+  (jdwp-uninterruptibly
+	(jdibug-debug "jdibug-array-subtree-expander")
+
+	;; Expand the elements in the sub-array
+	(let ((value (widget-get tree :jdi-value))
+		  (start (widget-get tree :jdi-start))
+		  (end (widget-get tree :jdi-end)))
+	  (jdibug-value-expander-array value start end))))
+
+
 
 (defun jdibug-make-tree-from-field-value (field value)
   (let ((display (format "%s%s: %s"
