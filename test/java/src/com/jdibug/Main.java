@@ -43,6 +43,9 @@ public class Main
 		largeArray[17] = floatArray;
 		largeArray[173] = list;
 
+		largeArray = new Object[23456];
+		largeArray[1732] = floatArray;
+		largeArray[8542] = list;
 
         System.out.println(list);
 

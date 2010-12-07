@@ -73,16 +73,14 @@ need not be refreshed."
 (defcustom jdibug-locals-max-array-size 20
   "The maximum number of entries shown when expanding an array.
 Expanding large numbers of arrays is slow.  Setting this to a
-reasonably small number allows the arrays to be expanded quickly.
-This limit can be violated due to the effects of `jdibug-locals-min-sub-array-size'."
+reasonably small number allows the arrays to be expanded quickly."
   :group 'jdibug
   :type 'integer)
 
-(defcustom jdibug-locals-min-sub-array-size 5
+(defcustom jdibug-locals-min-sub-array-size 10
   "The minium number of entries shown when expanding an
 sub-array.  This prevents the subarrays from being exceedingly
-short and will create subarrays longer than
-`jdibug-locals-max-array-size'."
+short."
   :group 'jdibug
   :type 'integer)
 
@@ -777,7 +775,7 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
   (let* ((first (or first 0))
 		 (last (or last (jdi-array-get-array-length value)))
 		 (num-display (- last first)))
-    (if (<= num-display (* jdibug-locals-max-array-size jdibug-locals-min-sub-array-size))
+    (if (<= num-display jdibug-locals-max-array-size)
 		;; Short array, so display all of the values
 		(loop with values = (jdi-array-get-values value first last)
 			  with strings = (mapcar 'jdibug-value-get-string values)
@@ -786,10 +784,28 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 			  for i from first by 1
 			  collect (jdibug-make-tree-from-value (format "[%s]" i) v s))
 	  ;; Long array, so create pseudo nodes for subarrays
-	  (loop with step = (max (/ num-display jdibug-locals-max-array-size) jdibug-locals-min-sub-array-size)
+	  (loop with step = (jdibug-locals-step-size num-display)
 			for start from first below last by step
 			for end = (min last (+ start step))
 			  collect (jdibug-make-array-subtree value start end)))))
+
+(defun jdibug-locals-step-size (num-display)
+  "Determine the number of subnodes to create when NUM-DISPLAY entries are present.  This respects `jdibug-locals-max-array-size' and `jdibug-locals-min-sub-array-size' and attempts to find a round value to return."
+  (let ((step (max (ceiling num-display jdibug-locals-max-array-size) jdibug-locals-min-sub-array-size))
+		(scale 1))
+	(if (> step jdibug-locals-min-sub-array-size)
+		;; Round up to the nearest power of 10.
+		(progn
+		  ;; First, find the largest power of 10 less than the current step
+		  (while (< (* scale 10) step)
+			(setq scale (* scale 10)))
+		  ;; Now round up to that value
+		  (* scale (ceiling step scale)))
+	  ;; We are at the minimum value (which the user can set) so just use that
+	  step)))
+
+
+
 
 (defun jdibug-make-array-subtree (value start end)
   "Create a pseudo node representing a subset of the array VALUE
