@@ -1286,6 +1286,12 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
   (jdibug-refresh-breakpoints-buffer)
   (message "breakpoint removed"))
 
+(defun jdibug-remove-all-breakpoints ()
+  "Remove all breakpoints"
+  (interactive)
+  (let ((bps jdibug-breakpoints))
+	(mapc 'jdibug-remove-breakpoint bps)))
+
 (defun jdibug-toggle-breakpoint ()
   (interactive)
   (jdwp-uninterruptibly
