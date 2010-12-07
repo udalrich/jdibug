@@ -69,3 +69,28 @@
 			(setq back-to-vec (jdwp-float-to-vec actual))
 			(assert-equal vec back-to-vec (format "conversion back to vector of %s" actual)))
 		  pairs)))
+
+(deftest sub-array-size conversions-suite
+  "Check that we scale the size of subarrays in a nice manner.
+Not really a conversion like the rest of the file, but sort of."
+  (let ((data '(; num-display min max expected
+				(23            10  20  10)
+				(30             3   7  5)
+				(300            3   7  50)
+				(230           10  20  20)
+				(72832         14  35  3000)
+)))
+	(mapc (lambda (input)
+			(let* ((num-display (nth 0 input))
+				   (jdibug-locals-min-sub-array-size (nth 1 input))
+				   (jdibug-locals-max-array-size (nth 2 input))
+				   (expected (nth 3 input))
+				   (step (jdibug-locals-step-size num-display)))
+			  (assert-equal expected step (format "Correct step size: %s" input))
+			  (assert-that (>= step jdibug-locals-min-sub-array-size)
+						   (format "min size respected %d: %s" step input))
+			  (assert-that (<= (ceiling num-display step)
+							   jdibug-locals-max-array-size)
+						   (format "max size respected %d: %s" step input))))
+		  data)))
+
