@@ -807,10 +807,13 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
 
 
 
-(defun jdibug-make-array-subtree (value start end)
+(defun jdibug-make-map-collection-array-subtree (value start end label expander)
   "Create a pseudo node representing a subset of the array VALUE
-from START (inclusive) to END (exclusive)"
-  (let ((display (format "[%d-%d]" start (1- end))))
+from START (inclusive) to END (exclusive).  Use LABEL to format
+the text for the button.  It must be a format string that takes
+the two parameters (the start and end indices).  EXPANDER is used
+to expand the node."
+  (let ((display (format label start (1- end))))
 	`(tree-widget
 	  :node (push-button
 		 :tag ,display
@@ -820,8 +823,23 @@ from START (inclusive) to END (exclusive)"
 	  :jdi-value ,value
 	  :jdi-start ,start
 	  :jdi-end ,end
-	  :expander jdibug-array-subtree-expander
-	  :dynargs jdibug-array-subtree-expander)))
+	  :expander ,expander
+	  :dynargs ,expander)))
+
+(defun jdibug-make-array-subtree (value start end)
+  "Create a pseudo node representing a subset of the array VALUE
+from START (inclusive) to END (exclusive)"
+  (jdibug-make-map-collection-array-subtree value start end "[%d-%d]" 'jdibug-array-subtree-expander))
+
+(defun jdibug-make-map-subtree (value start end)
+  "Create a pseudo node representing a subset of the array VALUE
+from START (inclusive) to END (exclusive)"
+  (jdibug-make-map-collection-array-subtree value start end "[kv%d-%d]" 'jdibug-map-subtree-expander))
+
+(defun jdibug-make-collection-subtree (value start end)
+  "Create a pseudo node representing a subset of the array VALUE
+from START (inclusive) to END (exclusive)"
+  (jdibug-make-map-collection-array-subtree value start end "[%d-%d]" 'jdibug-collection-subtree-expander))
 
 (defun jdibug-array-subtree-expander (tree)
   (jdwp-uninterruptibly
@@ -832,6 +850,28 @@ from START (inclusive) to END (exclusive)"
 		  (start (widget-get tree :jdi-start))
 		  (end (widget-get tree :jdi-end)))
 	  (jdibug-value-expander-array value start end))))
+
+(defun jdibug-map-subtree-expander (tree)
+  (jdwp-uninterruptibly
+	(jdibug-debug "jdibug-map-subtree-expander")
+
+	;; Expand the elements in the sub-array
+	(let ((value (widget-get tree :jdi-value))
+		  (start (widget-get tree :jdi-start))
+		  (end (widget-get tree :jdi-end)))
+	  (jdibug-value-custom-expand-map-1 value start end))))
+
+(defun jdibug-collection-subtree-expander (tree)
+  (jdwp-uninterruptibly
+	(jdibug-debug "jdibug-collection-subtree-expander")
+
+	;; Expand the elements in the sub-array
+	(let ((value (widget-get tree :jdi-value))
+		  (start (widget-get tree :jdi-start))
+		  (end (widget-get tree :jdi-end)))
+	  (jdibug-value-custom-expand-collection-1 value start end))))
+
+
 
 
 
@@ -1757,27 +1797,59 @@ special cases like infinity."
 
 (defun jdibug-value-custom-expand-collection (value)
   (jdi-debug "jdibug-value-custom-expand-collection")
+  (jdibug-value-custom-expand-collection-1 value nil nil))
+
+;; TODO: refactor the collection/map/array functions to reuse the common code.
+(defun jdibug-value-custom-expand-collection-1 (value first last)
+  (jdi-debug "jdibug-value-custom-expand-collection-1")
   (let ((result-value (jdi-value-invoke-method value jdibug-active-thread "toArray" nil nil)))
 	(if result-value
-		(jdibug-value-expander-array result-value))))
+		(let* ((first (or first 0))
+			   (last (or last (jdi-array-get-array-length result-value)))
+			   (num-display (- last first)))
+		  (if (<= num-display jdibug-locals-max-array-size)
+			  ;; Short collection, so display all of the values
+			  (jdibug-value-expander-array result-value start end)
+			;; Long collection, so create pseudo nodes for subarrays
+			(loop with step = (jdibug-locals-step-size num-display)
+				  for start from first below last by step
+				  for end = (min last (+ start step))
+				  collect (jdibug-make-collection-subtree value start end)))))))
+
 
 (defun jdibug-value-custom-expand-map (value)
   (jdi-debug "jdibug-value-custom-expand-collection")
+  (jdibug-value-custom-expand-map-1 value nil nil))
+
+(defun jdibug-value-custom-expand-map-1 (value first last)
   (let ((keyset-value (jdi-value-invoke-method value jdibug-active-thread "keySet" nil nil))
 		(values-value (jdi-value-invoke-method value jdibug-active-thread "values" nil nil)))
 	(when (and keyset-value values-value)
 	  (let ((keyset-array (jdi-value-invoke-method keyset-value jdibug-active-thread "toArray" nil nil))
 			(values-array (jdi-value-invoke-method values-value jdibug-active-thread "toArray" nil nil)))
 		(when (and keyset-array values-array)
-		  (loop for v in (loop for key in (jdi-array-get-values keyset-array)
-							   for value in (jdi-array-get-values values-array)
+		  (let* ((first (or first 0))
+				 (last (or last (jdi-array-get-array-length keyset-array)))
+				 (num-display (- last first)))
+			(jdibug-debug "Expanding map.  num-display=%d, max-size=%d"
+						  num-display jdibug-locals-max-array-size)
+			(if (<= num-display jdibug-locals-max-array-size)
+				;; Short map, so display all of the values
+				(loop for v in (loop for key in (jdi-array-get-values keyset-array first last)
+							   for value in (jdi-array-get-values values-array first last)
 							   append (list key value))
-				for s = (jdibug-value-get-string v)
-				for i from 0 by 1
-				collect (jdibug-make-tree-from-value (format "[%s%s]"
-															 (if (= 0 (mod i 2)) "k" "v")
-															 (/ i 2))
-													 v s)))))))
+					  for s = (jdibug-value-get-string v)
+					  for i from (* 2 first) by 1
+					  collect (jdibug-make-tree-from-value (format "[%s%s]"
+																   (if (= 0 (mod i 2)) "k" "v")
+																   (/ i 2))
+														   v s))
+			  ;; Long map, so create pseudo nodes for subarrays
+			  (loop with step = (jdibug-locals-step-size num-display)
+					for start from first below last by step
+					for end = (min last (+ start step))
+					collect (jdibug-make-map-subtree value start end)))))))))
+
 
 (defun jdibug-point-of-active-frame ()
   (catch 'done

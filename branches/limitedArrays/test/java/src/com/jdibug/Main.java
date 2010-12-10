@@ -1,12 +1,15 @@
 package com.jdibug; // Generated package name
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.ArrayList;
 
 public class Main
 {
@@ -48,6 +51,14 @@ public class Main
 		largeArray[8542] = list;
 
         System.out.println(list);
+
+		Map<Integer, Number> numberMap = new HashMap<Integer, Number>();
+		Collection<String> bigCollection = new TreeSet<String>();
+		for (int number = 0; number < 52; ++number)
+		{
+			numberMap.put(number, 2.3*number);
+			bigCollection.add("entry " + number);
+		}
 
         Main main = new Main();
         main.submitJobs();
