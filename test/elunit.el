@@ -197,6 +197,7 @@ arguments."
 	  (set-buffer elunit-report-buffer-name)
 	  (erase-buffer)))
   (elunit-run-suite (symbol-value (intern suite)))
+  (message "%s" elunit-failures)
   (message "%d tests with %d problems."
            elunit-test-count (length elunit-failures)))
 
@@ -269,7 +270,8 @@ arguments."
 (defun fail (&rest args)
   "Signal a test failure in a way that elunit understands.
 Takes the same ARGS as `error'."
-    (signal 'elunit-test-failed (list (apply 'format args))))
+  (message (apply 'format args))
+  (signal 'elunit-test-failed (list (apply 'format args))))
 
 (font-lock-add-keywords 'emacs-lisp-mode
                         ;; Make elunit tests look like defuns.
