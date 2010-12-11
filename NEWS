@@ -1,5 +1,20 @@
 * JDIbug News                  -*- outline -*-
 
+* 0.5 (Current)
+
+** Added jdibug-remove-all-breakpoints
+Removes all breakpoints with one interactive command.
+
+** Large arrays are displayed in segments
+Displaying all the entries of a large array (1000+ entries) is slow, and it is rare that the user will want to
+look at every entry, so much of the time spent retrieving the entries is wasted.  If you are looking for entry
+18374 in a 938432 element array, it can also take a long time just to find the appropriate entry.
+
+With the current version, if the size of the array exceeds jdibug-locals-max-array-size, expanding the array
+shows subarrays, which can be expanded.  While it might take 3 or 4 clicks to find the entry, those clicks
+respond much more quickly so the process should be much faster, even with the extra actions.
+
+
 * 0.4 (2010-12-05)
 
 ** Added simple function to start a program and attach a debugger.
