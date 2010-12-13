@@ -229,7 +229,7 @@ if the super method matches and the name in tree is a string."
 			  (value (string-to-number value))
 			  (jdwp-value (jdwp-number-to-vec value jdwp-type)))
 		 (make-jdi-primitive-value :type jdwp-type
-								   :value jdwp-value)))
+					   :value jdwp-value)))
 	  (otherwise
 	   (jdibug-expr-bad-eval "Uncertain how to evaluate %s" value)))))
 

@@ -93,8 +93,7 @@ and the application arguments are `jdibug-run-application-args'"
 		   (count 0)
 		   jvm-ready)
 	  (while (and (not jvm-ready) (< count max-count))
-		(save-excursion
-		  (set-buffer buffer)
+		(with-current-buffer buffer
 		  (goto-char (point-min))
 		  (if (search-forward-regexp jdibug-run-jvm-ready-regexp
 									 (point-max) t)

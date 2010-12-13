@@ -14,6 +14,9 @@ With the current version, if the size of the array exceeds jdibug-locals-max-arr
 shows subarrays, which can be expanded.  While it might take 3 or 4 clicks to find the entry, those clicks
 respond much more quickly so the process should be much faster, even with the extra actions.
 
+** Added breakpoints for when an exception is thrown
+TODO: fill in details when impl is complete.
+
 
 * 0.4 (2010-12-05)
 

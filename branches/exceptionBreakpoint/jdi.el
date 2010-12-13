@@ -38,7 +38,6 @@
 (require 'elog)
 (require 'jdwp)
 
-
 (elog-make-logger jdi)
 
 (defvar jdi-unit-testing nil)
@@ -242,6 +241,17 @@
 				 ((:mod-kind . ,jdwp-mod-kind-class-match)
 				  (:class-pattern . ((:length . ,(length signature))
 									 (:string . ,signature))))))))
+	(make-jdi-event-request :virtual-machine vm :data data)))
+
+(defun jdi-event-request-manager-create-break-on-exception (erm vm class-id caught uncaught)
+  (let ((data `((:event-kind     . ,jdwp-event-exception)
+				(:suspend-policy . ,jdwp-suspend-policy-event-thread)
+				(:modifiers      . 1)
+				(:modifier
+				 ((:mod-kind . ,jdwp-mod-kind-exception-only)
+				  (:class-pattern . ((:exception . ,class-id)
+									 (:caught . ,caught)
+									 (:uncaught. ,uncaught))))))))
 	(make-jdi-event-request :virtual-machine vm :data data)))
 
 (defun jdi-event-request-enable (er)
@@ -596,6 +606,38 @@
 	(let ((er (jdi-event-request-manager-create-class-prepare (jdi-virtual-machine-event-request-manager vm) vm (car (jdi-jni-to-print signature)))))
 	  (jdi-event-request-enable er))
 	result))
+
+(defun jdi-virtual-machine-set-break-on-exception (vm signature caught uncaught)
+  "Set break for when an exception is thrown and return a list of jdi-event-request"
+
+  (jdi-debug "jdi-virtual-machine-set-break-on-exception:signature=%s:caught=%s:uncaught=%s"
+			 signature caught uncaught)
+  (let (result
+		(classes (jdi-virtual-machine-get-classes-by-signature vm signature)))
+	(dolist (class classes)
+	  (if (jdi-class-instance-of-p class "java.lang.Throwable")
+		  (progn
+			(let ((er (jdi-event-request-manager-create-break-on-exception
+					   (jdi-virtual-machine-event-request-manager vm)
+					   vm
+					   (jdi-class-id class)
+					   caught uncaught)))
+			  (jdi-event-request-enable er)
+			  (push er result)))
+		(jdi-warn "%s is not a subclass of Throwable.  Not setting break when thrown."
+					 (jdi-jni-to-print (jdi-class-get-signature class)))))
+
+	;; the class might be loaded again by another class loader
+	;; so we install the class prepare event anyway
+	(let ((er (jdi-event-request-manager-create-class-prepare
+			   (jdi-virtual-machine-event-request-manager vm)
+			   vm
+			   (car (jdi-jni-to-print signature)))))
+	  (jdi-event-request-enable er))
+	;; Return event requests.
+	result))
+
+
 
 (defun jdi-request-event-prepare-inner-classes (class)
   "Request prepare events for the inner classes of CLASS"
@@ -1396,7 +1438,7 @@ This handles the event later, once we are connected."
   "callback to be called when debuggee detached from us, called with (jdi-virtual-machine)")
 
 (defvar jdi-class-prepare-hooks nil
-  "handler to be called when a class is prepared, called with (jdi-class)")
+  "handler to be called when a class is prepared, called with (jdi-class thread)")
 
 (defvar jdi-class-unload-hooks nil
   "handler to be called when a class is unloaded, called with (jdi-class)")

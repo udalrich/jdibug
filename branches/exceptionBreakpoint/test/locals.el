@@ -23,7 +23,6 @@
 
   ;; Connect and set breakpoint after we initialize stuff
   (jdibug-test-connect-to-jvm)
-  (debug)
 
   (goto-char (point-min))
   (search-forward "twoAsInt")

@@ -1460,16 +1460,18 @@ This method does not consume the packet, the caller can know by checking jdwp-pa
 (defvar jdwp-signal-count 0)
 (defun jdwp-signal-hook (error-symbol data)
   (jdwp-info "debug-on-error=%s jdwp-signal-count=%s" debug-on-error jdwp-signal-count)
-  (setq jdwp-signal-count (1+ jdwp-signal-count))
-  (if jdwp-error-flag
-	  (if (< jdwp-signal-count 5)
-		  (jdwp-error "jdwp-signal-hook:%s:%s\n%s\n" error-symbol data
-					  (with-output-to-string (backtrace)))
-		(if (< jdwp-signal-count 50)
-			(jdwp-error "jdwp-signal-hook:%s:%s (backtrace suppressed)"
-						error-symbol data)
-		  (let ((signal-hook-function nil)) (error error-symbol data))))
-	(let ((signal-hook-function nil)) (error error-symbol data))))
+  (if debug-on-error
+	  (debug)
+	(setq jdwp-signal-count (1+ jdwp-signal-count))
+	(if jdwp-error-flag
+		(if (< jdwp-signal-count 5)
+			(jdwp-error "jdwp-signal-hook:%s:%s\n%s\n" error-symbol data
+						(with-output-to-string (backtrace)))
+		  (if (< jdwp-signal-count 50)
+			  (jdwp-error "jdwp-signal-hook:%s:%s (backtrace suppressed)"
+						  error-symbol data)
+			(let ((signal-hook-function nil)) (error error-symbol data))))
+	  (let ((signal-hook-function nil)) (error error-symbol data)))))
 
 
 (defun jdwp-run-with-timer (secs repeat function &rest args)
