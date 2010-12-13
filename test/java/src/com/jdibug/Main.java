@@ -66,8 +66,24 @@ public class Main
         Gui gui = new Gui();
         gui.drawStuff();
 
+		  main.testExceptions();
+
 		System.out.println("Main.main finished");
     }
+
+	 private void testExceptions()
+	 {
+		  try {
+				throw new NullPointerException();
+		  } catch (RuntimeException exc) {
+				System.out.println("Caught expected exception");
+				exc.printStackTrace(System.out);
+		  }
+
+		  // And now an uncaught one for testing that
+		  throw new IllegalArgumentException("uncaught");
+	 }
+
 
     private void submitJobs()
     {

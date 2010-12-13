@@ -1408,6 +1408,9 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
 														 :source-file source-file
 														 :line-number line-number)))))))
 
+(defvar jdibug--break-on-exception-history nil
+  "History of exceptions input in `jdibug-break-on-exception")
+
 (defun jdibug-break-on-exception (name caught uncaught)
   "Break whenever an exception of type NAME (or a subclass) is
 thrown.  Breaks can happen for CAUGHT and/or UNCAUGHT exceptions.
@@ -1415,7 +1418,9 @@ If name is not yet loaded, the breakpoint will be enabled when
 the class is loaded."
   (interactive (list
 				;; TODO: use read-from-minibuffer and enable history
-				(read-minibuffer "Class of exception: ")
+				(read-from-minibuffer "Class of exception: "
+											 nil nil nil
+											 'jdibug--break-on-exception-history)
 				(y-or-n-p "Break on caught exception? ")
 				(y-or-n-p "Break on uncaught exception? ")))
   ;; Give the breakpoint a helpful name for debugging.  Not actually used anywhere.
