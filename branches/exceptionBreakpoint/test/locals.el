@@ -12,7 +12,7 @@
   :setup-hooks (list (lambda ()
 					   ;; Remove any prexisting breakpoints
 					   (jdwp-uninterruptibly
-						 (mapc #'jdibug-remove-breakpoint jdibug-breakpoints))))
+						 (mapc #'jdibug-remove-breakpoint (jdibug-all-breakpoints)))))
 
   ;; :teardown-hooks (lambda () )
 )
