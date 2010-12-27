@@ -1,3 +1,4 @@
+#labels Deprecated
 <html lang="en">
 <head>
 <title>JDIbug User Manual</title>
@@ -472,4 +473,3 @@ purpose.
 problem is and how to reproduce it.
 
 </body></html>
-
