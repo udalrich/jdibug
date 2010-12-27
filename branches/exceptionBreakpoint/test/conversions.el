@@ -7,11 +7,26 @@
 (require 'elunit)
 (require 'jdwp)
 (require 'jdibug-ui)
+(require 'jdi)
 
 (defsuite conversions-suite smoke-test-suite
   ;; :setup-hook (lambda () )
   ;; :teardown-hook (lambda () )
 )
+
+(deftest name-to-signature conversions-suite
+  "Test that we correctly convert names to JNI signatures"
+  (let ((pairs '(("java.lang.RuntimeException" . "Ljava/lang/RuntimeException;")
+					  ("java.util.Map$Entry" . "Ljava/util/Map$Entry;")))
+		  java-name jni-name)
+	 (mapc (lambda (pair)
+				(setq java-name (car pair)
+						jni-name (cdr pair))
+				(assert-equal jni-name (jdi-class-name-to-class-signature java-name)
+								  "Convert java to JNI")
+				(assert-equal (list java-name) (jdi-jni-to-print jni-name)
+								  "Convert JNI to java"))
+			 pairs)))
 
 (deftest vec-to-double conversions-suite
   "Test converting vectors to doubles"

@@ -12,9 +12,66 @@
   :setup-hooks (list (lambda ()
 					   ;; Remove any prexisting breakpoints
 					   (jdwp-uninterruptibly
-						 (mapc #'jdibug-remove-breakpoint (jdibug-all-breakpoints)))))
+						  (mapc #'jdibug-remove-breakpoint (jdibug-all-breakpoints)))))
   ;; :teardown-hooks (lambda () )
 )
+
+(deftest caught-exception breakpoints-suite
+  "Test that an caught exception breakpoint works."
+
+  (debug)
+  (let ((jde-run-option-application-args (list "exceptions")))
+	 (jdibug-break-on-exception "java.lang.RuntimeException" nil t)
+
+	 ;; Caught exception should cause us to hit a breakpoint
+	 (jdibug-test-connect-to-jvm)
+	 (jdibug-test-resume-and-wait-for-breakpoint)
+	 (jdibug-test-wait-for-refresh-timers)
+
+	 (assert-frames-display-value "throwWithoutCatch")))
+
+(deftest exception-by-type breakpoints-suite
+  "Test that catching exception by type works"
+
+  (debug)
+  (let ((jde-run-option-application-args (list "exceptions")))
+	 (jdibug-break-on-exception "java.lang.IllegalArgumentException" t t)
+
+	 ;;  Exception should cause us to hit a breakpoint
+	 (jdibug-test-connect-to-jvm)
+	 (jdibug-test-resume-and-wait-for-breakpoint)
+	 (jdibug-test-wait-for-refresh-timers)
+
+	 (assert-frames-display-value "throwWithoutCatch")))
+
+
+
+(deftest uncaught-exception breakpoints-suite
+  "Test that an uncaught exception breakpoint works."
+
+  (debug)
+  (let ((jde-run-option-application-args (list "exceptions")))
+	 (jdibug-break-on-exception "java.lang.RuntimeException" t nil)
+
+	 ;; Caught exception should cause us to hit a breakpoint
+	 (jdibug-test-connect-to-jvm)
+	 (jdibug-test-resume-and-wait-for-breakpoint)
+	 (jdibug-test-wait-for-refresh-timers)
+
+	 (assert-frames-display-value "throwAndCatch")
+
+	 ;; Uncaught exception should not trigger breakpoint.  There's no
+	 ;; obvioius event to wait for, so we'll just pause a short time
+	 (jdibug-resume-all)
+	 (sleep-for 2)
+	 (with-current-buffer (jdibug-test-main-buffer-name)
+		(goto-char (point-min))
+		(let* ((expr (concat "Exception in thread \"main\" "
+									"java.lang.IllegalArgumentException: uncaught"))
+				 (found (search-forward expr nil 'no-error)))
+		  (assert-that found "Uncaught exception message found")))))
+
+
 
 (deftest conditional-breakpoint breakpoints-suite
   "Test that a conditional breakpoint eventually suspends the program and does so on the correct iteration."
@@ -59,7 +116,7 @@ class is loaded but not the inner class"
   "Set a breakpoint at the first location of EXPR.  Make it conditional on COND.
 Run until a breakpoint is hit. Do not connect to jvm if NO-CONNECT."
 
-  (jdibug-test-connect-to-jvm)
+  (unless no-connect (jdibug-test-connect-to-jvm))
 
   ;; Set a breakpoint on the line where we define the variable
   (goto-char (point-min))
@@ -90,11 +147,13 @@ Run until a breakpoint is hit. Do not connect to jvm if NO-CONNECT."
 	(let ((regexp (concat (regexp-quote "|-  ") (regexp-quote var-name))))
 	  (assert-that
 	   (search-forward-regexp regexp nil t)
-	   (format "Found %s(%s) in locals buffer (%S)" var-name regexp (buffer-string))))
+	   (format "Found %s(%s) in locals buffer (%S)"
+				  var-name regexp
+				  (buffer-substring-no-properties (point-min) (point-max)))))
 	(let* ((eol (save-excursion (end-of-line) (point)))
 		   (rest-of-line (buffer-substring-no-properties (point) eol)))
 	  (assert-match (concat ":.*\\(" value "\\)") rest-of-line
-					(format "Correct value in buffer(%S)" (buffer-string))))))
+					(format "Correct value in buffer(%S)" (buffer-substring-no-properties (point-min) (point-max)))))))
 
 (defun assert-frames-display-value (regexp)
   "Assert that REGEXP is displayed in the frames window."
@@ -104,5 +163,6 @@ Run until a breakpoint is hit. Do not connect to jvm if NO-CONNECT."
 	(goto-char (point-min))
 	(assert-that
 	 (search-forward-regexp regexp nil t)
-	   (format "Found %s in locals buffer (%S)" regexp (buffer-string)))))
+	   (format "Found %s in locals buffer (%S)" regexp
+				  (buffer-substring-no-properties (point-min) (point-max))))))
 

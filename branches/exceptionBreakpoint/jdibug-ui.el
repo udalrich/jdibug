@@ -137,6 +137,7 @@ short."
 (require 'jdwp)
 (require 'jdi)
 (require 'jdibug-expr)
+(require 'jdibug-util)
 (require 'tree-mode)
 (require 'eieio)
 
@@ -260,7 +261,9 @@ created.")
 ;; Exception based breakpoint
 (defclass jdibug-breakpoint-exception (jdibug-breakpoint)
   ;; Fields
-  ((name :type string :initarg :name :accessor jdibug-breakpoint-name)
+  ((name :type string :initarg :name :accessor jdibug-breakpoint-name
+			:documentation
+			"Name of the exception in java format (e.g., java.lang.Exception)")
    (caught :type boolean :initarg :caught :accessor jdibug-breakpoint-caught)
    (uncaught :type boolean :initarg :uncaught :accessor jdibug-breakpoint-uncaught)
 	(list :type list :initform nil :accessor breakpoint-list :allocation :class))
@@ -316,6 +319,10 @@ created.")
   (message jdibug-current-message))
 
 (add-hook 'jdi-breakpoint-hooks 'jdibug-handle-breakpoint)
+;; Currently, no difference in breakpoint and exception handling,
+;; since exception events occur when we want to break on the exception
+;; being thrown
+(add-hook 'jdi-exception-hooks 'jdibug-handle-breakpoint)
 (add-hook 'jdi-step-hooks 'jdibug-handle-step)
 (add-hook 'jdi-detached-hooks 'jdibug-handle-detach)
 (add-hook 'jdi-class-prepare-hooks 'jdibug-handle-class-prepare)
@@ -541,6 +548,8 @@ And position the point at the line number."
 	(jdibug-trace "Condition not satisfied so resuming thread")
 	(jdi-thread-resume thread)))
 
+
+
 (defun jdibug-breakpoint-condition-p (thread location request-id)
   "Check if the breakpoint corresponding to REQUEST-ID that has
 been hit in THREAD at LOCATION either has no condition or that
@@ -551,19 +560,22 @@ the condition is satisfied."
 										  (jdibug-breakpoint-event-requests bp)))
 							(jdibug-all-breakpoints)))
 		  condition)
-    (unless bp (error "Unable to find breakpoint with request id %d" request-id))
-    (setq condition (jdibug-breakpoint-condition bp))
-    (if condition
-		  (let* ((frame (car (jdi-thread-get-frames thread)))
-					(jdwp (jdi-virtual-machine-jdwp (jdi-frame-virtual-machine frame)))
-					(result (catch jdibug-expr-bad-eval (jdibug-expr-eval-expr jdwp condition frame))))
-			 ;; We pass only if the result is a boolean that is true
-			 (when (jdi-value-p result)
-				(if (= (jdi-value-type result) jdwp-tag-boolean)
-					 (not (equal (jdi-primitive-value-value result) 0))
-				  (jdibug-warn "Breakpoint condition is not a boolean but a %s" (jdwp-type-name (jdi-value-type result)))
-				  nil)))
-      t)))
+    (if (not bp)
+		  (progn
+			 (jdibug-error "Unable to find breakpoint with request id %d" request-id)
+			 nil)
+		(setq condition (jdibug-breakpoint-condition bp))
+		(if condition
+			 (let* ((frame (car (jdi-thread-get-frames thread)))
+					  (jdwp (jdi-virtual-machine-jdwp (jdi-frame-virtual-machine frame)))
+					  (result (catch jdibug-expr-bad-eval (jdibug-expr-eval-expr jdwp condition frame))))
+				;; We pass only if the result is a boolean that is true
+				(when (jdi-value-p result)
+				  (if (= (jdi-value-type result) jdwp-tag-boolean)
+						(not (equal (jdi-primitive-value-value result) 0))
+					 (jdibug-warn "Breakpoint condition is not a boolean but a %s" (jdwp-type-name (jdi-value-type result)))
+					 nil)))
+		  t))))
 
 (defun jdibug-handle-step (thread location)
   (jdibug-debug "jdibug-handle-step")
@@ -1004,7 +1016,7 @@ execute BODY."
   (if (timerp jdibug-refresh-locals-buffer-timer)
 	  (cancel-timer jdibug-refresh-locals-buffer-timer))
   (setq jdibug-refresh-locals-buffer-timer
-		(jdibug-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-locals-buffer-now)))
+		(jdibug-util-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-locals-buffer-now)))
 
 (defun jdibug-refresh-locals-buffer-now ()
   (jdibug-refresh-buffer-now jdibug-locals-buffer jdibug-refresh-locals-buffer t
@@ -1031,7 +1043,7 @@ we quickly step several times."
   (if (timerp jdibug-refresh-watchpoints-buffer-timer)
 	  (cancel-timer jdibug-refresh-watchpoints-buffer-timer))
   (setq jdibug-refresh-watchpoints-buffer-timer
-		(jdibug-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-watchpoints-buffer-now)))
+		(jdibug-util-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-watchpoints-buffer-now)))
 
 (defun jdibug-refresh-watchpoints-buffer-now ()
   (jdibug-trace "jdibug-refresh-watchpoints-buffer-now: %s" jdibug-watchpoints)
@@ -1226,7 +1238,7 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
   (if (timerp jdibug-refresh-frames-buffer-timer)
 	  (cancel-timer jdibug-refresh-frames-buffer-timer))
   (setq jdibug-refresh-frames-buffer-timer
-		(jdibug-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-frames-buffer-now)))
+		(jdibug-util-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-frames-buffer-now)))
 
 (defun jdibug-refresh-frames-buffer-now ()
   (jdibug-refresh-buffer-now jdibug-frames-buffer jdibug-refresh-frames-buffer nil
@@ -1305,9 +1317,10 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
 		  (jdibug-get-source-paths))
     (setf buf (replace-regexp-in-string "^/" "" buf))
     (setf buf (replace-regexp-in-string ".java$" "" buf))
-    (setf buf (concat "L" buf ";"))
+	 (setf buf (jdi-class-name-to-class-signature buf))
     (jdibug-trace "jdi-source-to-class-signature : %s -> %s" source-file buf)
     buf))
+
 
 (defun jdibug-class-signature-to-source-file (class-signature)
   "Converts a JNI class name to source file."
@@ -1328,7 +1341,8 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
 (defmethod set-breakpoint ((bp jdibug-breakpoint))
   (jdibug-debug "set-breakpoint %s" (object-class-name bp))
   (setf (jdibug-breakpoint-status bp) 'unresolved)
-  (push bp (breakpoint-list bp))
+  (unless (memq bp (breakpoint-list bp))
+	 (push bp (breakpoint-list bp)))
   (jdibug-breakpoint-update bp)
   (jdibug-message "JDIbug setting breakpoint...")
   (dolist (vm jdibug-virtual-machines)
@@ -1364,19 +1378,19 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
 (defmethod set-breakpoint-in-vm ((bp jdibug-breakpoint-exception) vm)
   (jdibug-debug "set-breakpoint-in-vm %s" (class-name (class-of bp)))
   (let* ((name (jdibug-breakpoint-name bp))
-		(caught (jdibug-breakpoint-caught bp))
-		(uncaught (jdibug-breakpoint-uncaught bp))
-		(jdi-classes (jdi-virtual-machine-get-classes-by-signature vm name)))
+			(signature (jdi-class-name-to-class-signature name))
+			(caught (jdibug-breakpoint-caught bp))
+			(uncaught (jdibug-breakpoint-uncaught bp)))
 	(jdi-virtual-machine-set-break-on-exception vm
-												name caught uncaught)))
+												signature caught uncaught)))
 
 (defmethod disable-breakpoint ((bp jdibug-breakpoint))
   (mapc (lambda (er)
-		  (condition-case err
-			  (jdi-event-request-disable er)
-			(error (jdibug-error "Unable to disable breakpoint: %s" (cdr err)))
-			))
-		(jdibug-breakpoint-event-requests bp))
+			 (condition-case err
+				  (jdi-event-request-disable er)
+				(error (jdibug-error "Unable to disable breakpoint: %s" (cdr err)))
+				))
+		  (jdibug-breakpoint-event-requests bp))
   (setf (jdibug-breakpoint-status bp) 'disabled)
   (jdibug-breakpoint-update bp)
   (message "breakpoint disabled"))
@@ -1448,14 +1462,12 @@ the class is loaded."
 				(y-or-n-p "Break on caught exception? ")
 				(y-or-n-p "Break on uncaught exception? ")))
   ;; Give the breakpoint a helpful name for debugging.  Not actually used anywhere.
-  (let ((bp (jdibug-breakpoint-exception name
-										 :name name
-										 :caught caught
-										 :uncaught uncaught)))
-    (set-breakpoint bp)))
-
-
-
+  (jdwp-uninterruptibly
+	 (eval `(let ((bp (jdibug-breakpoint-exception ,name
+																	:name ,name
+																	:caught ,caught
+																	:uncaught ,uncaught)))
+				  (set-breakpoint bp)))))
 
 (defun jdibug-get-class-line-number ()
   "Get the line number of the class declaration."
@@ -1467,25 +1479,34 @@ the class is loaded."
 (defun jdibug-breakpoint-update (bp)
   (jdibug-debug "jdibug-breakpoint-update")
   (jdibug-refresh-breakpoints-buffer)
+  (breakpoint-update bp))
+
+(defmethod breakpoint-update ((this jdibug-breakpoint))
+  "Update any display of the breakpoint.  The default
+  implementation does nothing.")
+
+(defmethod breakpoint-update ((this jdibug-breakpoint-location))
+  "Update any display of the breakpoint.  Updates the overlays of the breakpoint in the file buffer."
+
   (let ((buffer (find-if (lambda (buf)
-						   (string= (buffer-file-name buf) (jdibug-breakpoint-source-file bp)))
+						   (string= (buffer-file-name buf) (jdibug-breakpoint-source-file this)))
 						 (buffer-list))))
 	(when (and buffer (buffer-live-p buffer))
 	  (jdibug-debug "Found buffer")
 	  (with-current-buffer buffer
 		(goto-char (point-min))
-		(forward-line (1- (or (jdibug-breakpoint-line-number bp)
+		(forward-line (1- (or (jdibug-breakpoint-line-number this)
 							  (jdibug-get-class-line-number))))
-		(if (jdibug-breakpoint-overlay bp)
-			(delete-overlay (jdibug-breakpoint-overlay bp)))
-		(setf (jdibug-breakpoint-overlay bp) (make-overlay (point) (1+ (line-end-position))))
-		(overlay-put (jdibug-breakpoint-overlay bp) 'priority 5)
-		(overlay-put (jdibug-breakpoint-overlay bp) 'face
-					 (cond ((equal (jdibug-breakpoint-status bp) 'enabled)
+		(if (jdibug-breakpoint-overlay this)
+			(delete-overlay (jdibug-breakpoint-overlay this)))
+		(setf (jdibug-breakpoint-overlay this) (make-overlay (point) (1+ (line-end-position))))
+		(overlay-put (jdibug-breakpoint-overlay this) 'priority 5)
+		(overlay-put (jdibug-breakpoint-overlay this) 'face
+					 (cond ((equal (jdibug-breakpoint-status this) 'enabled)
 							'jdibug-breakpoint-enabled)
-						   ((equal (jdibug-breakpoint-status bp) 'unresolved)
+						   ((equal (jdibug-breakpoint-status this) 'unresolved)
 							'jdibug-breakpoint-unresolved)
-						   ((equal (jdibug-breakpoint-status bp) 'disabled)
+						   ((equal (jdibug-breakpoint-status this) 'disabled)
 							'jdibug-breakpoint-disabled)))))))
 
 (defun jdibug-breakpoints-toggle ()
@@ -1540,7 +1561,7 @@ the class is loaded."
   (if (buffer-live-p jdibug-breakpoints-buffer)
 	  (let ((orig-line (line-number-at-pos)))
 		(with-current-buffer jdibug-breakpoints-buffer
-		  (let* ((header "  S Breakpoint")
+		  (let* ((header (format "   S %-40s Details" "Breakpoint"))
 					(inhibit-read-only t))
 			 (erase-buffer)
 			 (setq header-line-format header)
@@ -1568,9 +1589,9 @@ the class is loaded."
 (defmethod display-string ((bp jdibug-breakpoint-exception))
   (format "%-40s thrown when %s"
 			 (jdibug-breakpoint-name bp)
-			 (concat (if (jdibug-breakpoint-caught)
+			 (concat (if (jdibug-breakpoint-caught bp)
 							 "caught ")
-						(if (jdibug-breakpoint-uncaught)
+						(if (jdibug-breakpoint-uncaught bp)
 							 "uncaught "))))
 
 (defun jdibug-send-step (depth)
@@ -1969,24 +1990,6 @@ special cases like infinity."
 			  (throw 'done next-change)))
 		  (goto-char next-change))))))
 
-(defvar jdibug-signal-count 0)
-(defun jdibug-signal-hook (error-symbol data)
-  (setq jdibug-signal-count (1+ jdibug-signal-count))
-  (if (< jdibug-signal-count 5)
-	  (jdibug-error "jdibug-signal-hook:%s:%s\n%s\n" error-symbol data
-					(with-output-to-string (backtrace)))
-	(if (< jdibug-signal-count 50)
-		(jdibug-error "jdibug-signal-hook:%s:%s (backtrace suppressed)"
-				  error-symbol data)
-	  (let ((signal-hook-function nil))
-			(error error-symbol data)))))
-
-(defun jdibug-run-with-timer (secs repeat function &rest args)
-  (apply 'run-with-timer secs repeat (lambda (function &rest args)
-									   (let ((signal-hook-function 'jdibug-signal-hook))
-										 (unwind-protect
-											 (apply function args))))
-		 function args))
 
 (defun jdibug-normalize-path (path symbol cygwin-p)
   "Process PATH and SYMBOL like `jde-normalize-path'.  If CYGWIN-P, leave the result in cygwin form."
@@ -2006,7 +2009,7 @@ special cases like infinity."
   (if (timerp jdibug-refresh-threads-buffer-timer)
 	  (cancel-timer jdibug-refresh-threads-buffer-timer))
   (setq jdibug-refresh-threads-buffer-timer
-		(jdibug-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-threads-buffer-now)))
+		(jdibug-util-run-with-timer jdibug-refresh-delay nil 'jdibug-refresh-threads-buffer-now)))
 
 (defun jdibug-refresh-threads-buffer-now ()
   (jdibug-refresh-buffer-now jdibug-threads-buffer jdibug-refresh-threads-buffer nil
