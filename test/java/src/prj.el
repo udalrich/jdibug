@@ -3,4 +3,5 @@
  '(jde-global-classpath (quote ("../classes")))
  '(jde-run-option-debug (quote ("Server" "Socket" "javadebug" nil "6001" t)))
  '(jde-which-method-mode nil)
- '(jde-sourcepath (quote ("." "c:/bad/path"))))
+ '(jde-sourcepath (quote ("." "c:/bad/path")))
+ '(jde-run-application-class "com.jdibug.Main"))

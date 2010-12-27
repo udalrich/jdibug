@@ -41,37 +41,57 @@ public class Main
 
         List<String> list = Arrays.asList("foo", "bar");
 
-		// Large array for testing display of sub-arrays
-		Object[] largeArray = new Object[20000];
-		largeArray[17] = floatArray;
-		largeArray[173] = list;
+		  // Large array for testing display of sub-arrays
+		  Object[] largeArray = new Object[20000];
+		  largeArray[17] = floatArray;
+		  largeArray[173] = list;
 
-		largeArray = new Object[23456];
-		largeArray[1732] = floatArray;
-		largeArray[8542] = list;
+		  largeArray = new Object[23456];
+		  largeArray[1732] = floatArray;
+		  largeArray[8542] = list;
 
         System.out.println(list);
 
-		Map<Integer, Number> numberMap = new HashMap<Integer, Number>();
-		Collection<String> bigCollection = new TreeSet<String>();
-		for (int number = 0; number < 52; ++number)
-		{
-			numberMap.put(number, 2.3*number);
-			bigCollection.add("entry " + number);
-		}
+		  Map<Integer, Number> numberMap = new HashMap<Integer, Number>();
+		  Collection<String> bigCollection = new TreeSet<String>();
+		  for (int number = 0; number < 52; ++number)
+		  {
+				numberMap.put(number, 2.3*number);
+				bigCollection.add("entry " + number);
+		  }
 
         Main main = new Main();
         main.submitJobs();
-		System.out.println("submitJobs returned");
-        Gui gui = new Gui();
-        gui.drawStuff();
+		  System.out.println("submitJobs returned");
 
-		  main.testExceptions();
-
-		System.out.println("Main.main finished");
+		  if (args.length == 0)
+		  {
+				Gui gui = new Gui();
+				gui.drawStuff();
+		  }
+		  else
+		  {
+				main.testExceptions();
+		  }
+		  System.out.println("Main.main finished");
     }
 
 	 private void testExceptions()
+	 {
+		  throwAndCatch();
+
+		  throwWithoutCatch();
+
+
+	 }
+
+	 private void throwWithoutCatch()
+	 {
+		  // And now an uncaught one for testing that
+		  throw new IllegalArgumentException("uncaught");
+	 }
+
+	 private void throwAndCatch()
 	 {
 		  try {
 				throw new NullPointerException();
@@ -79,11 +99,7 @@ public class Main
 				System.out.println("Caught expected exception");
 				exc.printStackTrace(System.out);
 		  }
-
-		  // And now an uncaught one for testing that
-		  throw new IllegalArgumentException("uncaught");
 	 }
-
 
     private void submitJobs()
     {

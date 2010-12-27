@@ -34,6 +34,8 @@
 
 (require 'bindat)
 (require 'elog)
+(require 'jdibug-util)
+
 (eval-when-compile
   (load "cl-seq")
   (load "cl-extra"))
@@ -282,6 +284,10 @@
 	(:method-id vec (eval jdwp-method-id-size))
 	(:index     vec 8)))
 
+(defconst jdwp-tagged-object-spec
+  '((:type   u8)
+	 (:object vec (eval jdwp-object-id-size))))
+
 (defconst jdwp-event-spec
   `((:suspend-policy         u8)
 	(:events                 u32)
@@ -298,6 +304,11 @@
 											  (,jdwp-event-breakpoint     (:request-id    u32)
 																		  (:thread        vec (eval jdwp-object-id-size))
 																		  (:location      struct jdwp-location-spec))
+											  (,jdwp-event-exception      (:request-id    u32)
+																					(:thread        vec (eval jdwp-object-id-size))
+																					(:location      struct jdwp-location-spec)
+																					(:exception     struct jdwp-tagged-object-spec)
+																					(:catch-location struct jdwp-location-spec))
 											  (,jdwp-event-class-prepare  (:request-id    u32)
 																		  (:thread        vec (eval jdwp-object-id-size))
 																		  (:ref-type-tag  u8)
@@ -351,7 +362,7 @@
 	(let* ((header (bindat-unpack jdwp-arrayregion-header-spec packet))
 		   (type   (bindat-get-field header :type))
 		   (length (bindat-get-field header :length))
-		   repeater spec unpacked)
+		   repeater spec)
 	  (setq repeater
 			(case type
 			  ; object
@@ -814,7 +825,7 @@
 
 			  (jdwp-debug "jdwp-process-filter:command-packet")
 			  ;; command packet
-			  (jdwp-run-with-timer 0.1 nil 'jdwp-process-command jdwp packet)
+			  (jdibug-util-run-with-timer 0.1 nil 'jdwp-process-command jdwp packet)
 			  (jdwp-trace "received command packet")))))
 	(error (jdwp-error "jdwp-process-filter:%s" err))))
 
@@ -1457,30 +1468,10 @@ This method does not consume the packet, the caller can know by checking jdwp-pa
 										  :command-set (bindat-get-field unpacked :command-set)
 										  :data        (substring string jdwp-packet-header-size))))))))))
 
-(defvar jdwp-signal-count 0)
-(defun jdwp-signal-hook (error-symbol data)
-  (jdwp-info "debug-on-error=%s jdwp-signal-count=%s" debug-on-error jdwp-signal-count)
-  (if debug-on-error
-	  (debug)
-	(setq jdwp-signal-count (1+ jdwp-signal-count))
-	(if jdwp-error-flag
-		(if (< jdwp-signal-count 5)
-			(jdwp-error "jdwp-signal-hook:%s:%s\n%s\n" error-symbol data
-						(with-output-to-string (backtrace)))
-		  (if (< jdwp-signal-count 50)
-			  (jdwp-error "jdwp-signal-hook:%s:%s (backtrace suppressed)"
-						  error-symbol data)
-			(let ((signal-hook-function nil)) (error error-symbol data))))
-	  (let ((signal-hook-function nil)) (error error-symbol data)))))
 
 
-(defun jdwp-run-with-timer (secs repeat function &rest args)
-  (apply 'run-with-timer secs repeat (lambda (function &rest args)
-									   (setq signal-hook-function 'jdwp-signal-hook)
-									   (unwind-protect
-										   (apply function args)
-										 (setq signal-hook-function nil)))
-		 function args))
+
+
 
 
 (defmacro jdwp-uninterruptibly (&rest body)

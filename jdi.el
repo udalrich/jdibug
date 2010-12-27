@@ -244,14 +244,17 @@
 	(make-jdi-event-request :virtual-machine vm :data data)))
 
 (defun jdi-event-request-manager-create-break-on-exception (erm vm class-id caught uncaught)
+  ;; (let ((data `((:event-kind     . ,jdwp-event-exception)
+  ;; 				(:suspend-policy . ,jdwp-suspend-policy-event-thread)
+  ;; 				(:modifiers      . 1)
+  ;; 				(:modifier
+  ;; 				 ((:mod-kind . ,jdwp-mod-kind-exception-only)
+  ;; 				  (:class-pattern . ((:exception . ,class-id)
+  ;; 									 (:caught . ,caught)
+  ;; 									 (:uncaught. ,uncaught))))))))
   (let ((data `((:event-kind     . ,jdwp-event-exception)
 				(:suspend-policy . ,jdwp-suspend-policy-event-thread)
-				(:modifiers      . 1)
-				(:modifier
-				 ((:mod-kind . ,jdwp-mod-kind-exception-only)
-				  (:class-pattern . ((:exception . ,class-id)
-									 (:caught . ,caught)
-									 (:uncaught. ,uncaught))))))))
+				(:modifiers      . 0))))
 	(make-jdi-event-request :virtual-machine vm :data data)))
 
 (defun jdi-event-request-enable (er)
@@ -608,14 +611,19 @@
 	result))
 
 (defun jdi-virtual-machine-set-break-on-exception (vm signature caught uncaught)
-  "Set break for when an exception is thrown and return a list of jdi-event-request"
+  "Set break for when an exception is thrown and return a list of
+jdi-event-request.  SIGNATURE should be a JNI format
+signature (e.g., Ljava/lang/RuntimeException not
+java.lang.RuntimeException."
 
   (jdi-debug "jdi-virtual-machine-set-break-on-exception:signature=%s:caught=%s:uncaught=%s"
 			 signature caught uncaught)
   (let (result
 		(classes (jdi-virtual-machine-get-classes-by-signature vm signature)))
 	(dolist (class classes)
-	  (if (jdi-class-instance-of-p class "java.lang.Throwable")
+	  (if (jdi-class-instance-of-p
+			 class
+			 (jdi-class-name-to-class-signature "java.lang.Throwable"))
 		  (progn
 			(let ((er (jdi-event-request-manager-create-break-on-exception
 					   (jdi-virtual-machine-event-request-manager vm)
@@ -1232,6 +1240,14 @@ list whose nth element is the array element at index FIRST + n"
 
 (defun jdi-handle-breakpoint-event (jdwp event)
   (jdi-debug "jdi-handle-breakpoint-event")
+  (jdi-handle-general-breakpoint-event jdwp event 'jdi-breakpoint-hooks))
+
+(defun jdi-handle-exception-event (jdwp event)
+  "Handle an exception EVENT from the JDWP."
+  (jdi-debug "jdi-handle-exception-event")
+  (jdi-handle-general-breakpoint-event jdwp event 'jdi-exception-hooks))
+
+(defun jdi-handle-general-breakpoint-event (jdwp event hooks)
   (let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
 		 (thread-id (bindat-get-field event :u :thread))
 		 (class-id (bindat-get-field event :u :location :class-id))
@@ -1257,7 +1273,10 @@ list whose nth element is the array element at index FIRST + n"
 	(setf (jdi-virtual-machine-suspended-frames vm) (nreverse (cons frame (jdi-virtual-machine-suspended-frames vm))))
 
 	(setf (jdi-virtual-machine-suspended-thread-id vm) (bindat-get-field event :u :thread))
-	(run-hook-with-args 'jdi-breakpoint-hooks thread location request-id)))
+	(run-hook-with-args hooks thread location request-id)))
+
+
+
 
 (defun jdi-handle-step-event (jdwp event)
   (jdi-debug "jdi-handle-step-event")
@@ -1360,7 +1379,9 @@ This handles the event later, once we are connected."
 	  (apply 'jdi-handle-vm-start args))))
 
 (defun jdi-class-name-to-class-signature (class-name)
-  "Converts a.b.c class name to JNI class signature."
+  "Converts a.b.c CLASS-NAME to JNI class signature.  Inner
+classes must be specified using $ notation (e.g.,
+java.util.Map$Entry, not java.util.Map.Entry)."
   (let ((buf class-name))
 	(setf buf (replace-regexp-in-string "\\." "/" buf))
 	(setf buf (format "L%s;" buf))
@@ -1429,7 +1450,10 @@ This handles the event later, once we are connected."
 (defalias 'jdi-value-invoke-method 'jdi-object-invoke-method)
 
 (defvar jdi-breakpoint-hooks nil
-  "callback to be called when breakpoint is hit, called with (jdi-thread jdi-location)")
+  "callback to be called when breakpoint is hit, called with (jdi-thread jdi-location event-request)")
+
+(defvar jdi-exception-hooks nil
+  "callback to be called when exception is hit, called with (jdi-thread jdi-location event-request)")
 
 (defvar jdi-step-hooks nil
   "callback to be called when execution is stopped from stepping, called with (jdi-virtual-machine thread-id class-id method-id line-code-index)")
@@ -1464,6 +1488,7 @@ This handles the event later, once we are connected."
 					`(,jdwp-event-thread-end    . jdi-handle-thread-end)
 					`(,jdwp-event-vm-death      . jdi-handle-vm-death)
 					`(,jdwp-event-vm-start      . jdi-handle-vm-start)
+					`(,jdwp-event-exception     . jdi-handle-exception-event)
 					))
 		 (event-kind (if (integerp event) event (bindat-get-field event :event-kind)))
 		 (handler (find-if (lambda (pair)
