@@ -1,3 +1,8 @@
+#labels Deprecated
+=This page is no longer maintained=
+Please see the latest [http://jdibug.googlecode.com/svn/trunk/jdibug.html official user manual].
+
+
 JDIbug User Manual
 ******************
 
