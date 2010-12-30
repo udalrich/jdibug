@@ -445,6 +445,7 @@ processes"
   (interactive)
   (jdwp-uninterruptibly
 	(jdibug-trace "jdibug-exit-jvm")
+	(jdibug-cleanup-on-disconnect)
 
 	(jdibug-message "JDIbug disconnecting and killing JVM... ")
 	(mapc (lambda (vm)
