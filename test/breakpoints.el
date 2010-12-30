@@ -160,6 +160,6 @@ Run until a breakpoint is hit. Do not connect to jvm if NO-CONNECT."
 	(goto-char (point-min))
 	(assert-that
 	 (search-forward-regexp regexp nil t)
-	   (format "Found %s in locals buffer (%S)" regexp
+	   (format "Found %s in frames buffer (%S)" regexp
 				  (buffer-substring-no-properties (point-min) (point-max))))))
 

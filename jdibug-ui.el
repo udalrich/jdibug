@@ -635,7 +635,8 @@ the condition is satisfied."
 
 (defun jdibug-handle-class-prepare-breakpoint (class thread bp)
   "Check loaded class against breakpoints"
-  (when (equal (jdibug-breakpoint-source-file bp) (jdibug-class-signature-to-source-file (jdi-class-get-signature class)))
+  (when (equal (jdibug-breakpoint-source-file bp)
+					(jdibug-class-signature-to-source-file (jdi-class-get-signature class)))
 	(jdibug-debug "Found breakpoint in %s" (jdibug-breakpoint-source-file bp))
 	(let (found)
 	  (dolist (location (jdi-class-get-locations-of-line class (jdibug-breakpoint-line-number bp)))
@@ -645,11 +646,15 @@ the condition is satisfied."
 		  (push er (jdibug-breakpoint-event-requests bp))))
 	  (if found
 		  (progn
-			(setf (jdibug-breakpoint-status bp) 'enabled)
-			(jdibug-breakpoint-update bp)
-			(jdibug-refresh-breakpoints-buffer))
-		;; We didn't find the breakpoint, so it might be in an inner class
-		 (jdi-event-request-enable (jdi-event-request-manager-create-inner-class-prepare class))))))
+			 (jdibug-debug "Set breakpoint in vm")
+			 (setf (jdibug-breakpoint-status bp) 'enabled)
+			 (jdibug-breakpoint-update bp)
+			 (jdibug-refresh-breakpoints-buffer))
+		 ;; We didn't find the breakpoint, so it might be in an inner
+		 ;; class.  TODO: this request should be extraneous.
+		 (jdibug-debug "Location not found, so requesting inner class prepare")
+		 (jdi-event-request-enable (jdi-event-request-manager-create-inner-class-prepare class))
+))))
 
 (defun jdibug-handle-detach (vm)
   (if jdibug-current-line-overlay
@@ -1431,11 +1436,15 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
 									 nil
 								  (line-number-at-pos)))
 			  (bp (find-if (lambda (bp)
-								  (and (equal (jdibug-breakpoint-source-file bp) source-file)
-										 (equal (jdibug-breakpoint-line-number bp) line-number)))
+								  (and (equal (jdibug-breakpoint-source-file bp)
+												  source-file)
+										 (equal (jdibug-breakpoint-line-number bp)
+												  line-number)))
 								(breakpoint-list jdibug-breakpoint-location))))
-		(jdibug-debug "line-number:%s,current-line-text:%s" line-number current-line-text)
-		(cond ((and bp (member (jdibug-breakpoint-status bp) (list 'enabled 'unresolved)))
+		(jdibug-debug "line-number:%s,current-line-text:%s"
+						  line-number current-line-text)
+		(cond ((and bp (member (jdibug-breakpoint-status bp)
+									  (list 'enabled 'unresolved)))
 				 (disable-breakpoint bp))
 				((and bp (equal (jdibug-breakpoint-status bp) 'disabled))
 				 (jdibug-remove-breakpoint bp))

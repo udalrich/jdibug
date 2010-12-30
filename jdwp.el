@@ -1506,7 +1506,8 @@ It is best if these types of constructs are placed at a high
 level where the evaled block is simple, as the resulting code
 cannot be byte compiled.
 "
-  (declare (indent defun))
+  (declare (indent defun)
+			  (debug t))
   `(if jdwp-uninterruptibly-running-p
 	   (progn
 		 (setq jdwp-uninterruptibly-waiting
