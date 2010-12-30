@@ -19,7 +19,6 @@
 (deftest caught-exception breakpoints-suite
   "Test that an caught exception breakpoint works."
 
-  (debug)
   (let ((jde-run-option-application-args (list "exceptions")))
 	 (jdibug-break-on-exception "java.lang.RuntimeException" nil t)
 
@@ -33,7 +32,6 @@
 (deftest exception-by-type breakpoints-suite
   "Test that catching exception by type works"
 
-  (debug)
   (let ((jde-run-option-application-args (list "exceptions")))
 	 (jdibug-break-on-exception "java.lang.IllegalArgumentException" t t)
 
@@ -49,7 +47,6 @@
 (deftest uncaught-exception breakpoints-suite
   "Test that an uncaught exception breakpoint works."
 
-  (debug)
   (let ((jde-run-option-application-args (list "exceptions")))
 	 (jdibug-break-on-exception "java.lang.RuntimeException" t nil)
 

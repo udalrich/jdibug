@@ -541,8 +541,8 @@
 				   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
 				   :reply-spec   ((:num-nested    u32)
 								  (:nested        repeat (:num-nested)
-												  (:ref-type-tag (eval jdwp-reference-type-id-size))
-												  (:id vec (eval jdwp-field-id-size)))))
+												  (:ref-type-tag u8)
+												  (:id           vec (eval jdwp-reference-type-id-size)))))
 	(:name         "interfaces"
 				   :command-set  2
 				   :command      10
@@ -911,6 +911,8 @@
 		   (protocol     (jdwp-get-protocol (cdr (assoc :name command-data))))
 		   (reply-spec   (getf protocol :reply-spec)))
 	  (jdwp-trace "jdwp-process-reply packet-header:%s" packet)
+	  (jdwp-debug "jdwp-process-reply reply-spec:%s" reply-spec)
+	  (jdwp-debug "jdwp-process-reply data:%s (%d bytes)" (jdwp-packet-data packet) (length (jdwp-packet-data packet)))
       (if (not (= error-code 0))
 		  (progn
 			(jdwp-traffic-info "reply(error): %s %s" (jdwp-packet-data packet) packet)
@@ -1010,6 +1012,8 @@
 		   :length))))))
 
 (defun jdwp-get-string (s &rest fields)
+  "Similar to (`bindat-get-field' S FIELDS) except that the
+result is converted from a JDWP string to an emacs string."
   (concat (bindat-get-field (apply 'bindat-get-field s fields) :string)))
 
 (defun jdwp-thread-status-string (status)
@@ -1335,6 +1339,7 @@ the function as arguments.")
 								   (:command     . ,command)
 								   (:sent-time   . ,(if jdwp-info-flag (current-time) 0))))
 				   (command-packed (concat (jdwp-bindat-pack jdwp-command-spec command-data) outdata)))
+			  (unless protocol (error "Unknown command: %s" name))
 			  (jdwp-info "sending command [%-20s] id:%-4d len:%-4d data:%s"
 						 name
 						 id

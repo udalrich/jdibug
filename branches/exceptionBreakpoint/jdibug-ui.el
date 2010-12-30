@@ -649,7 +649,7 @@ the condition is satisfied."
 			(jdibug-breakpoint-update bp)
 			(jdibug-refresh-breakpoints-buffer))
 		;; We didn't find the breakpoint, so it might be in an inner class
-		(jdi-request-event-prepare-inner-classes class)))))
+		 (jdi-event-request-enable (jdi-event-request-manager-create-inner-class-prepare class))))))
 
 (defun jdibug-handle-detach (vm)
   (if jdibug-current-line-overlay
@@ -1306,7 +1306,7 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
   (let ((result (find-if (lambda (sp)
 						   (string-match (expand-file-name sp) file))
 						 (jdibug-get-source-paths))))
-	(jdi-debug (if result "found" "not found"))
+	(jdibug-debug (if result "found" "not found"))
 	result))
 
 (defun jdibug-source-file-to-class-signature (source-file)
