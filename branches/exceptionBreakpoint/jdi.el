@@ -654,27 +654,24 @@ the nested-classes command."
   "Set breakpoint and return a list of jdi-event-request"
 
   (jdi-debug "jdi-virtual-machine-set-breakpoint:signature=%s:line=%s" signature line)
-  (let (result
-		(classes (jdi-virtual-machine-get-classes-by-signature vm signature)))
-	 (setq result (jdi-virtual-machine-set-breakpoint-1 vm classes line))
+  (let* ((classes (jdi-virtual-machine-get-classes-by-signature vm signature))
+			(result (jdi-virtual-machine-set-breakpoint-1 vm classes line))
+			(request-manager (jdi-virtual-machine-event-request-manager vm))
+			(class-name (car (jdi-jni-to-print signature)))
+			;; the class might be loaded again by another class loader
+			;; so we install the class prepare event anyway.
+			(er (jdi-event-request-manager-create-class-prepare
+				  request-manager vm class-name)))
+	 (jdi-event-request-enable er)
 
-	;; the class might be loaded again by another class loader
-	;; so we install the class prepare event anyway.
-	(let ((er (jdi-event-request-manager-create-class-prepare
-				  (jdi-virtual-machine-event-request-manager vm)
-				  vm
-				  (car (jdi-jni-to-print signature)))))
-	  (jdi-event-request-enable er))
-	;; If we found the class but not the location, also install class
-	;; prepare events for nested classes.  TODO: do we need to do this
-	;; always because of multiple class loaders, like above?  Can we
-	;; avoid creating events for inner classes when the breakpoint is
-	;; in the outer class?
-	(if (and classes (not result))
-		 (let ((er (jdi-event-request-manager-create-inner-class-prepare (car classes))))
-			(jdi-event-request-enable er)))
+	 ;; Install a handler for inner classes if we didn't set the
+	 ;; breakpoint, since that might be what the problem was
+	 (unless result
+		(setq er (jdi-event-request-manager-create-class-prepare
+					 request-manager vm (concat class-name "$*")))
+		(jdi-event-request-enable er))
 
-	result))
+	 result))
 
 (defun jdi-virtual-machine-set-breakpoint-1 (vm classes line)
   "Attempt to set a breakpoint in CLASSES and all inner classes at LINE"
@@ -1405,10 +1402,14 @@ list whose nth element is the array element at index FIRST + n"
 (defun jdi-handle-class-prepare-event (jdwp event)
   (jdi-debug "jdi-handle-class-prepare-event")
   (let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
-		 (type-id (bindat-get-field event :u :type-id))
-		 (signature (jdwp-get-string event :u :signature))
-		 (thread (jdi-virtual-machine-get-object-create vm (make-jdi-thread :id (bindat-get-field event :u :thread))))
-		 (newclass (jdi-virtual-machine-get-class-create vm type-id :signature signature)))
+			(type-id (bindat-get-field event :u :type-id))
+			(signature (jdwp-get-string event :u :signature))
+			(thread
+			 (jdi-virtual-machine-get-object-create vm
+																 (make-jdi-thread
+																  :id (bindat-get-field event :u :thread))))
+			(newclass (jdi-virtual-machine-get-class-create vm type-id
+																			:signature signature)))
 	(jdi-debug "thread status: %s %d" (jdi-thread-get-status thread)
 			   (jdi-thread-get-suspend-count thread))
 	(jdi-debug "class-loaded:%s" signature)
