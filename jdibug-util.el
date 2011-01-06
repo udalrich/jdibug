@@ -54,12 +54,23 @@
 (defvar jdibug-util-signal-count 0)
 (defun jdibug-util--signal-hook (error-symbol data)
   "Signal hook for jdibug-util calls.  Do not set directly.  Instead, use `jdibug-util-with-signal-hook'"
-  (jdibug-util-info "debug-on-error=%s jdibug-util-signal-count=%s" debug-on-error jdibug-util-signal-count)
+
+  ;; If the error is going to be caught, just rethrow it
+  (if (and (boundp 'jdibug-util-in-condition-case)
+			  jdibug-util-in-condition-case)
+		(let ((signal-hook-function nil))
+		  (signal error-symbol data)))
+
+  ;; Enter the debugger if debug-on-error is set and the error won't
+  ;; be caught
+  (jdibug-util-info "debug-on-error=%s jdibug-util-signal-count=%s"
+						  debug-on-error jdibug-util-signal-count)
   (if (and debug-on-error
 			  (and (boundp 'jdibug-util-in-condition-case)
 					 (not jdibug-util-in-condition-case)))
 		(debug))
 
+  ;; Log it, but not to often
   (setq jdibug-util-signal-count (1+ jdibug-util-signal-count))
   (if jdibug-util-error-flag
 		(if (< jdibug-util-signal-count 5)

@@ -280,6 +280,54 @@ created.")
 
   :documentation "Traditional breakpoint based on file and line number.")
 
+(defmethod pretty-print ((bp jdibug-breakpoint))
+  "Convert to a string for developers to understand what is in the object"
+  (concat (symbol-name (class-of bp)) " is "
+			 (symbol-name (jdibug-breakpoint-status bp))
+			 " with event requests of ("
+			 (mapconcat (lambda (er)
+							  (number-to-string (jdi-event-request-id er)))
+							(jdibug-breakpoint-event-requests bp)
+							", ")
+			 ")"
+			 (if (jdibug-breakpoint-condition bp)
+				  (format " %s" (jdibug-breakpoint-condition bp))
+				"")
+			 "\n\t"
+			 (pretty-print-extra bp)))
+
+(defmethod pretty-print-extra ((bp jdibug-breakpoint-location))
+  "Extra information when pretty-printing a breakpoint"
+  (concat " at line " (number-to-string (jdibug-breakpoint-line-number bp))
+			 " in " (jdibug-breakpoint-source-file bp)))
+
+(defmethod pretty-print-extra ((bp jdibug-breakpoint-exception))
+  "Extra information when pretty-printing a breakpoint"
+  (concat " when " (jdibug-breakpoint-name bp)
+			 " is thrown"
+			 (if (jdibug-breakpoint-caught bp)
+				  (if (jdibug-breakpoint-uncaught bp)
+						;; always caught
+						""
+					 " and caught")
+				(if (jdibug-breakpoint-uncaught bp)
+					 " but not caught"
+				  "but neither caught nor not caught?!?"))))
+
+(defun jdibug-list-breakpoints (&rest ignore)
+  "List all of the current breakpoints and provide a reasonably
+legible description of the breakpoint.  The resulting buffer has
+static contents, but `revert-buffer' in the resulting buffer will
+update the list of breakpoints based on the current breakpoints."
+  (interactive "d")
+  (switch-to-buffer "*JDIbug Breakpoint List*")
+  (erase-buffer)
+  (mapc (lambda (bp)
+			 (insert (pretty-print bp))
+			 (newline))
+		  (jdibug-all-breakpoints))
+  (setq revert-buffer-function 'jdibug-list-breakpoints))
+
 (defmethod cleanup-on-disconnect ((bp jdibug-breakpoint))
   "Do any cleanup related to this BP when the jvm disconnects"
   (setf (jdibug-breakpoint-status bp) 'unresolved))
@@ -421,24 +469,24 @@ processes"
   (and (timerp jdibug-refresh-threads-buffer-timer)
 	   (cancel-timer jdibug-refresh-threads-buffer-timer))
 
-  (kill-buffer jdibug-locals-buffer)
-  (kill-buffer jdibug-watchpoints-buffer)
-  (kill-buffer jdibug-frames-buffer)
-  (kill-buffer jdibug-threads-buffer)
+  (mapc (lambda (buf)
+			 (when buf (kill-buffer buf)))
+		  (list jdibug-locals-buffer jdibug-watchpoints-buffer
+				  jdibug-frames-buffer jdibug-threads-buffer))
 
   (setq jdibug-locals-tree    nil
-		jdibug-locals-buffer  nil
+		  jdibug-locals-buffer  nil
 
-		jdibug-frames-tree    nil
-		jdibug-frames-buffer  nil
+		  jdibug-frames-tree    nil
+		  jdibug-frames-buffer  nil
 
-		jdibug-threads-buffer nil
-		jdibug-threads-tree   nil
+		  jdibug-threads-buffer nil
+		  jdibug-threads-tree   nil
 
-		jdibug-watchpoints-buffer nil
+		  jdibug-watchpoints-buffer nil
 
-		jdibug-active-thread  nil
-		jdibug-active-frame   nil))
+		  jdibug-active-thread  nil
+		  jdibug-active-frame   nil))
 
 (defun jdibug-exit-jvm ()
   "End the debugging session and kill all attached JVMs."
@@ -618,21 +666,34 @@ the condition is satisfied."
 (defun jdibug-handle-class-prepare-exception (class thread exc)
   "Check loaded class against exception breaks."
   (jdibug-debug "jdibug-handle-class-prepare-exception: class=%s, exc=%s" (jdi-class-get-signature class) (jdibug-breakpoint-name exc))
-  ;; TODO: handle wildcards in the exception specification.  Is it simpler to just pass in the event request id?
-  (when (equal (jdi-class-get-signature class) (jdibug-breakpoint-name exc))
+
+  (when (jdibug-signature-matches-name-with-wildcards
+			(jdi-class-get-signature class)
+			(jdibug-breakpoint-name exc))
 	(jdibug-debug "Found exception matching %s" (jdibug-breakpoint-name exc))
-	(if (jdi-class-instance-of-p class "java.lang.Throwable")
-		(progn
-		  (let* ((vm (jdi-mirror-virtual-machine class))
-				 (er (jdi-event-request-manager-create-break-on-exception
-					 (jdi-virtual-machine-event-request-manager vm)
-					 vm
-					 (jdi-class-id class)
-					 (jdibug-breakpoint-caught exc)
-					 (jdibug-breakpoint-caught exc))))
-			(jdi-event-request-enable er)))
+	(if (jdi-class-instance-of-p
+		  class
+		  (jdi-class-name-to-class-signature "java.lang.Throwable"))
+		 (progn
+			(let* ((vm (jdi-mirror-virtual-machine class)))
+			  (set-breakpoint exc (list vm))
+			  (jdibug-refresh-breakpoints-buffer)))
 	  (jdibug-warn "%s is not a subclass of Throwable.  Not setting break when thrown."
 					 (jdi-jni-to-print (jdi-class-get-signature class))))))
+
+(defun jdibug-signature-matches-name-with-wildcards (signature name)
+  "Checks if the JNI SIGNATURE matches NAME, which might contain * as a wildcard"
+  (jdibug-debug "jdibug-signature-matches-name-with-wildcards %s %s"
+					 signature name)
+  (let ((sig-as-name (car (jdi-jni-to-print signature)))
+		  (name-regexp (mapconcat 'regexp-quote
+										  (split-string name "*")
+										  ".*")))
+	 (jdibug-debug "Checking if %s matches %s" sig-as-name name-regexp)
+	 (string-match (concat "^" name-regexp "$") sig-as-name)))
+
+
+
 
 (defun jdibug-handle-class-prepare-breakpoint (class thread bp)
   "Check loaded class against breakpoints"
@@ -642,20 +703,10 @@ the condition is satisfied."
 	(let (found)
 	  (dolist (location (jdi-class-get-locations-of-line class (jdibug-breakpoint-line-number bp)))
 		(setq found t)
-		(let ((er (jdi-event-request-manager-create-breakpoint (jdi-virtual-machine-event-request-manager (jdi-mirror-virtual-machine class)) location)))
-		  (jdi-event-request-enable er)
-		  (push er (jdibug-breakpoint-event-requests bp))))
-	  (if found
-		  (progn
-			 (jdibug-debug "Set breakpoint in vm")
-			 (setf (jdibug-breakpoint-status bp) 'enabled)
-			 (jdibug-breakpoint-update bp)
-			 (jdibug-refresh-breakpoints-buffer))
-		 ;; We didn't find the breakpoint, so it might be in an inner
-		 ;; class.  TODO: this request should be extraneous.
-		 (jdibug-debug "Location not found, so requesting inner class prepare")
-		 (jdi-event-request-enable (jdi-event-request-manager-create-inner-class-prepare class))
-))))
+		(let ((vm (jdi-mirror-virtual-machine class)))
+		  (set-breakpoint bp (list vm))
+		  (jdibug-refresh-breakpoints-buffer))))))
+
 
 (defun jdibug-handle-detach (vm)
   (if jdibug-current-line-overlay
@@ -1344,14 +1395,16 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
     buf))
 
 
-(defmethod set-breakpoint ((bp jdibug-breakpoint))
-  (jdibug-debug "set-breakpoint %s" (object-class-name bp))
+(defmethod set-breakpoint ((bp jdibug-breakpoint) &optional vm-list)
+  "Set the breakpoint BP.  If VM-LIST, only set it in those virtual machines"
+
+  (jdibug-debug "set-breakpoint %s %s" (object-class-name bp) vm-list)
   (setf (jdibug-breakpoint-status bp) 'unresolved)
   (unless (memq bp (breakpoint-list bp))
 	 (push bp (breakpoint-list bp)))
   (jdibug-breakpoint-update bp)
   (jdibug-message "JDIbug setting breakpoint...")
-  (dolist (vm jdibug-virtual-machines)
+  (dolist (vm (or vm-list jdibug-virtual-machines))
 	(let ((result (set-breakpoint-in-vm bp vm)))
 	  (if result
 		  (progn

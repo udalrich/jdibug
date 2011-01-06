@@ -88,13 +88,13 @@ public class Main
 	 private void throwWithoutCatch()
 	 {
 		  // And now an uncaught one for testing that
-		  throw new IllegalArgumentException("uncaught");
+		  throw new JdibugFooException("uncaught");
 	 }
 
 	 private void throwAndCatch()
 	 {
 		  try {
-				throw new NullPointerException();
+				throw new JdibugBarException("caught");
 		  } catch (RuntimeException exc) {
 				System.out.println("Caught expected exception");
 				exc.printStackTrace(System.out);

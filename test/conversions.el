@@ -14,6 +14,38 @@
   ;; :teardown-hook (lambda () )
 )
 
+(deftest name-to-signature-matching conversions-suite
+  "Test that we identify when a signature matches a wildcarded pattern"
+  (let ((data '(("java.lang.RuntimeException" "Ljava/lang/RuntimeException;" t)
+					 ;; Mismatch
+					 ("java.lang.Object" "Ljava/lang/RuntimeException;" nil)
+					 ;; Trailing wildcard
+					 ("java.lang.*" "Ljava/lang/RuntimeException;" t)
+					 ;; Trailing wildcard but no match
+					 ("java.lang.*" "Ljava/util/Map;" nil)
+					 ;; Leading wildcard
+					 ("*.RuntimeException" "Ljava/lang/RuntimeException;" t)
+					 ;; Leading wildcard but no match
+					 ("*.Object" "Ljava/util/Map;" nil)
+					 ;; Leading and trailing wildcard
+					 ("*.lang.*" "Ljava/lang/Object;" t)
+					 ;; Leading and trailing wildcard but no match
+					 ("*.lang.*" "Ljava/util/Map;" nil))))
+	 (edebug)
+	 (mapc (lambda (item)
+				(let* ((name     (first item))
+						 (sig      (second item))
+						 (expected (third item))
+						 (actual   (jdibug-signature-matches-name-with-wildcards
+										sig name))
+						 (message   (format "Signature (%s) and name (%s) matched correctly"
+												  sig name)))
+				  (if expected
+						(assert-that actual message)
+					 (assert-nil actual message))))
+				data)))
+
+
 (deftest name-to-signature conversions-suite
   "Test that we correctly convert names to JNI signatures"
   (let ((pairs '(("java.lang.RuntimeException" . "Ljava/lang/RuntimeException;")
