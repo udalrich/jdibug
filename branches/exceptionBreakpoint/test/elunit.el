@@ -141,6 +141,7 @@ arguments."
 
 (defmacro deftest (name suite &rest body)
   "Define a test NAME in SUITE with BODY."
+  (declare (debug sexp sexp &rest form))
   `(save-excursion
 	 ;; In theory, we should use load-file-name only if load-in-progress,
 	 ;; but it appears that load-in-progress is not set when loading a file
@@ -289,10 +290,10 @@ Takes the same ARGS as `error'."
   (unless actual
     (fail "%s expected to be non-nil" message)))
 
-(defun assert-nil (actual)
+(defun assert-nil (actual &optional message)
   "Fails if ACTUAL is non-nil."
   (when actual
-    (fail "%s expected to be nil" actual)))
+    (fail "%s expected to be nil: %s" actual message)))
 
 (defun assert-equal (expected actual &optional message)
   "Fails if EXPECTED is not equal to ACTUAL."

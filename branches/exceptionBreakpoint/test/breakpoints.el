@@ -20,20 +20,21 @@
   "Test that an caught exception breakpoint works."
 
   (let ((jde-run-option-application-args (list "exceptions")))
-	 (jdibug-break-on-exception "java.lang.RuntimeException" nil t)
+	 (jdibug-break-on-exception "com.jdibug.JdibugException" t nil)
 
 	 ;; Caught exception should cause us to hit a breakpoint
 	 (jdibug-test-connect-to-jvm)
 	 (jdibug-test-resume-and-wait-for-breakpoint)
 	 (jdibug-test-wait-for-refresh-timers)
 
-	 (assert-frames-display-value "throwWithoutCatch")))
+	 (assert-frames-display-value "throwAndCatch")))
 
 (deftest exception-by-type breakpoints-suite
   "Test that catching exception by type works"
 
   (let ((jde-run-option-application-args (list "exceptions")))
-	 (jdibug-break-on-exception "java.lang.IllegalArgumentException" t t)
+	 (debug)
+	 (jdibug-break-on-exception "com.jdibug.JdibugFooException" t t)
 
 	 ;;  Exception should cause us to hit a breakpoint
 	 (jdibug-test-connect-to-jvm)
@@ -47,8 +48,10 @@
 (deftest uncaught-exception breakpoints-suite
   "Test that an uncaught exception breakpoint works."
 
+  (jdibug-test-info "Running uncaught-exception")
+
   (let ((jde-run-option-application-args (list "exceptions")))
-	 (jdibug-break-on-exception "java.lang.RuntimeException" t nil)
+	 (jdibug-break-on-exception "com.jdibug.JdibugException" nil t)
 
 	 ;; Caught exception should cause us to hit a breakpoint
 	 (jdibug-test-connect-to-jvm)
@@ -58,14 +61,21 @@
 	 (assert-frames-display-value "throwAndCatch")
 
 	 ;; Uncaught exception should not trigger breakpoint.  There's no
-	 ;; obvioius event to wait for, so we'll just pause a short time
+	 ;; obvious event to wait for, so we'll just pause a short time
 	 (jdibug-resume-all)
 	 (sleep-for 2)
 	 (with-current-buffer (jdibug-test-main-buffer-name)
 		(goto-char (point-min))
 		(let* ((expr (concat "Exception in thread \"main\" "
-									"java.lang.IllegalArgumentException: uncaught"))
+									"com.jdibug.JdibugFooException: uncaught"))
 				 (found (search-forward expr nil 'no-error)))
+		  (jdibug-test-info "Run buffer contents: %s"
+								  (buffer-substring-no-properties (point-min)
+																			 (point-max)))
+		  (with-current-buffer jdibug-frames-buffer
+			 (jdibug-test-info "Frames buffer contents: %s"
+									 (buffer-substring-no-properties (point-min)
+																				(point-max))))
 		  (assert-that found "Uncaught exception message found")))))
 
 
@@ -81,6 +91,7 @@
 (deftest nested-class-breakpoint breakpoints-suite
   "Test that breakpoints in nested classes work when set before
 inner or outer class is loaded."
+  (jdibug-test-info "Running nested-class-breakpoint");
 
   (jdibug-test-set-breakpoint-and-run "doStuff();")
 

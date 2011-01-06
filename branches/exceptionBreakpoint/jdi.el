@@ -245,17 +245,17 @@
 	(make-jdi-event-request :virtual-machine vm :data data)))
 
 (defun jdi-event-request-manager-create-break-on-exception (erm vm class-id caught uncaught)
-  ;; (let ((data `((:event-kind     . ,jdwp-event-exception)
-  ;; 				(:suspend-policy . ,jdwp-suspend-policy-event-thread)
-  ;; 				(:modifiers      . 1)
-  ;; 				(:modifier
-  ;; 				 ((:mod-kind . ,jdwp-mod-kind-exception-only)
-  ;; 				  (:class-pattern . ((:exception . ,class-id)
-  ;; 									 (:caught . ,caught)
-  ;; 									 (:uncaught. ,uncaught))))))))
   (let ((data `((:event-kind     . ,jdwp-event-exception)
-				(:suspend-policy . ,jdwp-suspend-policy-event-thread)
-				(:modifiers      . 0))))
+					 (:suspend-policy . ,jdwp-suspend-policy-event-thread)
+					 (:modifiers      . 0)
+					 ;; (:modifiers      . 1)
+					 ;; (:modifier
+					 ;;  ((:mod-kind . ,jdwp-mod-kind-exception-only)
+					 ;; 	(:class-pattern . ((:exception . ,class-id)
+					 ;; 							 (:caught . ,caught)
+					 ;; 							 (:uncaught. ,uncaught)))))
+
+)))
 	(make-jdi-event-request :virtual-machine vm :data data)))
 
 (defun jdi-event-request-enable (er)
@@ -706,7 +706,10 @@ the nested-classes command."
   "Set break for when an exception is thrown and return a list of
 jdi-event-request.  SIGNATURE should be a JNI format
 signature (e.g., Ljava/lang/RuntimeException not
-java.lang.RuntimeException."
+java.lang.RuntimeException.
+
+Returns a list of event requests sent to the VM.  This may be nil
+if no class matching SIGNATURE is found."
 
   (jdi-debug "jdi-virtual-machine-set-break-on-exception:signature=%s:caught=%s:uncaught=%s"
 			 signature caught uncaught)
@@ -1338,7 +1341,17 @@ list whose nth element is the array element at index FIRST + n"
 (defun jdi-handle-exception-event (jdwp event)
   "Handle an exception EVENT from the JDWP."
   (jdi-debug "jdi-handle-exception-event")
-  (jdi-handle-general-breakpoint-event jdwp event 'jdi-exception-hooks))
+  (let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
+			(exception (jdi-virtual-machine-get-object-create
+							vm (make-jdi-object
+								 :id (bindat-get field event :u :exception :object))))
+			(exc-type jdi-object-get-reference-type exception)
+			)
+	 (jdibug-debug "exception: %s %s"
+						(jdi-class-get-signature exc-type)
+						(jdi-object-get-values exception
+													  (jdi-reference-type-get-all-fields exc-type)))
+	 (jdi-handle-general-breakpoint-event jdwp event 'jdi-exception-hooks)))
 
 (defun jdi-handle-general-breakpoint-event (jdwp event hooks)
   (let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
