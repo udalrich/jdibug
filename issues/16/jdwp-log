@@ -1,0 +1,33 @@
+15:07:41 [debug] jdibug : jdibug-connect
+15:07:41 [debug] jdibug : jdibug-connected-p
+15:07:41 [debug] jdibug : connected = 0
+15:07:41 [ info] jdibug : JDIbug connecting... 
+15:07:41 [debug] jdibug : setting jdibug-active-thread to nil in jdibug-connect
+15:07:41 [ info] jdibug : JDIbug connecting... localhost:8000
+15:07:41 [trace] jdwp : jdwp-connect:localhost:8000
+15:07:41 [debug] jdwp : jdwp-accept-process-output
+15:07:41 [debug] jdwp : jdwp-receive-message:accept-process-output returned t
+15:07:41 [debug] jdwp : jdwp-consume-output:len=14
+15:07:41 [ info] jdwp : sending command [id-sizes            ] id:0    len:11   data:
+15:07:41 [debug] jdwp : data:nil
+15:07:41 [debug] jdwp : command-packed:00 00 00 0b 00 00 00 00 00 01 07
+15:07:41 [debug] jdwp : jdwp-accept-process-output
+15:07:41 [debug] jdwp : jdwp-receive-message:accept-process-output returned nil
+15:07:41 [debug] jdwp : no result
+15:07:41 [debug] jdwp : jdwp-accept-process-output
+15:07:41 [debug] jdwp : jdwp-process-filter
+15:07:41 [debug] jdwp : jdwp-packet-unpack
+15:07:41 [trace] jdwp : jdwp-packet-unpack: found full packet:00 00 00 1d 00 00 00 00 00 40 64 02 00 00 00 01 5a 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 1f 00 00 00 00 80 00 00 00 00 00 08 00 00 00 08 00 00 00 08 00 00 00 08 00 00 00 08
+15:07:41 [trace] jdwp : jdwp-packet-unpack: packet-flags=0
+15:07:41 [trace] jdwp : jdwp-packet-unpack: returning jdwp-packet-command
+15:07:41 [debug] jdwp : jdwp-consume-output:len=29
+15:07:41 [debug] jdwp : jdwp-process-filter received packet:type=vector
+15:07:41 [debug] jdwp : jdwp-process-filter:command-packet
+15:07:41 [trace] jdwp : received command packet
+15:07:41 [debug] jdwp : jdwp-packet-unpack
+15:07:41 [trace] jdwp : jdwp-packet-unpack: found full packet:00 00 00 1f 00 00 00 00 80 00 00 00 00 00 08 00 00 00 08 00 00 00 08 00 00 00 08 00 00 00 08
+15:07:41 [trace] jdwp : jdwp-packet-unpack: packet-flags=128
+15:07:41 [trace] jdwp : jdwp-packet-unpack: returning jdwp-packet-reply
+15:07:41 [debug] jdwp : jdwp-consume-output:len=31
+15:07:41 [debug] jdwp : jdwp-process-filter received packet:type=vector
+15:07:41 [trace] jdwp : jdwp-process-filter:reply packet:[cl-struct-jdwp-packet-reply 31 0 128 
