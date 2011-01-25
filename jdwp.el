@@ -197,7 +197,7 @@
 	(10  invalid-thread       "Passed thread is null, is not a valid thread or has exited.")
 	(11  invalid-thread-group "Thread group invalid.")
 	(12  invalid-priority     "Invalid priority.")
-	(13  thread-not-suspended "If the specified thread as not been suspended by and event.")
+	(13  thread-not-suspended "If the specified thread as not been suspended by an event.")
 	(14  thread-suspended     "Thread already suspended.")
 	(20  invalid-object       "If this reference type has been unloaded and garbage collected.")
 	(21  invalid-class        "Invalid class.")

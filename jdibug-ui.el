@@ -240,13 +240,16 @@ to populate the jdi-value-values of the jdi-value.")
 because we might be installing 2 breakpoints for a single vm
 because it have two class loaders, or we have two different vm!")
 
-   (condition :type list :initform nil ;;  :allow-nil-initform t
+   (condition :type list :initform nil
 	      :accessor jdibug-breakpoint-condition
 	      :documentation
 	      "The condition for the breakpoint.  If non-nil,
 	      only step if the condition evaluates to true.  Any
 	      other value (or an error) causes the breakpoing to
-	      be ignored."))
+	      be ignored.")
+   (condition-text :type string :initform ""
+				   :accessor jdibug-breakpoint-condition-text
+				   :documentation "Unparsed text of the condition.  Useful for display."))
   :abstract t
   :documentation "Underlying infrastructure for all types of conditions that can
 suspend the JVM (even those that are not considered breakpoints
@@ -291,19 +294,19 @@ created.")
 							", ")
 			 ")"
 			 (if (jdibug-breakpoint-condition bp)
-				  (format " %s" (jdibug-breakpoint-condition bp))
+				  (format "\n\twhen %s" (jdibug-breakpoint-condition-text bp))
 				"")
 			 "\n\t"
 			 (pretty-print-extra bp)))
 
 (defmethod pretty-print-extra ((bp jdibug-breakpoint-location))
   "Extra information when pretty-printing a breakpoint"
-  (concat " at line " (number-to-string (jdibug-breakpoint-line-number bp))
+  (concat "at line " (number-to-string (jdibug-breakpoint-line-number bp))
 			 " in " (jdibug-breakpoint-source-file bp)))
 
 (defmethod pretty-print-extra ((bp jdibug-breakpoint-exception))
   "Extra information when pretty-printing a breakpoint"
-  (concat " when " (jdibug-breakpoint-name bp)
+  (concat "when " (jdibug-breakpoint-name bp)
 			 " is thrown"
 			 (if (jdibug-breakpoint-caught bp)
 				  (if (jdibug-breakpoint-uncaught bp)
@@ -1422,7 +1425,7 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
 		(line-number (jdibug-breakpoint-line-number bp)))
 	(if (not (jdibug-file-in-source-paths-p source-file))
 		(progn
-		  (jdibug-message (format "file %s is not in source path"
+		  (jdibug-message (format "file %s is not in source path "
 								  source-file) t)
 		  nil)
 
@@ -1590,7 +1593,8 @@ the class is loaded."
 		   (parse (jdibug-expr-parse-expr condition)))
 	  (cond
 	   ((consp parse)
-		(setf (jdibug-breakpoint-condition bp) parse)
+		(setf (jdibug-breakpoint-condition bp) parse
+			  (jdibug-breakpoint-condition-text bp) condition)
 		(message "Set condition on breakpoint to %s" condition))
 	 ((stringp parse)
 	  (message "Unable to parse %s because %s" condition parse))
@@ -1635,7 +1639,11 @@ the class is loaded."
 												 ((equal (jdibug-breakpoint-status bp) 'unresolved) " P")
 												 (t "  "))
 										 (display-string bp))))
-				  (insert (propertize str 'breakpoint bp))))))
+				  (insert (propertize str
+									  'breakpoint bp
+									  'help-echo (if (jdibug-breakpoint-condition bp)
+													 (format "when %s" (jdibug-breakpoint-condition-text bp))
+												   "always")))))))
 		(goto-char (point-min))
 		(forward-line (1- orig-line)))))
 
