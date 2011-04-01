@@ -504,7 +504,9 @@
   (jdi-debug "jdi-class-get-methods:%s" (jdi-class-id class))
   (if (jdi-class-methods class)
 	  (jdi-class-methods class)
-	(let ((reply (jdwp-send-command (jdi-mirror-jdwp class) "methods" `((:ref-type . ,(jdi-class-id class))))))
+	(let ((reply (jdwp-send-command (jdi-mirror-jdwp class)
+											  (jdi-get-methods-command-name class)
+											  `((:ref-type . ,(jdi-class-id class))))))
 	  (jdi-debug "number of methods:%s" (bindat-get-field reply :methods))
 	  (setf (jdi-class-methods class)
 			(loop for method in (bindat-get-field reply :method)
@@ -888,7 +890,7 @@ if no class matching SIGNATURE is found."
 	  (jdi-method-variables method)
 
 	(let ((reply (jdwp-send-command (jdi-mirror-jdwp method)
-									"variable-table"
+											  (jdi-get-variable-table-command-name method)
 									`((:ref-type . ,(jdi-class-id (jdi-method-class method)))
 									  (:method-id . ,(jdi-method-id method))))))
 	  (jdi-trace "variable-table arg-count:%s slots:%s" (bindat-get-field reply :arg-cnt) (bindat-get-field reply :slots))
@@ -1284,7 +1286,9 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 (defun jdi-reference-type-get-fields (reference-type)
   "Get all the fields in this reference-type only."
   (jdi-with-cache jdi-reference-type-fields-cache reference-type
-				  (let ((reply (jdwp-send-command (jdi-mirror-jdwp reference-type) "fields" `((:ref-type . ,(jdi-reference-type-id reference-type))))))
+				  (let ((reply (jdwp-send-command (jdi-mirror-jdwp reference-type)
+															 (jdi-get-fields-command-name reference-type)
+															 `((:ref-type . ,(jdi-reference-type-id reference-type))))))
 					(jdi-debug "jdi-reference-type-get-fields: %s's fields:%s" (jdi-reference-type-id reference-type) (bindat-get-field reply :declared))
 					(loop for field in (bindat-get-field reply :field)
 						  collect (make-jdi-field :virtual-machine (jdi-mirror-virtual-machine reference-type)
@@ -1626,5 +1630,39 @@ java.util.Map$Entry, not java.util.Map.Entry)."
 		(t
 		 (jdi-error "Unknown type (%s) for value: %s" type jdi-value)
 		 (error "%s is not a numerical type" (jdwp-type-name type))))))
+
+(defun jdi-get-fields-command-name (reference-type)
+  "Return command name for getting fields"
+  (if (jdi-virtual-machine-has-generic-p
+       (jdi-mirror-virtual-machine reference-type))
+      (progn
+        (jdi-debug "JVM has generic")
+        "fields-with-generic")
+    (progn
+      (jdi-debug "JVM does not support generic")
+      "fields")))
+
+(defun jdi-get-methods-command-name (class)
+  "Return command name for getting methods"
+  (if (jdi-virtual-machine-has-generic-p
+		 (jdi-mirror-virtual-machine class))
+      (progn
+        (jdi-debug "JVM has generic")
+        "methods-with-generic")
+    (progn
+      (jdi-debug "JVM does not support generic")
+      "methods")))
+
+(defun jdi-get-variable-table-command-name (method)
+  "Return command name for getting variable table"
+  (if (jdi-virtual-machine-has-generic-p
+		 (jdi-mirror-virtual-machine method))
+		(progn
+        (jdi-debug "JVM has generic")
+        "variable-table-with-generic")
+    (progn
+      (jdi-debug "JVM does not support generic")
+      "variable-table")))
+
 
 (provide 'jdi)
