@@ -19,3 +19,10 @@ javac JdibugTest.java
 java -Xdebug -Xrunjdwp:transport=dt_socket,address=8000,server=y,suspend=y JdibugTest &
 
 emacs -Q --load jdibug-setup.el --load jdibug-config.el JdibugTest.java
+
+# Check that the java process has exited
+sleep 1
+ps | grep java
+
+# EOF
+
