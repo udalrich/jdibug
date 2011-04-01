@@ -572,6 +572,17 @@
 												  (:signature struct jdwp-string-spec)
 												  (:generic-signature struct jdwp-string-spec)
 												  (:mod-bits  u32))))
+	(:name         "methods-with-generic"
+						:command-set  2
+						:command      15
+						:command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
+						:reply-spec   ((:methods      u32)
+											(:method         repeat (:methods)
+																  (:method-id        vec (eval jdwp-method-id-size))
+																  (:name      struct jdwp-string-spec)
+																  (:signature struct jdwp-string-spec)
+																  (:generic-signature struct jdwp-string-spec)
+																  (:mod-bits  u32))))
 	(:name         "superclass"
 				   :command-set  3
 				   :command      1
