@@ -136,7 +136,8 @@ used"
 		(when buffer
 		  (when process
 			(set-process-query-on-exit-flag process nil))
-		  (kill-buffer buffer)))
+		  (flet ((yes-or-no-p (prompt) t))
+			 (kill-buffer buffer))))
 
 	  ;; Start the JVM
 	  (jde-run 1)

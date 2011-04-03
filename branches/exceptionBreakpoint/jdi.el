@@ -247,13 +247,13 @@
 (defun jdi-event-request-manager-create-break-on-exception (erm vm class-id caught uncaught)
   (let ((data `((:event-kind     . ,jdwp-event-exception)
 					 (:suspend-policy . ,jdwp-suspend-policy-event-thread)
-					 (:modifiers      . 0)
-					 ;; (:modifiers      . 1)
-					 ;; (:modifier
-					 ;;  ((:mod-kind . ,jdwp-mod-kind-exception-only)
-					 ;; 	(:class-pattern . ((:exception . ,class-id)
-					 ;; 							 (:caught . ,caught)
-					 ;; 							 (:uncaught. ,uncaught)))))
+					 ;; (:modifiers      . 0)
+					 (:modifiers      . 1)
+					 (:modifier
+					  ((:mod-kind . ,jdwp-mod-kind-exception-only)
+					 	(:class-pattern . ((:exception . ,class-id)
+					 							 (:caught . ,caught)
+					 							 (:uncaught. ,uncaught)))))
 
 )))
 	(make-jdi-event-request :virtual-machine vm :data data)))
@@ -1348,8 +1348,8 @@ list whose nth element is the array element at index FIRST + n"
   (let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
 			(exception (jdi-virtual-machine-get-object-create
 							vm (make-jdi-object
-								 :id (bindat-get field event :u :exception :object))))
-			(exc-type jdi-object-get-reference-type exception)
+								 :id (bindat-get-field event :u :exception :object))))
+			(exc-type (jdi-object-get-reference-type exception))
 			)
 	 (jdibug-debug "exception: %s %s"
 						(jdi-class-get-signature exc-type)
