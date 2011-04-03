@@ -33,7 +33,6 @@
   "Test that catching exception by type works"
 
   (let ((jde-run-option-application-args (list "exceptions")))
-	 (debug)
 	 (jdibug-break-on-exception "com.jdibug.JdibugFooException" t t)
 
 	 ;;  Exception should cause us to hit a breakpoint
