@@ -31,7 +31,6 @@
 					 ("*.lang.*" "Ljava/lang/Object;" t)
 					 ;; Leading and trailing wildcard but no match
 					 ("*.lang.*" "Ljava/util/Map;" nil))))
-	 (edebug)
 	 (mapc (lambda (item)
 				(let* ((name     (first item))
 						 (sig      (second item))

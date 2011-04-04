@@ -216,7 +216,7 @@ an unreasonable amount of time has passed."
 
 ;;(debug-on-entry 'jdi-class-get-locations-of-line)
 
- (debug-on-entry 'fail)
+;; (debug-on-entry 'fail)
 ;; (debug-on-entry 'jdibug-handle-breakpoint)
 ;; (debug-on-entry 'jdibug-handle-class-prepare)
 
