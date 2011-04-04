@@ -573,6 +573,7 @@ And position the point at the line number."
 										line-number
 										t))))
 
+
 (defun jdibug-handle-breakpoint (thread location request-id)
   (jdibug-debug "jdibug-handle-breakpoint: active-frames is %s"
 				(and jdibug-active-frame (jdi-frame-id jdibug-active-frame)))

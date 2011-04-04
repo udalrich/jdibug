@@ -40,6 +40,7 @@
 
 (elog-make-logger jdi)
 
+
 (defvar jdi-unit-testing nil)
 
 (eval-when-compile
@@ -70,6 +71,9 @@
   suspended-frames
 
   (objects (make-hash-table :test 'equal)) ;; hash table where key=object-id value=jdi-object
+
+  ;; Exception breakpoint workaround data
+  (break-on-exception-data (make-hash-table))
   )
 
 (defstruct (jdi-reference-type (:include jdi-mirror))
@@ -247,16 +251,31 @@
 (defun jdi-event-request-manager-create-break-on-exception (erm vm class-id caught uncaught)
   (let ((data `((:event-kind     . ,jdwp-event-exception)
 					 (:suspend-policy . ,jdwp-suspend-policy-event-thread)
-					 ;; (:modifiers      . 0)
 					 (:modifiers      . 1)
 					 (:modifier
 					  ((:mod-kind . ,jdwp-mod-kind-exception-only)
-					 	(:class-pattern . ((:exception . ,class-id)
+					 	(:class-pattern . (
+					 							 (:exception . ,class-id)
 					 							 (:caught . ,caught)
-					 							 (:uncaught. ,uncaught)))))
+					 							 (:uncaught . ,uncaught)))))
 
 )))
 	(make-jdi-event-request :virtual-machine vm :data data)))
+
+(defun jdi-event-request-manager-create-break-on-exception-workaround (erm vm class-id caught uncaught)
+  "It appears that the exception-only modifier does not work, as
+the event is never sent.  This method generates an event request
+that breaks for all exceptions.  The handling code must then
+check the caught/uncaught properties and if the exception is the
+correct class."
+  (let ((data `((:event-kind     . ,jdwp-event-exception)
+					 (:suspend-policy . ,jdwp-suspend-policy-event-thread)
+					 (:modifiers      . 0)
+					 )))
+	 (make-jdi-event-request :virtual-machine vm :data data)))
+
+(defstruct jdi-break-on-exception-workaround-data
+  class-id caught uncaught)
 
 (defun jdi-event-request-enable (er)
   (let ((reply (jdwp-send-command (jdi-mirror-jdwp er) "set" (jdi-event-request-data er))))
@@ -523,12 +542,18 @@
   (jdi-debug "jdi-class-get-signature")
   (if (jdi-class-signature class)
 	  (jdi-class-signature class)
-	(let ((reply (jdwp-send-command (jdi-mirror-jdwp class) (if (jdi-virtual-machine-has-generic-p (jdi-mirror-virtual-machine class))
-																"signature-with-generic"
-															  "signature")
-									`((:ref-type . ,(jdi-class-id class))))))
+	(let ((reply (jdwp-send-command (jdi-mirror-jdwp class)
+											  (if (jdi-virtual-machine-has-generic-p
+													 (jdi-mirror-virtual-machine class))
+													"signature-with-generic"
+												 "signature")
+											  `((:ref-type . ,(jdi-class-id class))))))
 	  (setf (jdi-class-generic-signature class) (jdwp-get-string reply :generic-signature)
-			(jdi-class-signature class) (jdwp-get-string reply :signature)))))
+			  (jdi-class-signature class) (jdwp-get-string reply :signature)))))
+
+(defun jdi-class-get-signature-by-id (vm class-id)
+  (let ((class (jdi-virtual-machine-get-class-create vm class-id)))
+	 (jdi-class-get-signature class)))
 
 (defun jdi-class-get-generic-signature (class)
   (jdi-debug "jdi-class-get-generic-signature")
@@ -703,6 +728,12 @@ the nested-classes command."
 			result)))
 
 
+(defcustom jdi-break-on-exception-workaround t
+  "Apply a workaround to an apparent bug which causes the JVM to
+not report exceptions if they are restricted to a specific
+class."
+   :type 'boolean
+  :group 'jdibug)
 
 (defun jdi-virtual-machine-set-break-on-exception (vm signature caught uncaught)
   "Set break for when an exception is thrown and return a list of
@@ -722,15 +753,27 @@ if no class matching SIGNATURE is found."
 			 class
 			 (jdi-class-name-to-class-signature "java.lang.Throwable"))
 		  (progn
-			(let ((er (jdi-event-request-manager-create-break-on-exception
-					   (jdi-virtual-machine-event-request-manager vm)
-					   vm
-					   (jdi-class-id class)
-					   caught uncaught)))
-			  (jdi-event-request-enable er)
-			  (push er result)))
-		(jdi-warn "%s is not a subclass of Throwable.  Not setting break when thrown."
-					 (jdi-jni-to-print (jdi-class-get-signature class)))))
+			 ;; Create the event request and enable it.
+			 (let* ((class-id  (jdi-class-id class))
+					 (erm (jdi-virtual-machine-event-request-manager vm))
+					 ;; Form of the event request depends on if the
+					 ;; workaround is enabled.
+					 (er (funcall (if jdi-break-on-exception-workaround
+											'jdi-event-request-manager-create-break-on-exception-workaround
+										 'jdi-event-request-manager-create-break-on-exception)
+									  erm vm class-id caught uncaught))
+					 (request-id (jdi-event-request-enable er)))
+				;; Store the data for the exception workaround.  Always
+				;; store it in case the user turns on the workaround
+				;; later.
+				(puthash request-id (make-jdi-break-on-exception-workaround-data
+											:class-id class-id
+											:caught caught
+											:uncaught uncaught)
+							(jdi-virtual-machine-break-on-exception-data vm))
+				(push er result)))
+		 (jdi-warn "%s is not a subclass of Throwable.  Not setting break when thrown."
+					  (jdi-jni-to-print (jdi-class-get-signature class)))))
 
 	;; the class might be loaded again by another class loader
 	;; so we install the class prepare event anyway
@@ -1343,7 +1386,8 @@ list whose nth element is the array element at index FIRST + n"
   (jdi-handle-general-breakpoint-event jdwp event 'jdi-breakpoint-hooks))
 
 (defun jdi-handle-exception-event (jdwp event)
-  "Handle an exception EVENT from the JDWP."
+  "Handle an exception EVENT from the JDWP. TODO: Handle multiple
+events in one message."
   (jdi-debug "jdi-handle-exception-event")
   (let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
 			(exception (jdi-virtual-machine-get-object-create
@@ -1351,11 +1395,35 @@ list whose nth element is the array element at index FIRST + n"
 								 :id (bindat-get-field event :u :exception :object))))
 			(exc-type (jdi-object-get-reference-type exception))
 			)
-	 (jdibug-debug "exception: %s %s"
-						(jdi-class-get-signature exc-type)
-						(jdi-object-get-values exception
-													  (jdi-reference-type-get-all-fields exc-type)))
-	 (jdi-handle-general-breakpoint-event jdwp event 'jdi-exception-hooks)))
+	 (when (jdi-breakpoint-conditions-met vm
+												 (bindat-get-field event :u :request-id)
+												 (bindat-get-field event :u :catch-location)
+												 exc-type)
+		(jdi-debug "exception: %s %s"
+						  (jdi-class-get-signature exc-type)
+						  (jdi-object-get-values exception
+														 (jdi-reference-type-get-all-fields exc-type)))
+		(jdi-handle-general-breakpoint-event jdwp event 'jdi-exception-hooks))))
+
+(defun jdi-breakpoint-conditions-met (vm request-id catch-location exc-type)
+  (if jdi-break-on-exception-workaround
+		(let* ((exc-data (gethash request-id
+										  (jdi-virtual-machine-break-on-exception-data vm)))
+				 (class-id (jdi-break-on-exception-workaround-data-class-id exc-data))
+				 (caught (jdi-break-on-exception-workaround-data-caught exc-data))
+				 (uncaught (jdi-break-on-exception-workaround-data-uncaught exc-data))
+				 (caught-class-id (bindat-get-field catch-location :class-id))
+				 is-caught)
+		  ;; Uncaught exceptions will have all zeros in the class-id of the catch location.
+		  (setq is-caught (notevery 'zerop caught-class-id))
+		  (when is-caught
+			 (jdi-debug "jdi-breakpoint-conditions-met: caught in %s"
+							(jdi-class-get-signature-by-id vm caught-class-id)))
+
+		  (and (or (eq caught is-caught)
+					  (eq uncaught (not is-caught)))
+				 (jdi-class-instance-of-by-id-p exc-type class-id)))
+	 t))
 
 (defun jdi-handle-general-breakpoint-event (jdwp event hooks)
   (let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
@@ -1509,6 +1577,15 @@ java.util.Map$Entry, not java.util.Map.Entry)."
 		 (signatures (mapcar 'jdi-class-get-signature (cons class (append supers interfaces)))))
 	(jdi-debug "jdi-class-instance-of-p:all-signatures=%s" signatures)
 	(member signature signatures)))
+
+(defun jdi-class-instance-of-by-id-p (class id)
+  "Test if CLASS has a super class with ID"
+  (let* ((supers (jdi-class-get-all-super class))
+		 (interfaces (jdi-class-get-all-interfaces class))
+		 (all-ids (mapcar 'jdi-class-id (cons class (append supers interfaces)))))
+	(jdi-debug "jdi-class-instance-of-by-id-p:all-ids=%s" all-ids)
+	(member id all-ids)))
+
 
 (defun jdi-object-instance-of-p (object signature)
   (jdi-debug "jdi-object-instance-of-p:signature=%s" signature)
