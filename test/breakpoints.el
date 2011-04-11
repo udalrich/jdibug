@@ -116,6 +116,7 @@ after the class is loaded."
 (deftest nested-class-breakpoint-after-load-of-outer breakpoints-suite
   "Test that breakpoints in nested classes work when the outer
 class is loaded but not the inner class"
+  (jdibug-test-info "Running nested-class-breakpoint-after-load-of-outer")
 
   (jdibug-test-set-breakpoint-and-run "twoAsInt")
 

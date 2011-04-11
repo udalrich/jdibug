@@ -1,4 +1,4 @@
-;;
+;
 ;; These tests run JDE and JDI together, for a system level
 ;; integration test suite.  These tests assume that the code in
 ;; test/java has been built.
