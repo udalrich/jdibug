@@ -100,8 +100,6 @@
 
 ;;; Code:
 
-(require 'cl)
-
 (defstruct elog-appender
   category
   priority

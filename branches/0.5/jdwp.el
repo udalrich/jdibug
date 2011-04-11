@@ -34,6 +34,8 @@
 
 (require 'bindat)
 (require 'elog)
+(require 'jdibug-util)
+
 (eval-when-compile
   (load "cl-seq")
   (load "cl-extra"))
@@ -195,7 +197,7 @@
 	(10  invalid-thread       "Passed thread is null, is not a valid thread or has exited.")
 	(11  invalid-thread-group "Thread group invalid.")
 	(12  invalid-priority     "Invalid priority.")
-	(13  thread-not-suspended "If the specified thread as not been suspended by and event.")
+	(13  thread-not-suspended "If the specified thread as not been suspended by an event.")
 	(14  thread-suspended     "Thread already suspended.")
 	(20  invalid-object       "If this reference type has been unloaded and garbage collected.")
 	(21  invalid-class        "Invalid class.")
@@ -282,6 +284,10 @@
 	(:method-id vec (eval jdwp-method-id-size))
 	(:index     vec 8)))
 
+(defconst jdwp-tagged-object-spec
+  '((:type   u8)
+	 (:object vec (eval jdwp-object-id-size))))
+
 (defconst jdwp-event-spec
   `((:suspend-policy         u8)
 	(:events                 u32)
@@ -298,6 +304,11 @@
 											  (,jdwp-event-breakpoint     (:request-id    u32)
 																		  (:thread        vec (eval jdwp-object-id-size))
 																		  (:location      struct jdwp-location-spec))
+											  (,jdwp-event-exception      (:request-id    u32)
+																					(:thread        vec (eval jdwp-object-id-size))
+																					(:location      struct jdwp-location-spec)
+																					(:exception     struct jdwp-tagged-object-spec)
+																					(:catch-location struct jdwp-location-spec))
 											  (,jdwp-event-class-prepare  (:request-id    u32)
 																		  (:thread        vec (eval jdwp-object-id-size))
 																		  (:ref-type-tag  u8)
@@ -351,7 +362,7 @@
 	(let* ((header (bindat-unpack jdwp-arrayregion-header-spec packet))
 		   (type   (bindat-get-field header :type))
 		   (length (bindat-get-field header :length))
-		   repeater spec unpacked)
+		   repeater spec)
 	  (setq repeater
 			(case type
 			  ; object
@@ -530,8 +541,8 @@
 				   :command-spec ((:ref-type      vec (eval jdwp-reference-type-id-size)))
 				   :reply-spec   ((:num-nested    u32)
 								  (:nested        repeat (:num-nested)
-												  (:ref-type-tag (eval jdwp-reference-type-id-size))
-												  (:id vec (eval jdwp-field-id-size)))))
+												  (:ref-type-tag u8)
+												  (:id           vec (eval jdwp-reference-type-id-size)))))
 	(:name         "interfaces"
 				   :command-set  2
 				   :command      10
@@ -825,7 +836,7 @@
 
 			  (jdwp-debug "jdwp-process-filter:command-packet")
 			  ;; command packet
-			  (jdwp-run-with-timer 0.1 nil 'jdwp-process-command jdwp packet)
+			  (jdibug-util-run-with-timer 0.1 nil 'jdwp-process-command jdwp packet)
 			  (jdwp-trace "received command packet")))))
 	(error (jdwp-error "jdwp-process-filter:%s" err))))
 
@@ -911,6 +922,8 @@
 		   (protocol     (jdwp-get-protocol (cdr (assoc :name command-data))))
 		   (reply-spec   (getf protocol :reply-spec)))
 	  (jdwp-trace "jdwp-process-reply packet-header:%s" packet)
+	  (jdwp-debug "jdwp-process-reply reply-spec:%s" reply-spec)
+	  (jdwp-debug "jdwp-process-reply data:%s (%d bytes)" (jdwp-packet-data packet) (length (jdwp-packet-data packet)))
       (if (not (= error-code 0))
 		  (progn
 			(jdwp-traffic-info "reply(error): %s %s" (jdwp-packet-data packet) packet)
@@ -1010,6 +1023,8 @@
 		   :length))))))
 
 (defun jdwp-get-string (s &rest fields)
+  "Similar to (`bindat-get-field' S FIELDS) except that the
+result is converted from a JDWP string to an emacs string."
   (concat (bindat-get-field (apply 'bindat-get-field s fields) :string)))
 
 (defun jdwp-thread-status-string (status)
@@ -1335,6 +1350,7 @@ the function as arguments.")
 								   (:command     . ,command)
 								   (:sent-time   . ,(if jdwp-info-flag (current-time) 0))))
 				   (command-packed (concat (jdwp-bindat-pack jdwp-command-spec command-data) outdata)))
+			  (unless protocol (error "Unknown command: %s" name))
 			  (jdwp-info "sending command [%-20s] id:%-4d len:%-4d data:%s"
 						 name
 						 id
@@ -1468,28 +1484,10 @@ This method does not consume the packet, the caller can know by checking jdwp-pa
 										  :command-set (bindat-get-field unpacked :command-set)
 										  :data        (substring string jdwp-packet-header-size))))))))))
 
-(defvar jdwp-signal-count 0)
-(defun jdwp-signal-hook (error-symbol data)
-  (jdwp-info "debug-on-error=%s jdwp-signal-count=%s" debug-on-error jdwp-signal-count)
-  (setq jdwp-signal-count (1+ jdwp-signal-count))
-  (if jdwp-error-flag
-	  (if (< jdwp-signal-count 5)
-		  (jdwp-error "jdwp-signal-hook:%s:%s\n%s\n" error-symbol data
-					  (with-output-to-string (backtrace)))
-		(if (< jdwp-signal-count 50)
-			(jdwp-error "jdwp-signal-hook:%s:%s (backtrace suppressed)"
-						error-symbol data)
-		  (let ((signal-hook-function nil)) (error error-symbol data))))
-	(let ((signal-hook-function nil)) (error error-symbol data))))
 
 
-(defun jdwp-run-with-timer (secs repeat function &rest args)
-  (apply 'run-with-timer secs repeat (lambda (function &rest args)
-									   (setq signal-hook-function 'jdwp-signal-hook)
-									   (unwind-protect
-										   (apply function args)
-										 (setq signal-hook-function nil)))
-		 function args))
+
+
 
 
 (defmacro jdwp-uninterruptibly (&rest body)
@@ -1519,7 +1517,8 @@ It is best if these types of constructs are placed at a high
 level where the evaled block is simple, as the resulting code
 cannot be byte compiled.
 "
-  (declare (indent defun))
+  (declare (indent defun)
+			  (debug t))
   `(if jdwp-uninterruptibly-running-p
 	   (progn
 		 (setq jdwp-uninterruptibly-waiting

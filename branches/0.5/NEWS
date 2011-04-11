@@ -20,6 +20,18 @@ information (required for pre-1.5 JVM) and methods that do include
 generic information.  The latter are now used if available.  Thanks to
 Lei Wang for the patch.
 
+** Added breakpoints for when an exception is thrown
+`jdibug-break-on-exception' will set a breakpoint for when the given
+exception is thrown.  The name must be fully qualified, but it can be
+a superclass of the actual exception thrown.  For example,
+java.lang.RuntimeException would break if a NullPointerException was
+thown.
+
+The method asks about whether caught or uncaught exceptions should
+cause a break.  However, as described in the JDWP documentation, it is
+possible for either type of exception to be reported as the other type.
+
+
 * 0.4 (2010-12-05)
 
 ** Added simple function to start a program and attach a debugger.

@@ -1,5 +1,7 @@
-;;
-;; These tests run JDE and JDI together, for a system level integration test suite.  These tests assume that the code in test/java has been built.
+;
+;; These tests run JDE and JDI together, for a system level
+;; integration test suite.  These tests assume that the code in
+;; test/java has been built.
 ;;
 (require 'elunit)
 (require 'jde)
@@ -23,16 +25,20 @@
   "Saved valud of the refresh delay")
 
 (defsuite jde-test-suite nil
-  :setup-hooks (list (lambda ()
-					   ;; Shorten the refresh delay so tests can run faster
-					   (unless jdibug-test-old-refresh-delay
-						 (setq jdibug-test-old-refresh-delay jdibug-refresh-delay
-							   jdibug-refresh-delay 0.1))
-					   (let ((process (get-buffer-process "*com.jdibug.Main*")))
-						 (when process
-						   (kill-process process)))
-					   (setq jdibug-jde-test-Main-buffer
-							 (find-file (expand-file-name "java/src/com/jdibug/Main.java" jdibug-test-root-dir)))))
+  :setup-hooks
+  (list (lambda ()
+			 ;; Shorten the refresh delay so tests can run faster
+			 (unless jdibug-test-old-refresh-delay
+				(setq jdibug-test-old-refresh-delay jdibug-refresh-delay
+						jdibug-refresh-delay 0.1))
+			 (let ((process (get-buffer-process
+								  (jdibug-test-main-buffer-name))))
+				(when process
+				  (kill-process process)))
+			 (setq jdibug-jde-test-Main-buffer
+					 (find-file (expand-file-name
+									 "java/src/com/jdibug/Main.java"
+									 jdibug-test-root-dir)))))
   :teardown-hooks (list (lambda()
 						  (jdibug-test-info "jde-test-suite teardown")
 						  (setq jdibug-refresh-delay jdibug-test-old-refresh-delay
@@ -99,6 +105,13 @@ finished.  Also wait for all of the buffers to finish updating."
   (setq jdibug-test-connected t)
   (remove-hook 'jdibug-connected-hook #'jdibug-test-connected-hook))
 
+(defun jdibug-test-main-buffer-name nil
+  "Get the name of the buffer where the main process is running"
+  (let ((main-class (or (and (not (string-equal "" jde-run-application-class))
+									  jde-run-application-class)
+								(jde-run-get-main-class))))
+	 (concat "*" main-class "*")))
+
 (defun jdibug-test-connect-to-jvm (&optional buffer)
   "Start a JVM and attach to it with JDIbug from within BUFFER.
 This assumes that the buffer has JDE variables set so that
@@ -113,12 +126,9 @@ used"
   (switch-to-buffer buffer)
 
   ;; TODO: there is probably a more general way to do this
-  (let* ((main-class (or (and (not (string-equal "" jde-run-application-class))
-							 jde-run-application-class)
-						(jde-run-get-main-class)))
-		(count 0)
-		(run-buffer (concat "*" main-class "*"))
-		buffer started)
+  (let* ((count 0)
+			(run-buffer (jdibug-test-main-buffer-name))
+			buffer started)
 	(save-excursion
 	  ;; Kill any currently running process
 	  (let* ((buffer (get-buffer run-buffer))
@@ -126,13 +136,15 @@ used"
 		(when buffer
 		  (when process
 			(set-process-query-on-exit-flag process nil))
-		  (kill-buffer buffer)))
+		  (flet ((yes-or-no-p (prompt) t))
+			 (kill-buffer buffer))))
 
 	  ;; Start the JVM
 	  (jde-run 1)
 	  ;; Wait for it to start
 	  (save-excursion
 		(while (and (< count 100) (not started))
+		  (jdibug-test-info "Waiting for JVM to start %d" count)
 		  (sleep-for 1)
 		  (setq buffer (get-buffer run-buffer)
 				count (1+ count))
@@ -194,8 +206,8 @@ an unreasonable amount of time has passed."
 	 (assert-that ,var ,message)))
 
 (load "locals.el")
-(load "breakpoints.el")
 (load "watchpoints.el")
+(load "breakpoints.el")
 
 ;; (debug-on-entry 'jdibug-test-connect-to-jvm)
 ;; (debug-on-entry 'jdibug-test-wait-for-refresh-timers)
@@ -204,7 +216,9 @@ an unreasonable amount of time has passed."
 
 ;;(debug-on-entry 'jdi-class-get-locations-of-line)
 
-(debug-on-entry 'fail)
+;; (debug-on-entry 'fail)
+;; (debug-on-entry 'jdibug-handle-breakpoint)
+;; (debug-on-entry 'jdibug-handle-class-prepare)
 
 (let ((then (float-time))
 	  now delta)

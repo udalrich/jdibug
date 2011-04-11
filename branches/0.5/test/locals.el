@@ -12,7 +12,7 @@
   :setup-hooks (list (lambda ()
 					   ;; Remove any prexisting breakpoints
 					   (jdwp-uninterruptibly
-						 (mapc #'jdibug-remove-breakpoint jdibug-breakpoints))))
+						 (mapc #'jdibug-remove-breakpoint (jdibug-all-breakpoints)))))
 
   ;; :teardown-hooks (lambda () )
 )
@@ -23,7 +23,6 @@
 
   ;; Connect and set breakpoint after we initialize stuff
   (jdibug-test-connect-to-jvm)
-  (debug)
 
   (goto-char (point-min))
   (search-forward "twoAsInt")
@@ -42,7 +41,8 @@
 	(set-buffer jdibug-locals-buffer)
 	;; Click to expand stuff
 	(goto-char (point-min))
-	(jdibug-test-info "About to search for stuff:")
+	(jdibug-test-info "About to search for stuff in '%s'b"
+							(buffer-substring-no-properties (point-min) (point-max)))
 	(search-forward "stuff:")
 	(search-backward "[+]")
 	(widget-button-press (point))
