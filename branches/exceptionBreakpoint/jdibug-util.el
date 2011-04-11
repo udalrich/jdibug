@@ -63,8 +63,8 @@
 
   ;; Enter the debugger if debug-on-error is set and the error won't
   ;; be caught
-  (jdibug-util-info "debug-on-error=%s jdibug-util-signal-count=%s"
-						  debug-on-error jdibug-util-signal-count)
+  (jdibug-util-info "debug-on-error=%s jdibug-util-signal-count=%s %s %s"
+						  debug-on-error jdibug-util-signal-count error-symbol data)
   (if (and debug-on-error
 			  (and (boundp 'jdibug-util-in-condition-case)
 					 (not jdibug-util-in-condition-case)))

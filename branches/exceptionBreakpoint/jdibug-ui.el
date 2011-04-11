@@ -708,7 +708,7 @@ the condition is satisfied."
 	  (dolist (location (jdi-class-get-locations-of-line class (jdibug-breakpoint-line-number bp)))
 		(setq found t)
 		(let ((vm (jdi-mirror-virtual-machine class)))
-		  (set-breakpoint bp (list vm))
+		  (set-breakpoint bp (list vm) class)
 		  (jdibug-refresh-breakpoints-buffer))))))
 
 
@@ -1399,8 +1399,10 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
     buf))
 
 
-(defmethod set-breakpoint ((bp jdibug-breakpoint) &optional vm-list)
-  "Set the breakpoint BP.  If VM-LIST, only set it in those virtual machines"
+(defmethod set-breakpoint ((bp jdibug-breakpoint) &optional vm-list class)
+  "Set the breakpoint BP.  If VM-LIST, only set it in those
+virtual machines.  If CLASS, use that class instead of the one
+based on the file name."
 
   (jdibug-debug "set-breakpoint %s %s" (object-class-name bp) vm-list)
   (setf (jdibug-breakpoint-status bp) 'unresolved)
@@ -1409,7 +1411,7 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
   (jdibug-breakpoint-update bp)
   (jdibug-message "JDIbug setting breakpoint...")
   (dolist (vm (or vm-list jdibug-virtual-machines))
-	(let ((result (set-breakpoint-in-vm bp vm)))
+	(let ((result (set-breakpoint-in-vm bp vm class)))
 	  (if result
 		  (progn
 			(jdibug-message "done" t)
@@ -1420,7 +1422,7 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
   (jdibug-breakpoint-update bp))
 
 
-(defmethod set-breakpoint-in-vm ((bp jdibug-breakpoint-location) vm)
+(defmethod set-breakpoint-in-vm ((bp jdibug-breakpoint-location) vm &optional class)
   (jdibug-debug "set-breakpoint-in-vm %s" (class-name (class-of bp)))
   (let ((source-file (jdibug-breakpoint-source-file bp))
 		(line-number (jdibug-breakpoint-line-number bp)))
@@ -1431,14 +1433,15 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
 		  nil)
 
 	  (let ((result (jdi-virtual-machine-set-breakpoint
-					 vm
-					 (jdibug-source-file-to-class-signature source-file)
-					 line-number)))
+						  vm
+						  (if class (jdi-class-signature class)
+								(jdibug-source-file-to-class-signature source-file))
+						  line-number)))
 		;; return values is the events returned above, which can (and
 		;; will) be nil if the call failed.
 		result))))
 
-(defmethod set-breakpoint-in-vm ((bp jdibug-breakpoint-exception) vm)
+(defmethod set-breakpoint-in-vm ((bp jdibug-breakpoint-exception) vm &optional class-signature)
   (jdibug-debug "set-breakpoint-in-vm %s" (class-name (class-of bp)))
   (let* ((name (jdibug-breakpoint-name bp))
 			(signature (jdi-class-name-to-class-signature name))
