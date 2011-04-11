@@ -1,6 +1,7 @@
 (defconst jdibug-build-files
   '("tree-mode"
 	"elog"
+	"jdibug-util"
 	"jdwp"
     "jdi"
     "jdibug-expr"
