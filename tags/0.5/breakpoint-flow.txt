@@ -1,0 +1,22 @@
+Location based breakpoints:
+
+connect-to-vm
+		  set bp in vm
+		  		if fail, set bp in inner classes (*NOT DONE*)
+		  			if fail, create prepare event for class and inner classes
+
+class-prepare
+		  set bp in vm
+
+enable-breakpoint
+		  find class
+		  		 if fail, create prepare event for class and inner classes
+		  set bp in vm
+		  		if fail, set bp in inner classes
+					if fail, create prepare event for class and inner classes
+
+
+What if the breakpoint is set in a static inner class that is already
+prepared, but the outer class is not loaded?  I think this is just a
+fail.  Or we could use semantic to figure out the name of the class at
+that line.
