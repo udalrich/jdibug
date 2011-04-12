@@ -1,5 +1,37 @@
 * JDIbug News                  -*- outline -*-
 
+* 0.5 (Current)
+
+** Added jdibug-remove-all-breakpoints
+Removes all breakpoints with one interactive command.
+
+** Large arrays are displayed in segments
+Displaying all the entries of a large array (1000+ entries) is slow, and it is rare that the user will want to
+look at every entry, so much of the time spent retrieving the entries is wasted.  If you are looking for entry
+18374 in a 938432 element array, it can also take a long time just to find the appropriate entry.
+
+With the current version, if the size of the array exceeds jdibug-locals-max-array-size, expanding the array
+shows subarrays, which can be expanded.  While it might take 3 or 4 clicks to find the entry, those clicks
+respond much more quickly so the process should be much faster, even with the extra actions.
+
+** Added support for Android and other JVM that only implement JDWP -with-generic commands.
+The debug interface defines methods that do not include generic
+information (required for pre-1.5 JVM) and methods that do include
+generic information.  The latter are now used if available.  Thanks to
+Lei Wang for the patch.
+
+** Added breakpoints for when an exception is thrown
+`jdibug-break-on-exception' will set a breakpoint for when the given
+exception is thrown.  The name must be fully qualified, but it can be
+a superclass of the actual exception thrown.  For example,
+java.lang.RuntimeException would break if a NullPointerException was
+thown.
+
+The method asks about whether caught or uncaught exceptions should
+cause a break.  However, as described in the JDWP documentation, it is
+possible for either type of exception to be reported as the other type.
+
+
 * 0.4 (2010-12-05)
 
 ** Added simple function to start a program and attach a debugger.

@@ -6,11 +6,58 @@
 
 (require 'elunit)
 (require 'jdwp)
+(require 'jdibug-ui)
+(require 'jdi)
 
 (defsuite conversions-suite smoke-test-suite
   ;; :setup-hook (lambda () )
   ;; :teardown-hook (lambda () )
 )
+
+(deftest name-to-signature-matching conversions-suite
+  "Test that we identify when a signature matches a wildcarded pattern"
+  (let ((data '(("java.lang.RuntimeException" "Ljava/lang/RuntimeException;" t)
+					 ;; Mismatch
+					 ("java.lang.Object" "Ljava/lang/RuntimeException;" nil)
+					 ;; Trailing wildcard
+					 ("java.lang.*" "Ljava/lang/RuntimeException;" t)
+					 ;; Trailing wildcard but no match
+					 ("java.lang.*" "Ljava/util/Map;" nil)
+					 ;; Leading wildcard
+					 ("*.RuntimeException" "Ljava/lang/RuntimeException;" t)
+					 ;; Leading wildcard but no match
+					 ("*.Object" "Ljava/util/Map;" nil)
+					 ;; Leading and trailing wildcard
+					 ("*.lang.*" "Ljava/lang/Object;" t)
+					 ;; Leading and trailing wildcard but no match
+					 ("*.lang.*" "Ljava/util/Map;" nil))))
+	 (mapc (lambda (item)
+				(let* ((name     (first item))
+						 (sig      (second item))
+						 (expected (third item))
+						 (actual   (jdibug-signature-matches-name-with-wildcards
+										sig name))
+						 (message   (format "Signature (%s) and name (%s) matched correctly"
+												  sig name)))
+				  (if expected
+						(assert-that actual message)
+					 (assert-nil actual message))))
+				data)))
+
+
+(deftest name-to-signature conversions-suite
+  "Test that we correctly convert names to JNI signatures"
+  (let ((pairs '(("java.lang.RuntimeException" . "Ljava/lang/RuntimeException;")
+					  ("java.util.Map$Entry" . "Ljava/util/Map$Entry;")))
+		  java-name jni-name)
+	 (mapc (lambda (pair)
+				(setq java-name (car pair)
+						jni-name (cdr pair))
+				(assert-equal jni-name (jdi-class-name-to-class-signature java-name)
+								  "Convert java to JNI")
+				(assert-equal (list java-name) (jdi-jni-to-print jni-name)
+								  "Convert JNI to java"))
+			 pairs)))
 
 (deftest vec-to-double conversions-suite
   "Test converting vectors to doubles"
@@ -69,3 +116,28 @@
 			(setq back-to-vec (jdwp-float-to-vec actual))
 			(assert-equal vec back-to-vec (format "conversion back to vector of %s" actual)))
 		  pairs)))
+
+(deftest sub-array-size conversions-suite
+  "Check that we scale the size of subarrays in a nice manner.
+Not really a conversion like the rest of the file, but sort of."
+  (let ((data '(; num-display min max expected
+				(23            10  20  10)
+				(30             3   7  5)
+				(300            3   7  50)
+				(230           10  20  20)
+				(72832         14  35  3000)
+)))
+	(mapc (lambda (input)
+			(let* ((num-display (nth 0 input))
+				   (jdibug-locals-min-sub-array-size (nth 1 input))
+				   (jdibug-locals-max-array-size (nth 2 input))
+				   (expected (nth 3 input))
+				   (step (jdibug-locals-step-size num-display)))
+			  (assert-equal expected step (format "Correct step size: %s" input))
+			  (assert-that (>= step jdibug-locals-min-sub-array-size)
+						   (format "min size respected %d: %s" step input))
+			  (assert-that (<= (ceiling num-display step)
+							   jdibug-locals-max-array-size)
+						   (format "max size respected %d: %s" step input))))
+		  data)))
+

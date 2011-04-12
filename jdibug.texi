@@ -5,27 +5,27 @@
 @c %**end of header
 
 @ifnottex
-@node Top
+@node Top, Rationale, (dir), (dir)
 @top JDIbug User Manual
 @end ifnottex
 
 @menu
-* Rationale::          Why I created JDIbug
-* Installation::       How to install JDIbug
-* Configuration::      Configuring JDIbug
-* Connecting::         Connecting to and Disconnecting from a debuggee
-* Breakpoints::        Setting and clearing breakpoints
-* Stepping::           Stepping into, over and out of source codes
-* Locals Browser::     Using the Locals Browser
-* Frames Browser::     Using the Frames Browser
-* Breakpoints Browser:: Using the Breakpoint Browser
-* Threads Browser::    Using the Threads Browser
-* Watchpoint Buffer::  Using the Watchpoint Buffer
-* Window Layout::      Changing the default window layout
-* Bug Reporting::      When you think there's a bug in JDIbug
+* Rationale::                   Why I created JDIbug
+* Installation::                How to install JDIbug
+* Configuration::               Configuring JDIbug
+* Connecting::                  Connecting to and Disconnecting from a debuggee
+* Breakpoints::                 Setting and clearing breakpoints
+* Stepping::                    Stepping into, over and out of source codes
+* Locals Browser::              Using the Locals Browser
+* Frames Browser::              Using the Frames Browser
+* Breakpoints Browser::         Using the Breakpoint Browser
+* Threads Browser::             Using the Threads Browser
+* Watchpoint Buffer::           Using the Watchpoint Buffer
+* Window Layout::               Changing the default window layout
+* Bug Reporting::               When you think there's a bug in JDIbug
 @end menu
 
-@node Rationale
+@node Rationale, Installation, Top, Top
 @chapter Rationale
 
 One word, locals browser. As I started using JDEE, there are two
@@ -44,7 +44,7 @@ doesn't integrate with Emacs.
 
 So I created JDIbug.
 
-@node Installation
+@node Installation, Configuration, Rationale, Top
 @chapter Installation
 
 JDIbug is hosted at googlecode, at
@@ -59,7 +59,7 @@ Then add the path into your @code{load-path}, and @code{require} it,
 for example, I have the following in my @file{.emacs} file:
 
 @example
-(add-to-list 'load-path (expand-file-name "~/emacs/site/jdibug-0.4"))
+(add-to-list 'load-path (expand-file-name "~/emacs/site/jdibug-0.5"))
 (require 'jdibug)
 @end example
 
@@ -71,7 +71,7 @@ installation instructions from the above link.
 
 That's it, you are good to go.
 
-@node Configuration
+@node Configuration, Connecting, Installation, Top
 @chapter Configuration
 
 Although JDIbug current does not rely on any data from JDEE, a lot of
@@ -113,7 +113,7 @@ JVM's may need different parameters.)
 -Xrunjdwp:transport=dt_socket,address=6001,server=y,suspend=y
 @end example
 
-@node Connecting
+@node Connecting, Breakpoints, Configuration, Top
 @chapter Connecting
 After configuring JDIbug, use the key sequence @kbd{C-c C-c C-c} in a
 jde-mode buffer to connect to the debuggee process. By default, the
@@ -126,7 +126,7 @@ breakpoints list on the bottom right.
 To disconnect from the debuggee, use the key sequence @kbd{C-c C-c
 C-d}.
 
-@node Breakpoints
+@node Breakpoints, Stepping, Connecting, Top
 @chapter Breakpoints
 You can set breakpoints before or after you have made the connection
 to the debuggee.
@@ -149,10 +149,33 @@ C-b}. Multiple breakpoints will be installed for the first line of
 every method in the class. Note that the pseudo method @code{<init>}
 will also be breakpoint-ed.
 
+Attempting to set a breakpoint at a method declaration will not have
+an effect (unless that line also contains executable code).
+
 @emph{New in 0.4}  Previous versions did not support breakpoints in
 inner classes.  Version 0.4 should support this functionality.
+Version 0.5 fixed bugs where these breakpoints were not always set.
 
-@node Stepping
+@menu
+Other types of breakpoints
+* Exception Breakpoints:: Breaking when an exception is thrown
+@end menu
+
+@node Exception Breakpoints,  , Breakpoints, Breakpoints
+@section Exception Breakpoints
+
+@emph{New in 0.5}  It is now possible to set a breakpoint for when an
+exception is thrown. @code{jdibug-break-on-exception} will prompt for
+the qualified name of a class.  When an exception of that class is
+about to be thrown, the thread will be suspended.
+
+@code{jdibug-break-on-exception} will also ask if it should break for
+caught or uncaught exceptions.  Due to interactions with native
+methods and compiler-generated code, it is possible for a caught
+exception to be reported as uncaught and vice versa.
+
+
+@node Stepping, Locals Browser, Breakpoints, Top
 @chapter Stepping
 When the debugger is suspended, you can use the following key
 sequences to step through the program.
@@ -178,7 +201,7 @@ resume the main thread in the debugger process. Or if you have added
 the snipplet above, you can just @kbd{M-f7} for that.  You can also
 use @kbd{C-c C-c C-a} to resume all threads in the JVM.
 
-@node Locals Browser
+@node Locals Browser, Frames Browser, Stepping, Top
 @chapter Locals Browser
 The locals browser uses the emacs tree-mode to display the local
 variables. Each of the variables can be expanded to view the member
@@ -222,7 +245,7 @@ will invoke the method and the results of the invocation will be shown
 in the expanded node. Currently only methods which does not need
 arguments can be invoked.
 
-@node Frames Browser
+@node Frames Browser, Breakpoints Browser, Locals Browser, Top
 @chapter Frames Browser
 The frames buffer is a simple list of all the frames from the
 @code{main} up to the current function. It provides a simple
@@ -240,12 +263,17 @@ Threads are also clickable.  This does not update the locals browser,
 but does change which thread will be affected with subsequent commands
 like @code{jdibug-resume} or @code{jdibug-step-into}.
 
-@node Breakpoints Browser
+@node Breakpoints Browser, Threads Browser, Frames Browser, Top
 @chapter Breakpoints Browser
 The breakpoints buffer shows a list of the current active and disabled
 breakpoints. Clicking on the breakpoints will show the line of code of
 the breakpoint in the source code buffer.
 
+@menu
+* Conditional Breakpoints :: Breaking when a condition is satisfied
+@end menu
+
+@node Conditional Breakpoints,  , Breakpoints Browser, Breakpoints Browser
 @section Conditional Breakpoints
 Pressing @kbd{c} while at a breakpoint allows you to set a condition expression
 on the breakpoint.  This feature is under development, so most common
@@ -265,7 +293,7 @@ made to determine that the result is a boolean or that any variables
 referenced in the expression are in scope.  If the expression is
 invalid, the program will resume execution.
 
-@node Threads Browser
+@node Threads Browser, Watchpoint Buffer, Breakpoints Browser, Top
 @chapter Threads Browser
 The threads buffer is normally not visible, but can be shown by the
 command @code{jdibug-debug-view-1}.  This buffer lists all of the
@@ -278,7 +306,7 @@ be useful to determine where it is executing, as it allows it to be
 selected as the current thread in the frames browser.  At that point,
 it is possible to step through the thread with the usual commands.
 
-@node Watchpoint Buffer
+@node Watchpoint Buffer, Window Layout, Threads Browser, Top
 @chapter Watchpoint Buffer
 @emph{New in 0.4} The watchpoint buffer can be shown by @code{jdibug-debug-view-2} if it
 is not initially visible.  This buffer displays a list of
@@ -294,7 +322,7 @@ exactly those that are supposed by watchpoints, so you can test if
 your expression will work in a conditional breakpoint by first
 entering it as a watchpoint.
 
-@node Window Layout
+@node Window Layout, Bug Reporting, Watchpoint Buffer, Top
 @chapter Window Layout
 The default four buffers layout is what I like the most on my screen.
 The commands @code{jdibug-debug-view}, @code{jdibug-debug-view-1} and
@@ -314,7 +342,7 @@ And then proceed to add your equivalent functions in the above
 hooks. You can refer to the two functions @code{jdibug-debug-view} and
 @code{jdibug-undebug-view} for a start.
 
-@node Bug Reporting
+@node Bug Reporting,  , Window Layout, Top
 @chapter Bug Reporting
 If you think there's a bug in JDIbug, please submit the log together
 with a description of what you have done.

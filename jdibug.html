@@ -24,6 +24,7 @@
 <a name="Top"></a>
 <p><hr>
 Next:&nbsp;<a rel="next" accesskey="n" href="#Rationale">Rationale</a>,
+Previous:&nbsp;<a rel="previous" accesskey="p" href="#dir">(dir)</a>,
 Up:&nbsp;<a rel="up" accesskey="u" href="#dir">(dir)</a>
 
 </div>
@@ -31,19 +32,19 @@ Up:&nbsp;<a rel="up" accesskey="u" href="#dir">(dir)</a>
 <h2 class="unnumbered">JDIbug User Manual</h2>
 
 <ul class="menu">
-<li><a accesskey="1" href="#Rationale">Rationale</a>:           Why I created JDIbug
-<li><a accesskey="2" href="#Installation">Installation</a>:        How to install JDIbug
-<li><a accesskey="3" href="#Configuration">Configuration</a>:       Configuring JDIbug
-<li><a accesskey="4" href="#Connecting">Connecting</a>:          Connecting to and Disconnecting from a debuggee
-<li><a accesskey="5" href="#Breakpoints">Breakpoints</a>:         Setting and clearing breakpoints
-<li><a accesskey="6" href="#Stepping">Stepping</a>:            Stepping into, over and out of source codes
-<li><a accesskey="7" href="#Locals-Browser">Locals Browser</a>:      Using the Locals Browser
-<li><a accesskey="8" href="#Frames-Browser">Frames Browser</a>:      Using the Frames Browser
-<li><a accesskey="9" href="#Breakpoints-Browser">Breakpoints Browser</a>:  Using the Breakpoint Browser
-<li><a href="#Threads-Browser">Threads Browser</a>:     Using the Threads Browser
-<li><a href="#Watchpoint-Buffer">Watchpoint Buffer</a>:   Using the Watchpoint Buffer
-<li><a href="#Window-Layout">Window Layout</a>:       Changing the default window layout
-<li><a href="#Bug-Reporting">Bug Reporting</a>:       When you think there's a bug in JDIbug
+<li><a accesskey="1" href="#Rationale">Rationale</a>:                    Why I created JDIbug
+<li><a accesskey="2" href="#Installation">Installation</a>:                 How to install JDIbug
+<li><a accesskey="3" href="#Configuration">Configuration</a>:                Configuring JDIbug
+<li><a accesskey="4" href="#Connecting">Connecting</a>:                   Connecting to and Disconnecting from a debuggee
+<li><a accesskey="5" href="#Breakpoints">Breakpoints</a>:                  Setting and clearing breakpoints
+<li><a accesskey="6" href="#Stepping">Stepping</a>:                     Stepping into, over and out of source codes
+<li><a accesskey="7" href="#Locals-Browser">Locals Browser</a>:               Using the Locals Browser
+<li><a accesskey="8" href="#Frames-Browser">Frames Browser</a>:               Using the Frames Browser
+<li><a accesskey="9" href="#Breakpoints-Browser">Breakpoints Browser</a>:          Using the Breakpoint Browser
+<li><a href="#Threads-Browser">Threads Browser</a>:              Using the Threads Browser
+<li><a href="#Watchpoint-Buffer">Watchpoint Buffer</a>:            Using the Watchpoint Buffer
+<li><a href="#Window-Layout">Window Layout</a>:                Changing the default window layout
+<li><a href="#Bug-Reporting">Bug Reporting</a>:                When you think there's a bug in JDIbug
 </ul>
 
 <div class="node">
@@ -95,7 +96,7 @@ my <samp><span class="file">~/emacs/site</span></samp>, so the jdibug <samp><spa
    <p>Then add the path into your <code>load-path</code>, and <code>require</code> it,
 for example, I have the following in my <samp><span class="file">.emacs</span></samp> file:
 
-<pre class="example">     (add-to-list 'load-path (expand-file-name "~/emacs/site/jdibug-0.4"))
+<pre class="example">     (add-to-list 'load-path (expand-file-name "~/emacs/site/jdibug-0.5"))
      (require 'jdibug)
 </pre>
    <p>You also need to install CEDET from
@@ -206,8 +207,38 @@ C-b</kbd>. Multiple breakpoints will be installed for the first line of
 every method in the class. Note that the pseudo method <code>&lt;init&gt;</code>
 will also be breakpoint-ed.
 
+   <p>Attempting to set a breakpoint at a method declaration will not have
+an effect (unless that line also contains executable code).
+
    <p><em>New in 0.4</em>  Previous versions did not support breakpoints in
-inner classes.  Version 0.4 should support this functionality.
+inner classes.  Version 0.4 should support this functionality. 
+Version 0.5 fixed bugs where these breakpoints were not always set.
+
+</li></ul>
+<p>Other types of breakpoints
+<ul class="menu">
+<li><a accesskey="1" href="#Exception-Breakpoints">Exception Breakpoints</a>:  Breaking when an exception is thrown
+</ul>
+
+<div class="node">
+<a name="Exception-Breakpoints"></a>
+<p><hr>
+Previous:&nbsp;<a rel="previous" accesskey="p" href="#Breakpoints">Breakpoints</a>,
+Up:&nbsp;<a rel="up" accesskey="u" href="#Breakpoints">Breakpoints</a>
+
+</div>
+
+<h3 class="section">5.1 Exception Breakpoints</h3>
+
+<p><em>New in 0.5</em>  It is now possible to set a breakpoint for when an
+exception is thrown. <code>jdibug-break-on-exception</code> will prompt for
+the qualified name of a class.  When an exception of that class is
+about to be thrown, the thread will be suspended.
+
+   <p><code>jdibug-break-on-exception</code> will also ask if it should break for
+caught or uncaught exceptions.  Due to interactions with native
+methods and compiler-generated code, it is possible for a caught
+exception to be reported as uncaught and vice versa.
 
 <div class="node">
 <a name="Stepping"></a>
@@ -332,6 +363,18 @@ Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
 <p>The breakpoints buffer shows a list of the current active and disabled
 breakpoints. Clicking on the breakpoints will show the line of code of
 the breakpoint in the source code buffer.
+
+<ul class="menu">
+<li><a accesskey="1" href="#Conditional-Breakpoints">Conditional Breakpoints </a>:  Breaking when a condition is satisfied
+</ul>
+
+<div class="node">
+<a name="Conditional-Breakpoints"></a>
+<p><hr>
+Previous:&nbsp;<a rel="previous" accesskey="p" href="#Breakpoints-Browser">Breakpoints Browser</a>,
+Up:&nbsp;<a rel="up" accesskey="u" href="#Breakpoints-Browser">Breakpoints Browser</a>
+
+</div>
 
 <h3 class="section">9.1 Conditional Breakpoints</h3>
 

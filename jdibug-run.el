@@ -93,14 +93,14 @@ and the application arguments are `jdibug-run-application-args'"
 		   (count 0)
 		   jvm-ready)
 	  (while (and (not jvm-ready) (< count max-count))
-		(save-excursion
-		  (set-buffer buffer)
-		  (goto-char (point-min))
-		  (if (search-forward-regexp jdibug-run-jvm-ready-regexp
-									 (point-max) t)
-			  (setq jvm-ready t)
-			(redisplay t)
-			(sleep-for interval)))))
+		 (with-current-buffer buffer
+			(save-excursion
+			  (goto-char (point-min))
+			  (if (search-forward-regexp jdibug-run-jvm-ready-regexp
+												  (point-max) t)
+					(setq jvm-ready t)
+				 (redisplay t))))
+			(sleep-for interval)))
 
 	;; Connect the debugger
 	(jdibug-connect)))
