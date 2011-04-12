@@ -149,6 +149,9 @@ C-b}. Multiple breakpoints will be installed for the first line of
 every method in the class. Note that the pseudo method @code{<init>}
 will also be breakpoint-ed.
 
+Attempting to set a breakpoint at a method declaration will not have
+an effect (unless that line also contains executable code).
+
 @emph{New in 0.4}  Previous versions did not support breakpoints in
 inner classes.  Version 0.4 should support this functionality.
 Version 0.5 fixed bugs where these breakpoints were not always set.
