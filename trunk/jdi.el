@@ -38,8 +38,8 @@
 (require 'elog)
 (require 'jdwp)
 
-
 (elog-make-logger jdi)
+
 
 (defvar jdi-unit-testing nil)
 
@@ -71,6 +71,9 @@
   suspended-frames
 
   (objects (make-hash-table :test 'equal)) ;; hash table where key=object-id value=jdi-object
+
+  ;; Exception breakpoint workaround data
+  (break-on-exception-data (make-hash-table))
   )
 
 (defstruct (jdi-reference-type (:include jdi-mirror))
@@ -92,7 +95,8 @@
   interfaces-count ;; we use this to see whether the interfaces field have been resolved or not
   ;; list of jdi-method
   methods
-  ;; list of nested classes
+  ;; list of nested classes.  This is a cached value and might be nil.
+  ;; Use jdi-class-get-nested-classes instead.
   nested-classes)
 
 (defstruct (jdi-interface (:include jdi-reference-type)))
@@ -243,6 +247,35 @@
 				  (:class-pattern . ((:length . ,(length signature))
 									 (:string . ,signature))))))))
 	(make-jdi-event-request :virtual-machine vm :data data)))
+
+(defun jdi-event-request-manager-create-break-on-exception (erm vm class-id caught uncaught)
+  (let ((data `((:event-kind     . ,jdwp-event-exception)
+					 (:suspend-policy . ,jdwp-suspend-policy-event-thread)
+					 (:modifiers      . 1)
+					 (:modifier
+					  ((:mod-kind . ,jdwp-mod-kind-exception-only)
+					 	(:class-pattern . (
+					 							 (:exception . ,class-id)
+					 							 (:caught . ,caught)
+					 							 (:uncaught . ,uncaught)))))
+
+)))
+	(make-jdi-event-request :virtual-machine vm :data data)))
+
+(defun jdi-event-request-manager-create-break-on-exception-workaround (erm vm class-id caught uncaught)
+  "It appears that the exception-only modifier does not work, as
+the event is never sent.  This method generates an event request
+that breaks for all exceptions.  The handling code must then
+check the caught/uncaught properties and if the exception is the
+correct class."
+  (let ((data `((:event-kind     . ,jdwp-event-exception)
+					 (:suspend-policy . ,jdwp-suspend-policy-event-thread)
+					 (:modifiers      . 0)
+					 )))
+	 (make-jdi-event-request :virtual-machine vm :data data)))
+
+(defstruct jdi-break-on-exception-workaround-data
+  class-id caught uncaught)
 
 (defun jdi-event-request-enable (er)
   (let ((reply (jdwp-send-command (jdi-mirror-jdwp er) "set" (jdi-event-request-data er))))
@@ -490,7 +523,9 @@
   (jdi-debug "jdi-class-get-methods:%s" (jdi-class-id class))
   (if (jdi-class-methods class)
 	  (jdi-class-methods class)
-	(let ((reply (jdwp-send-command (jdi-mirror-jdwp class) "methods" `((:ref-type . ,(jdi-class-id class))))))
+	(let ((reply (jdwp-send-command (jdi-mirror-jdwp class)
+											  (jdi-get-methods-command-name class)
+											  `((:ref-type . ,(jdi-class-id class))))))
 	  (jdi-debug "number of methods:%s" (bindat-get-field reply :methods))
 	  (setf (jdi-class-methods class)
 			(loop for method in (bindat-get-field reply :method)
@@ -507,12 +542,18 @@
   (jdi-debug "jdi-class-get-signature")
   (if (jdi-class-signature class)
 	  (jdi-class-signature class)
-	(let ((reply (jdwp-send-command (jdi-mirror-jdwp class) (if (jdi-virtual-machine-has-generic-p (jdi-mirror-virtual-machine class))
-																"signature-with-generic"
-															  "signature")
-									`((:ref-type . ,(jdi-class-id class))))))
+	(let ((reply (jdwp-send-command (jdi-mirror-jdwp class)
+											  (if (jdi-virtual-machine-has-generic-p
+													 (jdi-mirror-virtual-machine class))
+													"signature-with-generic"
+												 "signature")
+											  `((:ref-type . ,(jdi-class-id class))))))
 	  (setf (jdi-class-generic-signature class) (jdwp-get-string reply :generic-signature)
-			(jdi-class-signature class) (jdwp-get-string reply :signature)))))
+			  (jdi-class-signature class) (jdwp-get-string reply :signature)))))
+
+(defun jdi-class-get-signature-by-id (vm class-id)
+  (let ((class (jdi-virtual-machine-get-class-create vm class-id)))
+	 (jdi-class-get-signature class)))
 
 (defun jdi-class-get-generic-signature (class)
   (jdi-debug "jdi-class-get-generic-signature")
@@ -523,16 +564,77 @@
 		(setf (jdi-class-signature class) (jdwp-get-string reply :signature)
 			  (jdi-class-generic-signature class) (jdwp-get-string reply :generic-signature))))))
 
+(defcustom jdi-class-nested-classes-workaround t
+  "The default 1.6 JVM will not return anonymous nested classes.
+Among other things, this can break setting breakpoints in such
+classes.  If this is true, an alternate implementation is used
+that works around this problem.  It is possible for the
+workaround to return incorrect values is classes are created that
+have $ in the class name but are not inner classes."
+  :type 'boolean
+  :group 'jdibug)
+
 (defun jdi-class-get-nested-classes (class)
-  "Return the (possibly cached) list of nested classes for this class.  Note: this is not implemented in the default 1.6 JVM."
+  "Return the (possibly cached) list of nested classes for this class.  Note: this is not implemented in the default 1.6 JVM for anonymous classes.  As a workaround, if `jdi-class-nested-classes-workaround' is non-nil, we use a workaround to query for all classes and match against the names to determine the direct nested classes."
   (jdi-debug "jdi-class-get-nested-classes")
   (or (jdi-class-nested-classes class)
-      (let ((reply (jdwp-send-command (jdi-mirror-jdwp class) "nested-classes"
-				      `((:ref-type . ,(jdi-class-id class))))))
-	(setf (jdi-class-methods class)
-	      (loop for nested in (bindat-get-field reply :nested)
-		    collect nested
-		    do (jdi-debug "jdi-class-get-nested-classes:id=%s" nested))))))
+		(setf (jdi-class-nested-classes class)
+				(if jdi-class-nested-classes-workaround
+					 (jdi-fetch-nested-classes-workaround class)
+				  (jdi-fetch-nested-classes class)))
+			 ;; TODO: create a class-prepare event to update the list of
+			 ;; nested classes if additional nested classes are loaded.
+		))
+
+(defun jdi-fetch-nested-classes-workaround (class)
+  "Get the nested classes of CLASS by fetching all the classes,
+then filter out any that do not match the signature of a nested
+class of CLASS.  This works around the bug in JDWP that does not
+return anonymous nested classes when asking for nested classes.
+It is probably very slow."
+  (let* ((vm (jdi-mirror-virtual-machine class))
+			(candidate-classes (jdi-get-all-classes vm))
+			(signature  (jdi-class-get-signature class))
+			(sig-less-1 (substring signature 0 (1- (length signature))))
+			(inner-sig-re (concat "^"
+										 (regexp-quote sig-less-1)
+										 "\\$[^$]+;$")))
+			(jdi-debug "Accepting classes of the form %s" inner-sig-re)
+	 (loop for nested in candidate-classes
+			 for nested-sig = (jdi-class-get-signature nested)
+			 if (string-match inner-sig-re nested-sig)
+			 collect nested)))
+
+(defun jdi-get-all-classes (vm)
+  "Get all classes from a VM. This is probably very slow and should not be used."
+  (jdi-debug "jdi-get-all-classes")
+  (let* ((jdwp  (jdi-virtual-machine-jdwp vm))
+			(reply (jdwp-send-command jdwp "all-classes" nil)))
+	(jdi-debug "number of classes matched:%s" (bindat-get-field reply :classes))
+	(loop for class       in (bindat-get-field reply :class)
+		  for type-id      =  (bindat-get-field class :type-id)
+		  for ref-type-tag =  (bindat-get-field class :ref-type-tag)
+		  for status       =  (bindat-get-field class :status)
+		  for signature    =  (jdwp-get-string class :signature)
+		  for newclass     =  (jdi-virtual-machine-get-class-create vm type-id
+																	:signature signature
+																	:ref-type-tag ref-type-tag
+																	:status status)
+		  collect newclass)))
+
+
+(defun jdi-fetch-nested-classes (class)
+  "Get the nested classes of CLASS by fetching the classes using
+the nested-classes command."
+  (let* ((jdwp  (jdi-mirror-jdwp class))
+			(reply (jdwp-send-command jdwp "nested-types"
+											  `((:ref-type . ,(jdi-class-id class))))))
+	 (loop with vm = (jdi-class-virtual-machine class)
+			 for nested in (bindat-get-field reply :nested)
+			 for id = (bindat-get-field nested :id)
+			 for new-class = (jdi-virtual-machine-get-class-create vm id)
+			 collect new-class
+			 do (jdi-debug "jdi-class-get-nested-classes:id=%s" id))))
 
 
 (defun jdi-method-get-signature (method)
@@ -579,34 +681,123 @@
   "Set breakpoint and return a list of jdi-event-request"
 
   (jdi-debug "jdi-virtual-machine-set-breakpoint:signature=%s:line=%s" signature line)
+  (let* ((classes (jdi-virtual-machine-get-classes-by-signature vm signature))
+			(result (jdi-virtual-machine-set-breakpoint-1 vm classes line))
+			(request-manager (jdi-virtual-machine-event-request-manager vm))
+			(class-name (car (jdi-jni-to-print signature)))
+			;; the class might be loaded again by another class loader
+			;; so we install the class prepare event anyway.
+			(er (jdi-event-request-manager-create-class-prepare
+				  request-manager vm class-name)))
+	 (jdi-event-request-enable er)
+
+	 ;; Install a handler for inner classes if we didn't set the
+	 ;; breakpoint, since that might be what the problem was
+	 (unless result
+		(setq er (jdi-event-request-manager-create-class-prepare
+					 request-manager vm (concat class-name "$*")))
+		(jdi-event-request-enable er))
+
+	 result))
+
+(defun jdi-virtual-machine-set-breakpoint-1 (vm classes line)
+  "Attempt to set a breakpoint in CLASSES and all inner classes at LINE"
+	(if classes
+		 (let (found result)
+			(dolist (class classes)
+			  ;; If we found the breakpoint in one class, we can skip the
+			  ;; rest of the iterations (which should be over other inner
+			  ;; classes)
+			  (jdi-debug "jdi-virtual-machine-set-breakpoint-1 checking %s" (jdi-class-signature class))
+			  (unless found
+				 (dolist (location (jdi-class-get-locations-of-line class line))
+					(setq found t)
+					(let ((er (jdi-event-request-manager-create-breakpoint
+								  (jdi-virtual-machine-event-request-manager vm)
+								  location)))
+					  (jdi-event-request-enable er)
+					  (push er result)))
+				 ;; If we did not find the breakpoint, look in inner classes.
+				 (unless found
+					(setq result (append
+									  (jdi-virtual-machine-set-breakpoint-1
+										vm
+										(jdi-class-get-nested-classes class)
+										line)
+									  result)))))
+			result)))
+
+
+(defcustom jdi-break-on-exception-workaround t
+  "Apply a workaround to an apparent bug which causes the JVM to
+not report exceptions if they are restricted to a specific
+class."
+   :type 'boolean
+  :group 'jdibug)
+
+(defun jdi-virtual-machine-set-break-on-exception (vm signature caught uncaught)
+  "Set break for when an exception is thrown and return a list of
+jdi-event-request.  SIGNATURE should be a JNI format
+signature (e.g., Ljava/lang/RuntimeException not
+java.lang.RuntimeException.
+
+Returns a list of event requests sent to the VM.  This may be nil
+if no class matching SIGNATURE is found."
+
+  (jdi-debug "jdi-virtual-machine-set-break-on-exception:signature=%s:caught=%s:uncaught=%s"
+			 signature caught uncaught)
   (let (result
 		(classes (jdi-virtual-machine-get-classes-by-signature vm signature)))
-	(if classes
-		;; TODO: if we don't find the location here, check the inner classes
-		(dolist (class classes)
-		  (dolist (location (jdi-class-get-locations-of-line class line))
-			(let ((er (jdi-event-request-manager-create-breakpoint
-					   (jdi-virtual-machine-event-request-manager vm)
-					   location)))
-			  (jdi-event-request-enable er)
-			  (push er result)))))
+	(dolist (class classes)
+	  (if (jdi-class-instance-of-p
+			 class
+			 (jdi-class-name-to-class-signature "java.lang.Throwable"))
+		  (progn
+			 ;; Create the event request and enable it.
+			 (let* ((class-id  (jdi-class-id class))
+					 (erm (jdi-virtual-machine-event-request-manager vm))
+					 ;; Form of the event request depends on if the
+					 ;; workaround is enabled.
+					 (er (funcall (if jdi-break-on-exception-workaround
+											'jdi-event-request-manager-create-break-on-exception-workaround
+										 'jdi-event-request-manager-create-break-on-exception)
+									  erm vm class-id caught uncaught))
+					 (request-id (jdi-event-request-enable er)))
+				;; Store the data for the exception workaround.  Always
+				;; store it in case the user turns on the workaround
+				;; later.
+				(puthash request-id (make-jdi-break-on-exception-workaround-data
+											:class-id class-id
+											:caught caught
+											:uncaught uncaught)
+							(jdi-virtual-machine-break-on-exception-data vm))
+				(push er result)))
+		 (jdi-warn "%s is not a subclass of Throwable.  Not setting break when thrown."
+					  (jdi-jni-to-print (jdi-class-get-signature class)))))
 
 	;; the class might be loaded again by another class loader
 	;; so we install the class prepare event anyway
-	(let ((er (jdi-event-request-manager-create-class-prepare (jdi-virtual-machine-event-request-manager vm) vm (car (jdi-jni-to-print signature)))))
+	(let ((er (jdi-event-request-manager-create-class-prepare
+			   (jdi-virtual-machine-event-request-manager vm)
+			   vm
+			   (car (jdi-jni-to-print signature)))))
 	  (jdi-event-request-enable er))
+	;; Return event requests.
 	result))
 
-(defun jdi-request-event-prepare-inner-classes (class)
+
+
+(defun jdi-event-request-manager-create-inner-class-prepare (class)
   "Request prepare events for the inner classes of CLASS"
-  (jdi-debug "jdi-request-event-prepare-inner-classes %s" (jdi-class-signature class))
+  (jdi-debug "jdi-event-request-manager-create-inner-class-prepare %s" (jdi-class-signature class))
   (let* ((vm (jdi-mirror-virtual-machine class))
-		 (signature (jdi-class-signature class))
-		 (er (jdi-event-request-manager-create-class-prepare
-			  (jdi-virtual-machine-event-request-manager vm)
-			  vm
-			  (concat (car (jdi-jni-to-print signature)) "$*"))))
-	(jdi-event-request-enable er)))
+			(signature (jdi-class-signature class))
+			(er (jdi-event-request-manager-create-class-prepare
+				  (jdi-virtual-machine-event-request-manager vm)
+				  vm
+				  (concat (car (jdi-jni-to-print signature)) "$*"))))
+	 er))
+
 
 
 (defun jdi-virtual-machine-has-generic-p (vm)
@@ -742,7 +933,7 @@
 	  (jdi-method-variables method)
 
 	(let ((reply (jdwp-send-command (jdi-mirror-jdwp method)
-									"variable-table"
+											  (jdi-get-variable-table-command-name method)
 									`((:ref-type . ,(jdi-class-id (jdi-method-class method)))
 									  (:method-id . ,(jdi-method-id method))))))
 	  (jdi-trace "variable-table arg-count:%s slots:%s" (bindat-get-field reply :arg-cnt) (bindat-get-field reply :slots))
@@ -1138,7 +1329,9 @@ Interfaces returned by interfaces()  are returned as well all superinterfaces."
 (defun jdi-reference-type-get-fields (reference-type)
   "Get all the fields in this reference-type only."
   (jdi-with-cache jdi-reference-type-fields-cache reference-type
-				  (let ((reply (jdwp-send-command (jdi-mirror-jdwp reference-type) "fields" `((:ref-type . ,(jdi-reference-type-id reference-type))))))
+				  (let ((reply (jdwp-send-command (jdi-mirror-jdwp reference-type)
+															 (jdi-get-fields-command-name reference-type)
+															 `((:ref-type . ,(jdi-reference-type-id reference-type))))))
 					(jdi-debug "jdi-reference-type-get-fields: %s's fields:%s" (jdi-reference-type-id reference-type) (bindat-get-field reply :declared))
 					(loop for field in (bindat-get-field reply :field)
 						  collect (make-jdi-field :virtual-machine (jdi-mirror-virtual-machine reference-type)
@@ -1176,20 +1369,63 @@ list whose nth element is the array element at index FIRST + n"
 			   (reply-array (jdwp-unpack-arrayregion (jdi-mirror-jdwp array) reply)))
 		  (jdi-trace "got array-get-values:%s" reply-array)
 		  (if (or (= (bindat-get-field reply-array :type) jdwp-tag-object)
-				  (= (bindat-get-field reply-array :type) jdwp-tag-array))
-			  (loop for value-reply in (bindat-get-field reply-array :value)
-					for i from first to (1- last)
-					collect (jdi-virtual-machine-get-value-create (jdi-mirror-virtual-machine array)
-																  (bindat-get-field value-reply :value :type)
-																  (bindat-get-field value-reply :value :u :value)))
-			(loop for value-reply in (bindat-get-field reply-array :value)
-				  for i from first to (1- last)
-				  collect (jdi-virtual-machine-get-value-create (jdi-mirror-virtual-machine array)
-																(bindat-get-field reply-array :type)
-																(bindat-get-field value-reply :value)))))))))
+			  (= (bindat-get-field reply-array :type) jdwp-tag-array))
+		      (loop for value-reply in (bindat-get-field reply-array :value)
+			    for i from first to (1- last)
+			    collect (jdi-virtual-machine-get-value-create (jdi-mirror-virtual-machine array)
+									  (bindat-get-field value-reply :value :type)
+									  (bindat-get-field value-reply :value :u :value)))
+		    (loop for value-reply in (bindat-get-field reply-array :value)
+			  for i from first to (1- last)
+			  collect (jdi-virtual-machine-get-value-create (jdi-mirror-virtual-machine array)
+									(bindat-get-field reply-array :type)
+									(bindat-get-field value-reply :value)))))))))
 
 (defun jdi-handle-breakpoint-event (jdwp event)
   (jdi-debug "jdi-handle-breakpoint-event")
+  (jdi-handle-general-breakpoint-event jdwp event 'jdi-breakpoint-hooks))
+
+(defun jdi-handle-exception-event (jdwp event)
+  "Handle an exception EVENT from the JDWP. TODO: Handle multiple
+events in one message."
+  (jdi-debug "jdi-handle-exception-event")
+  (let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
+			(exception (jdi-virtual-machine-get-object-create
+							vm (make-jdi-object
+								 :id (bindat-get-field event :u :exception :object))))
+			(exc-type (jdi-object-get-reference-type exception))
+			)
+	 (when (jdi-breakpoint-conditions-met vm
+												 (bindat-get-field event :u :request-id)
+												 (bindat-get-field event :u :catch-location)
+												 exc-type)
+		(jdi-debug "exception: %s %s"
+						  (jdi-class-get-signature exc-type)
+						  (jdi-object-get-values exception
+														 (jdi-reference-type-get-all-fields exc-type)))
+		(jdi-handle-general-breakpoint-event jdwp event 'jdi-exception-hooks))))
+
+(defun jdi-breakpoint-conditions-met (vm request-id catch-location exc-type)
+  (if jdi-break-on-exception-workaround
+		(let* ((exc-data (gethash request-id
+										  (jdi-virtual-machine-break-on-exception-data vm)))
+				 (class-id (jdi-break-on-exception-workaround-data-class-id exc-data))
+				 (caught (jdi-break-on-exception-workaround-data-caught exc-data))
+				 (uncaught (jdi-break-on-exception-workaround-data-uncaught exc-data))
+				 (caught-class-id (bindat-get-field catch-location :class-id))
+				 is-caught)
+		  ;; Uncaught exceptions will have all zeros in the class-id of the catch location.
+		  (setq is-caught (notevery 'zerop caught-class-id))
+		  (when is-caught
+			 (jdi-debug "jdi-breakpoint-conditions-met: caught in %s"
+							(jdi-class-get-signature-by-id vm caught-class-id)))
+
+		  (and (or (eq caught is-caught)
+					  (eq uncaught (not is-caught)))
+				 (jdi-class-instance-of-by-id-p exc-type class-id)))
+	 t))
+
+(defun jdi-handle-general-breakpoint-event (jdwp event hooks)
   (let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
 		 (thread-id (bindat-get-field event :u :thread))
 		 (class-id (bindat-get-field event :u :location :class-id))
@@ -1215,7 +1451,10 @@ list whose nth element is the array element at index FIRST + n"
 	(setf (jdi-virtual-machine-suspended-frames vm) (nreverse (cons frame (jdi-virtual-machine-suspended-frames vm))))
 
 	(setf (jdi-virtual-machine-suspended-thread-id vm) (bindat-get-field event :u :thread))
-	(run-hook-with-args 'jdi-breakpoint-hooks thread location request-id)))
+	(run-hook-with-args hooks thread location request-id)))
+
+
+
 
 (defun jdi-handle-step-event (jdwp event)
   (jdi-debug "jdi-handle-step-event")
@@ -1248,10 +1487,14 @@ list whose nth element is the array element at index FIRST + n"
 (defun jdi-handle-class-prepare-event (jdwp event)
   (jdi-debug "jdi-handle-class-prepare-event")
   (let* ((vm (jdwp-get jdwp 'jdi-virtual-machine))
-		 (type-id (bindat-get-field event :u :type-id))
-		 (signature (jdwp-get-string event :u :signature))
-		 (thread (jdi-virtual-machine-get-object-create vm (make-jdi-thread :id (bindat-get-field event :u :thread))))
-		 (newclass (jdi-virtual-machine-get-class-create vm type-id :signature signature)))
+			(type-id (bindat-get-field event :u :type-id))
+			(signature (jdwp-get-string event :u :signature))
+			(thread
+			 (jdi-virtual-machine-get-object-create vm
+																 (make-jdi-thread
+																  :id (bindat-get-field event :u :thread))))
+			(newclass (jdi-virtual-machine-get-class-create vm type-id
+																			:signature signature)))
 	(jdi-debug "thread status: %s %d" (jdi-thread-get-status thread)
 			   (jdi-thread-get-suspend-count thread))
 	(jdi-debug "class-loaded:%s" signature)
@@ -1318,7 +1561,9 @@ This handles the event later, once we are connected."
 	  (apply 'jdi-handle-vm-start args))))
 
 (defun jdi-class-name-to-class-signature (class-name)
-  "Converts a.b.c class name to JNI class signature."
+  "Converts a.b.c CLASS-NAME to JNI class signature.  Inner
+classes must be specified using $ notation (e.g.,
+java.util.Map$Entry, not java.util.Map.Entry)."
   (let ((buf class-name))
 	(setf buf (replace-regexp-in-string "\\." "/" buf))
 	(setf buf (format "L%s;" buf))
@@ -1332,6 +1577,15 @@ This handles the event later, once we are connected."
 		 (signatures (mapcar 'jdi-class-get-signature (cons class (append supers interfaces)))))
 	(jdi-debug "jdi-class-instance-of-p:all-signatures=%s" signatures)
 	(member signature signatures)))
+
+(defun jdi-class-instance-of-by-id-p (class id)
+  "Test if CLASS has a super class with ID"
+  (let* ((supers (jdi-class-get-all-super class))
+		 (interfaces (jdi-class-get-all-interfaces class))
+		 (all-ids (mapcar 'jdi-class-id (cons class (append supers interfaces)))))
+	(jdi-debug "jdi-class-instance-of-by-id-p:all-ids=%s" all-ids)
+	(member id all-ids)))
+
 
 (defun jdi-object-instance-of-p (object signature)
   (jdi-debug "jdi-object-instance-of-p:signature=%s" signature)
@@ -1387,7 +1641,10 @@ This handles the event later, once we are connected."
 (defalias 'jdi-value-invoke-method 'jdi-object-invoke-method)
 
 (defvar jdi-breakpoint-hooks nil
-  "callback to be called when breakpoint is hit, called with (jdi-thread jdi-location)")
+  "callback to be called when breakpoint is hit, called with (jdi-thread jdi-location event-request)")
+
+(defvar jdi-exception-hooks nil
+  "callback to be called when exception is hit, called with (jdi-thread jdi-location event-request)")
 
 (defvar jdi-step-hooks nil
   "callback to be called when execution is stopped from stepping, called with (jdi-virtual-machine thread-id class-id method-id line-code-index)")
@@ -1396,7 +1653,7 @@ This handles the event later, once we are connected."
   "callback to be called when debuggee detached from us, called with (jdi-virtual-machine)")
 
 (defvar jdi-class-prepare-hooks nil
-  "handler to be called when a class is prepared, called with (jdi-class)")
+  "handler to be called when a class is prepared, called with (jdi-class thread)")
 
 (defvar jdi-class-unload-hooks nil
   "handler to be called when a class is unloaded, called with (jdi-class)")
@@ -1422,6 +1679,7 @@ This handles the event later, once we are connected."
 					`(,jdwp-event-thread-end    . jdi-handle-thread-end)
 					`(,jdwp-event-vm-death      . jdi-handle-vm-death)
 					`(,jdwp-event-vm-start      . jdi-handle-vm-start)
+					`(,jdwp-event-exception     . jdi-handle-exception-event)
 					))
 		 (event-kind (if (integerp event) event (bindat-get-field event :event-kind)))
 		 (handler (find-if (lambda (pair)
@@ -1449,5 +1707,39 @@ This handles the event later, once we are connected."
 		(t
 		 (jdi-error "Unknown type (%s) for value: %s" type jdi-value)
 		 (error "%s is not a numerical type" (jdwp-type-name type))))))
+
+(defun jdi-get-fields-command-name (reference-type)
+  "Return command name for getting fields"
+  (if (jdi-virtual-machine-has-generic-p
+       (jdi-mirror-virtual-machine reference-type))
+      (progn
+        (jdi-debug "JVM has generic")
+        "fields-with-generic")
+    (progn
+      (jdi-debug "JVM does not support generic")
+      "fields")))
+
+(defun jdi-get-methods-command-name (class)
+  "Return command name for getting methods"
+  (if (jdi-virtual-machine-has-generic-p
+		 (jdi-mirror-virtual-machine class))
+      (progn
+        (jdi-debug "JVM has generic")
+        "methods-with-generic")
+    (progn
+      (jdi-debug "JVM does not support generic")
+      "methods")))
+
+(defun jdi-get-variable-table-command-name (method)
+  "Return command name for getting variable table"
+  (if (jdi-virtual-machine-has-generic-p
+		 (jdi-mirror-virtual-machine method))
+		(progn
+        (jdi-debug "JVM has generic")
+        "variable-table-with-generic")
+    (progn
+      (jdi-debug "JVM does not support generic")
+      "variable-table")))
+
 
 (provide 'jdi)

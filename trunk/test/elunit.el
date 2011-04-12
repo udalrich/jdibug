@@ -141,6 +141,7 @@ arguments."
 
 (defmacro deftest (name suite &rest body)
   "Define a test NAME in SUITE with BODY."
+  (declare (debug sexp sexp &rest form))
   `(save-excursion
 	 ;; In theory, we should use load-file-name only if load-in-progress,
 	 ;; but it appears that load-in-progress is not set when loading a file
@@ -197,6 +198,7 @@ arguments."
 	  (set-buffer elunit-report-buffer-name)
 	  (erase-buffer)))
   (elunit-run-suite (symbol-value (intern suite)))
+  (message "%s" elunit-failures)
   (message "%d tests with %d problems."
            elunit-test-count (length elunit-failures)))
 
@@ -269,7 +271,8 @@ arguments."
 (defun fail (&rest args)
   "Signal a test failure in a way that elunit understands.
 Takes the same ARGS as `error'."
-    (signal 'elunit-test-failed (list (apply 'format args))))
+  (message (apply 'format args))
+  (signal 'elunit-test-failed (list (apply 'format args))))
 
 (font-lock-add-keywords 'emacs-lisp-mode
                         ;; Make elunit tests look like defuns.
@@ -287,10 +290,10 @@ Takes the same ARGS as `error'."
   (unless actual
     (fail "%s expected to be non-nil" message)))
 
-(defun assert-nil (actual)
+(defun assert-nil (actual &optional message)
   "Fails if ACTUAL is non-nil."
   (when actual
-    (fail "%s expected to be nil" actual)))
+    (fail "%s expected to be nil: %s" actual message)))
 
 (defun assert-equal (expected actual &optional message)
   "Fails if EXPECTED is not equal to ACTUAL."
@@ -346,12 +349,17 @@ Takes the same ARGS as `error'."
 				  test-count failure-count))
   (newline)
   (mapc (lambda (test)
-		  (insert (format "  Test %20s %20s:%-5d \n"
-						  (test-name test)
-						  (test-file test)
-						  (test-line test)))
-		  (insert (format "     %s\n" (test-message test)))
-		  (insert (format "     %s\n" (test-problem test))))
+			 (let ((start (point))
+					 overlay)
+				(insert (format "  Test %20s %20s:%-5d \n"
+									 (test-name test)
+									 (test-file test)
+									 (test-line test)))
+				(setq overlay (make-overlay start (point)))
+				(overlay-put overlay 'face 'elunit-fail-face)
+				(overlay-put overlay 'priority 100))
+			 (insert (format "     %s\n" (test-message test)))
+			 (insert (format "     %s\n" (test-problem test))))
 		  elunit-failures))
 (when (not noninteractive)
   (add-hook 'elunit-done-running-hook 'elunit-report))
