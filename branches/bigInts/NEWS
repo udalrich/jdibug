@@ -1,0 +1,126 @@
+* JDIbug News                  -*- outline -*-
+
+* 0.5 (Current)
+
+** Added jdibug-remove-all-breakpoints
+Removes all breakpoints with one interactive command.
+
+** Large arrays are displayed in segments
+Displaying all the entries of a large array (1000+ entries) is slow, and it is rare that the user will want to
+look at every entry, so much of the time spent retrieving the entries is wasted.  If you are looking for entry
+18374 in a 938432 element array, it can also take a long time just to find the appropriate entry.
+
+With the current version, if the size of the array exceeds jdibug-locals-max-array-size, expanding the array
+shows subarrays, which can be expanded.  While it might take 3 or 4 clicks to find the entry, those clicks
+respond much more quickly so the process should be much faster, even with the extra actions.
+
+** Added support for Android and other JVM that only implement JDWP -with-generic commands.
+The debug interface defines methods that do not include generic
+information (required for pre-1.5 JVM) and methods that do include
+generic information.  The latter are now used if available.  Thanks to
+Lei Wang for the patch.
+
+** Added breakpoints for when an exception is thrown
+`jdibug-break-on-exception' will set a breakpoint for when the given
+exception is thrown.  The name must be fully qualified, but it can be
+a superclass of the actual exception thrown.  For example,
+java.lang.RuntimeException would break if a NullPointerException was
+thown.
+
+The method asks about whether caught or uncaught exceptions should
+cause a break.  However, as described in the JDWP documentation, it is
+possible for either type of exception to be reported as the other type.
+
+
+* 0.4 (2010-12-05)
+
+** Added simple function to start a program and attach a debugger.
+See `jdibug-run'.
+
+** Added expression watchpoints.
+The *JDIbug-Watchpoints* window now displays expressions.  Current
+support is moderate:
+***  Multiplication, division, addition, subtraction
+***  Logical and, or
+***  Numerical comparisons (<,>,<=,>=,==,!=)
+***  Array element access
+***  Constant numbers
+***  Field access via dot notation (a.b.c)
+***  Method calls (foo.bar(baz)) (only tested for no-arg methods)
+More should be added soon.
+
+** Added conditional breakpoints.
+Any valid expression for a watchpoint that evaluates to a boolean can
+be added as condition to breakpoint.  The check on a boolean value is
+made at runtime.  To add a conditional breakpoint, create a breakpoint
+normally.  Select it in the breakpoints buffer and type "c".
+
+** Added support for breakpoints in inner classes.
+In previous version, breakpoints in inner classes where ignored.  They
+now work in both anonymous and named inner classes.
+
+* 0.3 (2010-04-28)
+
+** Supports multi dimensional array
+Now supports displaying/expanding of multi dimensional array.
+
+** Supports generics
+Now the locals browser supports displaying generics as
+ArrayList<String>. I do not understand why Eclipse is displaying it
+as ArrayList<E>!
+
+** Supports connecting to multiple debuggee
+Now JDIbug can connect to multiple debuggee on different host:port.
+The configuration parameter jdibug-connect-host and jdibug-connect-port
+have been merged into a jdibug-connect-hosts which should be set
+to a list, containing strings of "host:port". You can then set
+breakpoints in any of the files in any of the debuggee.
+
+** Supports switching active thread
+Clicking on a thread in the frames display makes that thread active
+for future commands like step and resume.
+
+** Menu of commands
+A menu of the commonly used commands has been added.
+
+* 0.2 (2009-05-07)
+
+** Supports relative paths in jde-source-paths
+Thanks to Len Trigg <len@netvalue.net.nz>
+
+** Class that contains attributes pointing back to itself
+If an attribute in a class contain a reference to itself, now the node
+will just display as "this" and it will not be expandable, this is to
+prevent confusion to the user because the attribute will be infinitely
+expandable.
+
+** Class loaded by multiple class loaders
+Previously, if a class is loaded by that once by different class
+loaders, setting breakpoint on the class might not work
+properly. Fixed it.
+
+** Invoking methods
+When an object is expanded, there will be a pseudo node named
+"methods" at the end of the list. Expanding the node will invoke the
+method on the object. Only methods which do not need arguments can be
+invoked.
+
+** Break on all methods within a class
+Now you can break on all the methods a class by positioning the cursor
+on the first line in the class (usually "^public class...") and
+calling jdibug-toggle-breakpoint or C-c C-c C-b. Multiple breakpoints
+will be installed for the first line of every method in the
+class. Note that the pseudo method <init> will also be breakpoint-ed.
+
+** Setting breakpoint before debuggee is connected
+You can now set the breakpoints before connecting to the debuggee.
+
+** Fixed bug where expanding HttpServletRequest causes JBOSS to crash
+As reported by Lei Wang <tendant@gmail.com>, when expanding
+HttpServletRequest under JBOSS, it causes JBOSS to crash, the reason
+being that there are several toString methods within the Integer
+object, and we were invoking the wrong one. The fix makes sure we only
+invoke those methods that takes no argument and returns a string.
+
+* 0.1 (2008-11-04)
+Initial Release

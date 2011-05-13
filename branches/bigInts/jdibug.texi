@@ -1,0 +1,383 @@
+\input texinfo     @c -*- mode: texinfo; mode:auto-fill -*-
+@c %**start of header
+@setfilename jdibug.info
+@settitle JDIbug User Manual
+@c %**end of header
+
+@ifnottex
+@node Top, Rationale, (dir), (dir)
+@top JDIbug User Manual
+@end ifnottex
+
+@menu
+* Rationale::                   Why I created JDIbug
+* Installation::                How to install JDIbug
+* Configuration::               Configuring JDIbug
+* Connecting::                  Connecting to and Disconnecting from a debuggee
+* Breakpoints::                 Setting and clearing breakpoints
+* Stepping::                    Stepping into, over and out of source codes
+* Locals Browser::              Using the Locals Browser
+* Frames Browser::              Using the Frames Browser
+* Breakpoints Browser::         Using the Breakpoint Browser
+* Threads Browser::             Using the Threads Browser
+* Watchpoint Buffer::           Using the Watchpoint Buffer
+* Window Layout::               Changing the default window layout
+* Bug Reporting::               When you think there's a bug in JDIbug
+@end menu
+
+@node Rationale, Installation, Top, Top
+@chapter Rationale
+
+One word, locals browser. As I started using JDEE, there are two
+debuggers that are available, which are jdb and jdebug.
+
+jdb is too simple to be used as a debugger, I find myself doing
+@code{locals} repeatedly while stepping through the codes, and the
+output of @code{locals} are not sorted! It is worse when I want to
+inspect the attributes of particular objects.
+
+jdebug is too slow and buggy for my liking, stepping through the
+source files takes forever.
+
+I then started using jswat, which is very user friendly. But it
+doesn't integrate with Emacs.
+
+So I created JDIbug.
+
+@node Installation, Configuration, Rationale, Top
+@chapter Installation
+
+JDIbug is hosted at googlecode, at
+@uref{http://code.google.com/p/jdibug/}
+
+Download distribution file and untar it into somewhere within
+your @code{load-path}. For example, I keep all my emacs modules under
+my @file{~/emacs/site}, so the jdibug @file{.el} files will go into
+@file{~/emacs/site/jdibug-0.4}.
+
+Then add the path into your @code{load-path}, and @code{require} it,
+for example, I have the following in my @file{.emacs} file:
+
+@example
+(add-to-list 'load-path (expand-file-name "~/emacs/site/jdibug-0.5"))
+(require 'jdibug)
+@end example
+
+You also need to install CEDET from
+@uref{http://cedet.sourceforge.net/}.  The current code was tested
+with the 1.0pre7 release.  If you are using Emacs 23, CEDET should
+already be installed as part of the release.  Otherwise, follow the
+installation instructions from the above link.
+
+That's it, you are good to go.
+
+@node Configuration, Connecting, Installation, Top
+@chapter Configuration
+
+Although JDIbug current does not rely on any data from JDEE, a lot of
+things are made very simple when using JDIbug with JDEE. So please
+@uref{http://jdee.sourceforge.net/install.html,install JDEE} if you have not yet done it.
+
+There are only two parameters that you need to configure before you
+can start using JDIbug, which is the `jdibug-connect-hosts' parameter.
+@code{jdibug-connect-hosts} specifies a list of hostname and ports of
+the debuggee process that you want to debug.  It is possible to
+connect to multiple hosts.  For example, @code{("localhost:6001"
+"server:6002")} would cause JDIbug to attempt to connect to a process
+at port 6001 on the computer starting JDIbug and to port 6002 on the
+machine ``server''.
+
+If you have multiple projects set up using JDEE's @file{prj.el} file,
+you can set the two parameters inside the @file{prj.el} file so that
+different projects can be connected using different host/ports by
+JDIbug.
+
+   If you are using JDEE, you will also want to customize jde-run-option-debug, as shown below.
+
+@image{images/jde-run-option-debug}
+
+   Ensure that you use the same port number when customizing `jdibug-connect-hosts' and `jde-run-option-debug'.
+
+
+If you want to use JDIbug without using JDEE, you need to customize two
+additional parameters.  Customize @code{jdibug-use-jde-source-paths} to false
+(nil).  Then customize @code{jdibug-source-paths} to the location of your
+source.  This should be a list of locations: @code{("~/src")}
+@strong{not} @code{"~/src"}.
+
+   If you are not using JDEE, you will want to add the following lines
+the your java command.  (These values work with the Sun JVM.  Other
+JVM's may need different parameters.)
+@example
+-Xdebug
+-Xrunjdwp:transport=dt_socket,address=6001,server=y,suspend=y
+@end example
+
+@node Connecting, Breakpoints, Configuration, Top
+@chapter Connecting
+After configuring JDIbug, use the key sequence @kbd{C-c C-c C-c} in a
+jde-mode buffer to connect to the debuggee process. By default, the
+frame will be split into windows each displaying different
+buffers with the java source file on the top left, the locals browser
+on the top right, the stack browser on the bottom left, and the
+breakpoints list on the bottom right.
+
+
+To disconnect from the debuggee, use the key sequence @kbd{C-c C-c
+C-d}.
+
+@node Breakpoints, Stepping, Connecting, Top
+@chapter Breakpoints
+You can set breakpoints before or after you have made the connection
+to the debuggee.
+
+To toggle the breakpoint on the current line of java source, use the
+key sequence @kbd{C-c C-c C-b} in the java source buffer. This toggles
+the breakpoints on the current line between disabled, enabled, and no
+breakpoint. The ``disabled'' status is just an easy way of remembering
+that line as a line of interest but you do not want the debugger to
+stop there.
+
+If the line of code is not loaded when the breakpoint is requested, it
+will be marked as pending. When the class is finally loaded, the
+breakpoint will be installed.
+
+You can also break on all the methods a class by positioning the
+cursor on the first line in the class (usually @code{^public class})
+and calling @code{jdibug-toggle-breakpoint} or @kbd{C-c C-c
+C-b}. Multiple breakpoints will be installed for the first line of
+every method in the class. Note that the pseudo method @code{<init>}
+will also be breakpoint-ed.
+
+Attempting to set a breakpoint at a method declaration will not have
+an effect (unless that line also contains executable code).
+
+@emph{New in 0.4}  Previous versions did not support breakpoints in
+inner classes.  Version 0.4 should support this functionality.
+Version 0.5 fixed bugs where these breakpoints were not always set.
+
+@menu
+Other types of breakpoints
+* Exception Breakpoints:: Breaking when an exception is thrown
+@end menu
+
+@node Exception Breakpoints,  , Breakpoints, Breakpoints
+@section Exception Breakpoints
+
+@emph{New in 0.5}  It is now possible to set a breakpoint for when an
+exception is thrown. @code{jdibug-break-on-exception} will prompt for
+the qualified name of a class.  When an exception of that class is
+about to be thrown, the thread will be suspended.
+
+@code{jdibug-break-on-exception} will also ask if it should break for
+caught or uncaught exceptions.  Due to interactions with native
+methods and compiler-generated code, it is possible for a caught
+exception to be reported as uncaught and vice versa.
+
+
+@node Stepping, Locals Browser, Breakpoints, Top
+@chapter Stepping
+When the debugger is suspended, you can use the following key
+sequences to step through the program.
+
+@example
+C-c C-c C-n to step over.
+C-c C-c C-i to step into.
+C-c C-c C-o to step out.
+@end example
+
+As these keys are used very often, I bind them to function keys for
+faster access. I have the following in my .emacs file:
+
+@example
+(define-key jde-mode-map [f8]   'jdibug-step-over)
+(define-key jde-mode-map [M-f8] 'jdibug-step-into)
+(define-key jde-mode-map [f7]   'jdibug-step-out)
+(define-key jde-mode-map [M-f7] 'jdibug-resume)
+@end example
+
+When you are done, you can use the key sequence @kbd{C-c C-c C-r} to
+resume the main thread in the debugger process. Or if you have added
+the snipplet above, you can just @kbd{M-f7} for that.  You can also
+use @kbd{C-c C-c C-a} to resume all threads in the JVM.
+
+@node Locals Browser, Frames Browser, Stepping, Top
+@chapter Locals Browser
+The locals browser uses the emacs tree-mode to display the local
+variables. Each of the variables can be expanded to view the member
+variables by clicking on the expand icon.
+
+When the cursor is over any element in the tree, you can press the
+@kbd{s} key to invoke the @code{toString} method on the variable under
+the cursor. The result will be printed in the echo-area. You can also
+press the @kbd{c} key to print the class name of the object under the
+cursor in the echo area.
+
+One extra feature that is very useful in the Locals Browser is that it
+reduces the number of clicks that you have to do to inspect a
+variable. By default, a number of java objects will be displayed with
+their string representation, for example Boolean, Number, StringBuffer
+etc. For decendants of Collection and Map, there will be extra
+information displayed about the number of items that are within the
+Collection of Map.
+
+If you like the above feature, there's more! You can define custom
+displayer functions for your own java objects, for example, if you
+have a class @code{com.foo.Dog} which have a getter called
+@code{getName}, and you want to see the name of the dog displayed, you
+can just add the following line into your @file{.emacs} (after the
+@code{(require 'jdibug)} line) and viola, you will see the name of the
+dog instead of the @code{Dog} class name. The method that is specified
+must receive no arguments and return a @code{java.lang.String}.
+
+@example
+(add-to-list 'jdi-value-custom-set-strings '("com.foo.Dog" "getName"))
+@end example
+
+When expanding a Collection or Map, the locals browser will be
+displaying the contents as an array instead of having you to click one
+or two more times to see the contents within the Collection or Map.
+
+At the end of every object, there is a pseudo node named @code{methods}
+that can be expanded to show all the methods for that object and also
+static methods of the object's class. Expanding any of the methods
+will invoke the method and the results of the invocation will be shown
+in the expanded node. Currently only methods which does not need
+arguments can be invoked.
+
+@node Frames Browser, Breakpoints Browser, Locals Browser, Top
+@chapter Frames Browser
+The frames buffer is a simple list of all the frames from the
+@code{main} up to the current function. It provides a simple
+caller/callee stack of the current breakpoint. If the frame points to
+a location which can be corresponded to a line of code in the source
+path, the frame will be clickable, and the source code buffer will be
+updated to show the file and line number. The locals browser will also
+be updated to show the locals of that particular frame.
+
+Please note that the current execution point does not change when you
+switch between the frames, so if you do @code{jdibug-step-over}, the
+stepping will go back to the original execution point.
+
+Threads are also clickable.  This does not update the locals browser,
+but does change which thread will be affected with subsequent commands
+like @code{jdibug-resume} or @code{jdibug-step-into}.
+
+@node Breakpoints Browser, Threads Browser, Frames Browser, Top
+@chapter Breakpoints Browser
+The breakpoints buffer shows a list of the current active and disabled
+breakpoints. Clicking on the breakpoints will show the line of code of
+the breakpoint in the source code buffer.
+
+@menu
+* Conditional Breakpoints :: Breaking when a condition is satisfied
+@end menu
+
+@node Conditional Breakpoints,  , Breakpoints Browser, Breakpoints Browser
+@section Conditional Breakpoints
+Pressing @kbd{c} while at a breakpoint allows you to set a condition expression
+on the breakpoint.  This feature is under development, so most common
+expressions are understood and supported, but more complex constructs
+might not work.  Whenever the breakpoint is reached, the expression is
+evaluated. If the result is the boolean value true, execution stops as
+usual for a breakpoint.  Otherwise, the program resumes execution.
+
+Evaluating the expression is a fairly slow process, so conditional
+breakpoints should be used with care.  Stopping on the fifth iteration
+of a loop should not have a noticeable effect on the runtime, but
+stopping on iteration 10,000 will take a long time.
+
+The only error checking done at the time the condition is created is
+to check that the expression is syntactically valid.  No attempt is
+made to determine that the result is a boolean or that any variables
+referenced in the expression are in scope.  If the expression is
+invalid, the program will resume execution.
+
+@node Threads Browser, Watchpoint Buffer, Breakpoints Browser, Top
+@chapter Threads Browser
+The threads buffer is normally not visible, but can be shown by the
+command @code{jdibug-debug-view-1}.  This buffer lists all of the
+threads and threadgroups in the JVM (including system threads that are
+suppressed in the frames browser).
+
+When expanding a thread, details about the thread are shown as well as
+buttons to suspend and resume the thread.  Suspending the thread can
+be useful to determine where it is executing, as it allows it to be
+selected as the current thread in the frames browser.  At that point,
+it is possible to step through the thread with the usual commands.
+
+@node Watchpoint Buffer, Window Layout, Threads Browser, Top
+@chapter Watchpoint Buffer
+@emph{New in 0.4} The watchpoint buffer can be shown by @code{jdibug-debug-view-2} if it
+is not initially visible.  This buffer displays a list of
+expressions.  Whenever the current thread is suspended, the
+expressions are also evaluated.
+
+If there is an error in the expression (a variable is out of scope,
+a name is mispelled, the expression contains unsupported operations)
+an error message is displayed instead.
+
+The expressions that are supported by conditional breakpoints are
+exactly those that are supposed by watchpoints, so you can test if
+your expression will work in a conditional breakpoint by first
+entering it as a watchpoint.
+
+@node Window Layout, Bug Reporting, Watchpoint Buffer, Top
+@chapter Window Layout
+The default four buffers layout is what I like the most on my screen.
+The commands @code{jdibug-debug-view}, @code{jdibug-debug-view-1} and
+@code{jdibug-debug-view-2} display different windows.  If you do not
+like any of these, creating additional commands can be done fairly
+simply by modifying those commands.
+
+After you create your own functions that create the window layout of
+your liking, and then add this in your @file{.emacs} file:
+
+@example
+(remove-hook 'jdibug-connected-hook 'my-jdibug-debug-view)
+(remove-hook 'jdibug-detached-hook  'my-jdibug-undebug-view)
+@end example
+
+And then proceed to add your equivalent functions in the above
+hooks. You can refer to the two functions @code{jdibug-debug-view} and
+@code{jdibug-undebug-view} for a start.
+
+@node Bug Reporting,  , Window Layout, Top
+@chapter Bug Reporting
+If you think there's a bug in JDIbug, please submit the log together
+with a description of what you have done.
+
+JDIbug uses the @file{elog.el} module that I have written for this
+purpose.
+
+Run the following piece of code
+@example
+(elog-set-appenders
+ (list
+  (make-elog-appender :category 'jdwp
+                      :priority 'trace
+                      :layout "%H:%M:%S [%p] %c : %m%n"
+                      :output "*jdwp-log*")
+  (make-elog-appender :category 'jdi
+                      :priority 'trace
+                      :layout "%H:%M:%S [%p] %c : %m%n"
+                      :output "*jdwp-log*")
+  (make-elog-appender :category 'jdibug
+                      :priority 'trace
+                      :layout "%H:%M:%S [%p] %c : %m%n"
+                      :output "*jdwp-log*")
+  (make-elog-appender :category 'jdwp-traffic
+                      :priority 'info
+                      :layout "%H:%M:%S: %m%n"
+                      :output "*jdwp-traffic*")))
+@end example
+
+Redo the actions that have generated the bug.
+
+Save the content of the @code{*jdwp-log*} and
+@code{*jdwp-traffic*} buffers into files.
+
+Create an issue at @uref{https://code.google.com/p/jdibug/issues/list,
+the JDIbug issue page}.  Attach the files and describe what the
+problem is and how to reproduce it.
+@bye
