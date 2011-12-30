@@ -22,6 +22,12 @@ public class Main
 
         int twoAsInt = 2;
 
+		  // Test display of large integers
+		  int maxInt = Integer.MAX_VALUE;
+		  int minInt = Integer.MIN_VALUE;
+		  long maxLong = Long.MAX_VALUE;
+		  long minLong = Long.MIN_VALUE;
+
         float f = 1.2f;
         int intVar = 3;
         double dblVar = 3.4;
