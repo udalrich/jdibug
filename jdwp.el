@@ -1035,7 +1035,148 @@ result is converted from a JDWP string to an emacs string."
 (defun jdwp-get-int (s &rest fields)
   (jdwp-vec-to-int (apply 'bindat-get-field s fields)))
 
+(defconst jdwp--num-bits-in-int
+  (let ((num-bits 1))
+	 ;; See how many bits are in an integer by shifting ever more bits
+	 ;; until we get zero
+	 (while (not (= 0 (lsh most-negative-fixnum (- num-bits))))
+		(setq num-bits (1+ num-bits)))
+	 ;; Num-bits is now one more than the number of bits
+	 (1- num-bits))
+  "Number of bits in internal representation of integers.")
+
+(defconst jdwp--num-full-bytes-in-int (/ jdwp--num-bits-in-int 8)
+  "Number of bytes that can be fully used to fit into a fixnum.")
+(defconst jdwp--num-bits-in-last-byte
+  (- jdwp--num-bits-in-int (* 8 jdwp--num-full-bytes-in-int) 1)
+  "Number of bits in last byte representing the value, not
+  including the sign bit")
+
 (defun jdwp-vec-to-int (vec)
+  "Converts a vector representation VEC into an integer.  This will return a fixnum if the value fits into it.  Otherwise, it will return a symbol whose string representation is the string representation of the integer."
+  ;; Determine if we will overflow
+  (if (jdwp-check-high-bits-not-used vec)
+		(jdwp-vec-to-int-fixnum vec)
+	 (jdwp-vec-to-int-symbol vec)))
+
+(defun jdwp-check-high-bits-not-used (vec)
+  "Check if any of the high bits are set that will cause us to
+overflow the emacs integer type."
+  (let* ((num-bytes (length vec))
+			(num-bytes-minus-one (1- num-bytes))
+			index
+			small-int
+			byte bytes-to-check )
+	 (if (<= num-bytes jdwp--num-full-bytes-in-int)
+		  ;; Vector is small enough to always fit
+		  (setq small-int t)
+
+		;; Need to check if the high-order bits are 0
+		;; First, make the number positive if it is negative
+		(when (equal #x80 (logand #x80 (elt vec 0)))
+		  (setq vec (jdwp--make-positive vec)))
+
+		;; Check if any of the high bits are still set
+		(setq bytes-to-check (- num-bytes jdwp--num-full-bytes-in-int)
+				index 0 small-int t)
+		(while (and (< index bytes-to-check)
+						small-int)
+		  ;; Get the byte
+		  (setq byte (elt vec index))
+		  (if (not (zerop byte))
+				;; It won't fit unless this is the last bit and it fits in
+				;; the remaining bits
+				(unless (and (= index (1- bytes-to-check))
+								 (zerop (lsh byte (- jdwp--num-bits-in-last-byte))))
+				  (setq small-int nil)))
+		  (incf index)))
+	 small-int))
+
+(defun jdwp--make-positive (vec)
+  "Create a vector the represents the absolution value of the
+negative integer stored in VEC"
+  ;; Make a copy so we don't change the original data
+  (setq vec (copy-seq vec))
+  ;; Toggle all the bits
+  (let* ((num-bytes (length vec))
+			(num-bytes-minus-one (1- num-bytes)))
+	 (loop for index from 0 below num-bytes
+			 do (aset vec index (logxor #xff (elt vec index))))
+	 ;; Add 1 and carry
+	 (aset vec num-bytes-minus-one (1+ (elt vec num-bytes-minus-one)))
+	 (setq index num-bytes-minus-one)
+	 (while (and (>= index 0) (= #x100 (elt vec index)))
+		(aset vec index 0)
+		(when (> index 0)
+		  (aset vec (1- index) (1+ (elt vec (1- index)))))
+		(decf index)))
+  ;; Return the modified vector
+  vec)
+
+
+(defun jdwp-vec-to-int-symbol (vec)
+  "Converts a vector representation VEC into a symbol whose
+string value corresponds to the integer."
+  (let ((value "0") (index 0)
+		  (negative (not (zerop (logand #x80 (elt vec 0)))))
+		  term)
+	 (when negative
+		(setq vec (jdwp--make-positive vec)))
+    (while (< index (length vec))
+      (setq value (jdwp-string-mult value 256)
+				term (elt vec index))
+      (setq value (jdwp-string-plus value term))
+      (incf index))
+	 (when negative
+		(setq value (concat "-" value)))
+    (intern value)))
+
+(defun jdwp-string-mult (string int)
+  "Multiply the number represented by STRING by INT and return a
+string containing the result.  Will not overflow if INT can be
+represented by a byte."
+  (let ((result "") (index 0))
+	 (while (< index (length string))
+		(setq digit (substring string index (1+ index))
+				term-1 (concat result "0")
+				term-2 (number-to-string (* int (string-to-number digit)))
+				result (jdwp-string-plus term-1 term-2)
+				index (1+ index)))
+	 result))
+
+(defun jdwp-string-plus (first second)
+  "Add FIRST string to SECOND number or string, returning a
+string representing the number.  Does not overflow."
+  ;; Convert int to string if needed
+  (if (numberp second) (setq second (number-to-string second)))
+
+  ;; Pad with leading zeros
+  (while (< (length first) (length second))
+	 (setq first (concat "0" first)))
+  (while (> (length first) (length second))
+	 (setq second (concat "0" second)))
+
+  ;; Add each digit
+  (let ((index (1- (length first)))
+		  result carry temp)
+	 (while (>= index 0)
+		(setq temp (+ (string-to-number (substring first index (1+ index)))
+						  (string-to-number (substring second index (1+ index)))
+						  (if carry 1 0)))
+		(if (> temp 9)
+			 (setq carry t
+					 temp (- temp 10))
+		  (setq carry nil))
+		(setq result (concat (number-to-string temp) result)
+				index (1- index)))
+	 (if carry (setq result (concat "1" result)))
+
+	 ;; Return the result
+	 result))
+
+
+
+(defun jdwp-vec-to-int-fixnum (vec)
   "Converts a vector representation VEC into an integer.  This will
 fail for large values that require more bits than emacs uses to
 store an integer."
@@ -1088,14 +1229,15 @@ byte, which might be needed to fill out the vector."
 
 (defconst jdwp-float-exponent-bias 127)
 (defun jdwp-vec-to-float (vec)
-  (let* ((int (jdwp-vec-to-int vec))
+  (let* ((int (jdwp-vec-to-int (subseq vec 1)))
 		 (high (+ (* (elt vec 0) 256)
 				  (elt vec 1)))
 		 (sign (if (= 1 (lsh high -15)) -1 1))
 		 (exponent (logand (lsh high -7) #xff))
 		 (mantissa (logand int #x7fffff))
 		 result)
-	(jdwp-info "jdwp-vec-to-float vec=%s exponent=%d mantissa=%d" vec exponent mantissa)
+	(jdwp-info "jdwp-vec-to-float vec=%s exponent=%d mantissa=%d"
+				  vec exponent mantissa)
 	(case exponent
 	  (0
 	   ;; Subnormal
