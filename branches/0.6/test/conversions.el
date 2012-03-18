@@ -14,6 +14,29 @@
   ;; :teardown-hook (lambda () )
 )
 
+(deftest jdwp-string-plus conversions-suite
+  "Test that jdwp-string-plus correctly adds numbers"
+  ;; Basic addition
+  (assert-equal "3" (jdwp-string-plus "1" "2"))
+  ;; Unequal lengths
+  (assert-equal "25" (jdwp-string-plus "1" "24"))
+  ;; Unequal lengths (other order)
+  (assert-equal "25" (jdwp-string-plus "2" "23"))
+  ;; Huge numbers
+  (assert-equal "11111111101111111110"
+					 (jdwp-string-plus "1234567890987654321"
+											 "9876543210123456789"))
+  ;; Carry to get extra digits
+  (assert-equal "15" (jdwp-string-plus "7" "8"))
+  ;; TODO: do we need to support negative numbers?
+  )
+
+(deftest jdwp-string-mult conversions-suite
+  "Test that jdwp-string-mult correctly multiplies"
+  ;; Basic multiplication
+  (assert-equal (number-to-string (* 12 34))
+					 (jdwp-string-mult "12" 34)))
+
 (deftest name-to-signature-matching conversions-suite
   "Test that we identify when a signature matches a wildcarded pattern"
   (let ((data '(("java.lang.RuntimeException" "Ljava/lang/RuntimeException;" t)
@@ -98,6 +121,20 @@
   (assert-equal '[#xff #xff #xff #xff #xff #xff #xff #xff]
 				(jdwp-integer-to-vec -1 8)))
 
+(deftest vec-to-large-int conversions-suite
+  "Test that numbers larger than emacs internal representation are converted properly"
+  (let ((pairs (list (cons [#x40 0 0 0] (intern "1073741824"))
+							(cons [#x10 0 0] 1048576)
+							(cons [#xc0 0 0 0] (intern "-1073741824"))
+							))
+		  vec expected)
+	(mapc (lambda (pair)
+			(setq vec (car pair) expected (cdr pair)
+				  actual (jdwp-vec-to-int vec))
+			(assert-equal expected actual "conversion to large int"))
+		  pairs)))
+
+
 (deftest float-to-vec-to-float conversions-suite
   "Test that the float/vec conversion functions are inverses"
   (let ((pairs '(([#x3f #x80 0 0 ] . 1.0)
@@ -110,6 +147,7 @@
 				 ([#xff #x80 0 0] . -infinity)))
 		vec actual expected back-to-vec)
 	(mapc (lambda (pair)
+			  (message "Testing %s" pair)
 			(setq vec (car pair) expected (cdr pair)
 				  actual (jdwp-vec-to-float vec))
 			(assert-equal expected actual "conversion to float")
