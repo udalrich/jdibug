@@ -107,6 +107,9 @@
   "default-suite"
   "Choice to use for default suite to run (gets updated to last suite run).")
 
+(defvar elunit--last-reported-suite nil
+  "Last suite reported by elunit-report")
+
 (defvar elunit-test-count 0)
 (defvar elunit-failures nil
   "A list of tests that have failed.")
@@ -196,7 +199,9 @@ arguments."
   (save-excursion
 	(when (get-buffer elunit-report-buffer-name)
 	  (set-buffer elunit-report-buffer-name)
-	  (erase-buffer)))
+	  (erase-buffer)
+	  ;; Clear the last reported suite, since we just erased the buffer
+	  (setq elunit--last-reported-suite nil))
   (elunit-run-suite (symbol-value (intern suite)))
   (message "%s" elunit-failures)
   (message "%d tests with %d problems."
@@ -344,23 +349,27 @@ Takes the same ARGS as `error'."
 (defun elunit-report (test-count failure-count)
   (switch-to-buffer elunit-report-buffer-name)
   (goto-char (point-max))
-  (insert (format "Suite: %s\n" elunit-default-suite))
-  (insert (format "Total tests run: %d   Total failures: %d"
-				  test-count failure-count))
-  (newline)
-  (mapc (lambda (test)
-			 (let ((start (point))
-					 overlay)
-				(insert (format "  Test %20s %20s:%-5d \n"
-									 (test-name test)
-									 (test-file test)
-									 (test-line test)))
-				(setq overlay (make-overlay start (point)))
-				(overlay-put overlay 'face 'elunit-fail-face)
-				(overlay-put overlay 'priority 100))
-			 (insert (format "     %s\n" (test-message test)))
-			 (insert (format "     %s\n" (test-problem test))))
-		  elunit-failures))
+  (when (not (eq elunit-default-suite elunit--last-reported-suite))
+	 (setq elunit--last-reported-suite elunit-default-suite)
+	 (insert (format "Suite: %s\n" elunit-default-suite))
+	 (insert (format "Total tests run: %d   Total failures: %d"
+						  test-count failure-count))
+	 (newline)
+	 (mapc (lambda (test)
+				(let ((start (point))
+						overlay)
+				  (insert (format "  Test %20s %20s:%-5d \n"
+										(test-name test)
+										(test-file test)
+										(test-line test)))
+				  (setq overlay (make-overlay start (point)))
+				  (overlay-put overlay 'face 'elunit-fail-face)
+				  (overlay-put overlay 'priority 100))
+				(insert (format "     %s\n" (test-message test)))
+				(insert (format "     %s\n" (test-problem test))))
+			 elunit-failures)))
+
+
 (when (not noninteractive)
   (add-hook 'elunit-done-running-hook 'elunit-report))
 

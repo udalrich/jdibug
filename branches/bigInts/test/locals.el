@@ -41,7 +41,7 @@
 	(set-buffer jdibug-locals-buffer)
 	;; Click to expand stuff
 	(goto-char (point-min))
-	(jdibug-test-info "About to search for stuff in '%s'b"
+	(jdibug-test-info "About to search for stuff in '%s'"
 							(buffer-substring-no-properties (point-min) (point-max)))
 	(search-forward "stuff:")
 	(search-backward "[+]")
@@ -70,7 +70,7 @@
   (jdibug-test-connect-to-jvm)
 
   (goto-char (point-min))
-  (search-forward "maxLong")
+  (search-forward "intVar")
   (jdibug-toggle-breakpoint)
 
   ;; Start running
@@ -79,7 +79,7 @@
   (jdibug-test-resume-and-wait-for-breakpoint)
   (jdibug-test-wait-for-refresh-timers)
 
-  ;; Emulate the appropiate clicks
+  ;; Emulate the appropriate clicks
   (save-excursion
 	 (set-buffer jdibug-locals-buffer)
 
