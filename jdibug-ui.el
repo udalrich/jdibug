@@ -1055,7 +1055,8 @@ from START (inclusive) to END (exclusive)"
   "Standard boilerplate for updating BUFFER.  If we cannot update
 now, call RETRY-FUNC to schedule another try later.  Otherwise,
 execute BODY."
-  (declare (indent 3))
+  (declare (indent 3)
+			  (debug (&define buffer retry-func must-be-suspended def-body)))
   `(when (or (jdwp-accepting-process-output-p)
 			jdwp-uninterruptibly-running-p
 			jdwp-sending-command
@@ -1087,7 +1088,7 @@ execute BODY."
 		  (insert "No debug information available")
 		(let* ((values (jdi-frame-get-values jdibug-active-frame variables))
 			   (tree (jdibug-make-locals-tree variables values)))
-		  (jdibug-debug "values.size=" (length values))
+		  (jdibug-debug "values.size=%d" (length values))
 		  (setq jdibug-locals-tree (tree-mode-insert tree))
 		  (widget-put jdibug-locals-tree :jdibug-opened-path (tree-mode-opened-tree jdibug-locals-tree))
 		  (jdi-info "current opened tree path:%s" (tree-mode-opened-tree jdibug-locals-tree))
@@ -1879,12 +1880,8 @@ locals and watchpoint buffers."
 
 		((or (equal (jdi-value-type value) jdwp-tag-long)
 			 (equal (jdi-value-type value) jdwp-tag-int))
-		 ;; TODO: This will fail for large values (greater than about
-		 ;; 24 bits) since emacs integers only have 24-28 bits.  Doing
-		 ;; this right will require writing something like
-		 ;; number-to-string that works on at least 8 bytes
 ;; 		 (jdibug-debug "value=%s value-value=%s" value (jdi-primitive-value-value value))
-		 (format "%d" (jdwp-vec-to-int (jdi-primitive-value-value value))))
+		 (format "%s" (jdwp-vec-to-int (jdi-primitive-value-value value))))
 
 		((equal (jdi-value-type value) jdwp-tag-float)
 		 (jdibug-float-to-string (jdwp-vec-to-float (jdi-primitive-value-value value))))

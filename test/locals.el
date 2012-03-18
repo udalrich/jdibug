@@ -41,7 +41,7 @@
 	(set-buffer jdibug-locals-buffer)
 	;; Click to expand stuff
 	(goto-char (point-min))
-	(jdibug-test-info "About to search for stuff in '%s'b"
+	(jdibug-test-info "About to search for stuff in '%s'"
 							(buffer-substring-no-properties (point-min) (point-max)))
 	(search-forward "stuff:")
 	(search-backward "[+]")
@@ -59,9 +59,56 @@
 
 	;; Check that we are looking at the correct value
 	(forward-line 1)
-	(let* ((eol (save-excursion (end-of-line) (point)))
-		   (rest-of-line (buffer-substring-no-properties (point) eol)))
-	  (assert-match (concat "result: \"com.jdibug.Main$Stuff@[0-9a-f]+\"$") rest-of-line
-					(format "Correct value in buffer(%S)" (buffer-string))))))
+	(assert-rest-of-line-matches
+	 "result: \"com.jdibug.Main$Stuff@[0-9a-f]+\"$")))
+
+
+(deftest local-max-min-int locals-suite
+  "Test that min/max int/long displays correctly"
+
+  ;; Connect and set breakpoint after we initialize stuff
+  (jdibug-test-connect-to-jvm)
+
+  (goto-char (point-min))
+  (search-forward "intVar")
+  (jdibug-toggle-breakpoint)
+
+  ;; Start running
+  (setq jdwp-signal-count 0)
+
+  (jdibug-test-resume-and-wait-for-breakpoint)
+  (jdibug-test-wait-for-refresh-timers)
+
+  ;; Emulate the appropriate clicks
+  (save-excursion
+	 (set-buffer jdibug-locals-buffer)
+
+	 (goto-char (point-min))
+	 (search-forward "maxInt")
+	 (assert-rest-of-line-matches ": 2147483647$")
+
+	 (goto-char (point-min))
+	 (search-forward "minInt")
+	 (assert-rest-of-line-matches ": -2147483648$")
+
+	 (goto-char (point-min))
+	 (search-forward "maxLong")
+	 (assert-rest-of-line-matches ": 9223372036854775807$")
+
+	 (goto-char (point-min))
+	 (search-forward "minLong")
+	 (assert-rest-of-line-matches ": -9223372036854775808$")))
+
+
+(defun assert-rest-of-line-matches (regexp)
+  "Assert that the line, starting at point, matches REGEXP"
+	 (let* ((eol (save-excursion (end-of-line) (point)))
+			  (rest-of-line (buffer-substring-no-properties (point) eol)))
+		(assert-match regexp rest-of-line
+						  (format "Correct value in buffer(%S)" (buffer-string)))))
+
+
+
+
 
 
