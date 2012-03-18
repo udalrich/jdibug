@@ -1,5 +1,10 @@
 * JDIbug News                  -*- outline -*-
 
+* 0.6
+
+** Display large integers correct
+Integers and longs that are larger than can be stored in emacs (about 2^28) are now displayed correctly.
+
 * 0.5 (Current)
 
 ** Added jdibug-remove-all-breakpoints
