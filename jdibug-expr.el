@@ -37,7 +37,7 @@
 (require 'jdi)
 (require 'eieio)
 (require 'elog)
-(require 'semantic-java)
+;;(require 'semantic-java)
 
 (elog-make-logger jdibug-expr)
 (elog-make-logger jdibug-expr-parse)

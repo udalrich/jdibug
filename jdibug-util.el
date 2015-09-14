@@ -83,10 +83,15 @@
 	 (let ((signal-hook-function nil)) (error error-symbol data))))
 
 (defun jdibug-util-run-with-timer (secs repeat function &rest args)
-  (apply 'run-with-timer secs repeat (lambda (function &rest args)
-													(jdibug-util-with-signal-hook
-													 (apply function args)))
-		 function args))
+  ;; (apply 'run-with-timer secs repeat (lambda (function &rest args)
+  ;;   												(jdibug-util-with-signal-hook
+  ;;   												 (apply function args)))
+  ;;   	 function args))
+
+  ;; Emacs-24 doesn't allow advince on condition-case.  Figure out if there is a
+  ;; way to restore the logging, but for now, just run the function without the
+  ;; wrapper.
+  (apply 'run-with-timer secs repeat function args))
 
 (provide 'jdibug-util)
 

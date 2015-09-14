@@ -142,6 +142,28 @@ arguments."
 
 (defsuite default-suite nil)
 
+
+(defmacro deftest-x (name suite &rest body)
+  "Define a test NAME in SUITE with BODY."
+;;  (declare (debug sexp sexp &rest form))
+  `(save-excursion
+     ;; In theory, we should use load-file-name only if load-in-progress,
+     ;; but it appears that load-in-progress is not set when loading a file
+     ;; from the command line in a non-interactive session.
+     (let ((file (or load-file-name buffer-file-name))
+    	   (def-regexp (concat "deftest\\s-+"
+    						   (symbol-name ',name)))
+    	   line test)
+       (find-file file)
+       (goto-char (point-min))
+       (search-forward-regexp def-regexp nil t)
+       (setq line (line-number-at-pos))
+       (setq test (make-test :name ',name :body (lambda () ,@body)
+    						 :file file :line line))
+       (elunit-delete-test ',name ,suite)
+       (push test (test-suite-tests ,suite))))
+  )
+
 (defmacro deftest (name suite &rest body)
   "Define a test NAME in SUITE with BODY."
   (declare (debug sexp sexp &rest form))
@@ -201,7 +223,7 @@ arguments."
 	  (set-buffer elunit-report-buffer-name)
 	  (erase-buffer)
 	  ;; Clear the last reported suite, since we just erased the buffer
-	  (setq elunit--last-reported-suite nil))
+	  (setq elunit--last-reported-suite nil)))
   (elunit-run-suite (symbol-value (intern suite)))
   (message "%s" elunit-failures)
   (message "%d tests with %d problems."
