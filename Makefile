@@ -25,8 +25,8 @@ EL_INIT=$(BUILD_CONFIG)/el_init.el
 EL_TEST_INIT=$(BUILD_CONFIG)/el_test_init.el
 
 BUILD=$(EMACS_ARGS) -l jdibug-build.el -f jdibug-build
-SMOKE_TEST=$(EMACS_ARGS) -l $(EL_TEST_INIT) -l $(TEST_DIR)/smoke-tests.el
-JDE_TEST=$(EMACS_ARGS) -l $(EL_TEST_INIT) -l $(TEST_DIR)/jde-tests.el
+SMOKE_TEST=$(EMACS_ARGS) -l $(EL_TEST_INIT) -l $(TEST_DIR)/smoke-tests.el -f ert-run-tests-batch-and-exit
+JDE_TEST=$(EMACS_ARGS) -l $(EL_TEST_INIT) -l $(TEST_DIR)/jde-tests.el -f ert-run-tests-batch-and-exit
 
 
 

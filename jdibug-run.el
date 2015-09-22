@@ -38,10 +38,14 @@ wait for the debugger to connect."
   :group 'jdibug
   :type '(repeat (string :tag "JVM Argument")))
 
-(defcustom jdibug-run-application-args nil
-  "List of arguments passed to the java class by `jdibug-run'."
+(defcustom jdibug-run-application-args
+  (if (symbolp jde-run-option-application-args) 'jde-run-option-application-args)
+  "List of arguments passed to the java class by `jdibug-run'.  If this is a
+symbol, such as `jde-run-option-application-args', then the value of that symbol is used."
   :group 'jdibug
-  :type '(repeat (string :tag "Argument")))
+  ;; Todo: Figure out how to add :tag "String" to the first choice
+  :type '(choice (repeat (string :tag "Argument"))
+                 (symbol :value jde-run-option-application-args)))
 
 (defcustom jdibug-run-main-class
   (if (boundp 'jde-run-application-class) jde-run-application-class)
@@ -72,10 +76,13 @@ and the application arguments are `jdibug-run-application-args'"
   (let* ((main-class (jdibug-run-get-main-class))
 		(name (concat "*" main-class "*"))
 		(buffer (get-buffer-create name))
+        (app-args (if (symbolp jdibug-run-application-args)
+                      (symbol-value jdibug-run-application-args)
+                    jdibug-run-application-args))
 		(args (append (jdibug-run-server-args)
 					  (jdibug-run-get-jvm-args)
 					  (list main-class)
-					  jdibug-run-application-args)))
+					  app-args)))
 
 	;; Remove any old output from the buffer
 	(pop-to-buffer buffer)

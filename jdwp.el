@@ -1176,16 +1176,30 @@ string representing the number.  Does not overflow."
 
 
 
-(defun jdwp-vec-to-int-fixnum (vec)
+(defun jdwp-vec-to-int-fixnum (vec &optional unsigned)
   "Converts a vector representation VEC into an integer.  This will
 fail for large values that require more bits than emacs uses to
 store an integer."
   (let ((result 0)
-		(i 0))
+		(i 0)
+        (negative nil)
+        val)
     (while (< i (length vec))
-      (setq result (* result 256))
-      (setq result (+ result (elt vec i)))
+      (setq result (* result 256)
+            val  (elt vec i))
+      ;; If the vector is too short to hold a full integer, set it to negative
+      ;; if the sign bit is set
+      (when (and (= 0 i)
+                 (not unsigned)
+                 (< (length vec) jdwp--num-full-bytes-in-int)
+                 (/= (logand val #x80) 0))
+        (setq val (logand val #x7f)
+              negative t))
+      (setq result (+ result val))
       (incf i))
+    (when negative
+      (setq result (1- (- (1+ result)
+                          (lsh 1 (1- (* 8 (length vec))))))))
     result))
 
 (defun jdwp-integer-to-vec (number length)
@@ -1229,7 +1243,7 @@ byte, which might be needed to fill out the vector."
 
 (defconst jdwp-float-exponent-bias 127)
 (defun jdwp-vec-to-float (vec)
-  (let* ((int (jdwp-vec-to-int (subseq vec 1)))
+  (let* ((int (jdwp-vec-to-int-fixnum (subseq vec 1) 'unsigned))
 		 (high (+ (* (elt vec 0) 256)
 				  (elt vec 1)))
 		 (sign (if (= 1 (lsh high -15)) -1 1))
@@ -1266,15 +1280,15 @@ byte, which might be needed to fill out the vector."
 (defconst jdwp-double-exponent-bias 1023)
 (defun jdwp-vec-to-double (vec)
   (jdwp-debug "jdwp-vec-to-double %s" vec)
-  (let* ((short-high (jdwp-vec-to-int (subseq vec 0 2)))
+  (let* ((short-high (jdwp-vec-to-int-fixnum (subseq vec 0 2) 'unsigned))
 		 (sign (if (= 1 (lsh short-high -15)) -1 1))
 		 (exponent (logand (lsh short-high -4) #x7ff))
 		 ;; bits 52-33 (20 bits)
-		 (mantissa-high (logand (jdwp-vec-to-int (subseq vec 1 4)) #xfffff))
+		 (mantissa-high (logand (jdwp-vec-to-int-fixnum (subseq vec 1 4) 'unsigned) #xfffff))
 		 ;; bits 32-17 (16 bits)
-		 (mantissa-mid (jdwp-vec-to-int (subseq vec 4 6)))
+		 (mantissa-mid (jdwp-vec-to-int-fixnum (subseq vec 4 6) 'unsigned))
 		 ;; bits 16-1  (16 bits)
-		 (mantissa-low (jdwp-vec-to-int (subseq vec 6)))
+		 (mantissa-low (jdwp-vec-to-int-fixnum (subseq vec 6) 'unsigned))
 		 result)
 	(case exponent
 	  (0 ;; subnormal
