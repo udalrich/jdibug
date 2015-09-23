@@ -1099,7 +1099,8 @@ negative integer stored in VEC"
   (setq vec (copy-seq vec))
   ;; Toggle all the bits
   (let* ((num-bytes (length vec))
-			(num-bytes-minus-one (1- num-bytes)))
+	 (num-bytes-minus-one (1- num-bytes))
+	 index)
 	 (loop for index from 0 below num-bytes
 			 do (aset vec index (logxor #xff (elt vec index))))
 	 ;; Add 1 and carry
@@ -1135,7 +1136,7 @@ string value corresponds to the integer."
   "Multiply the number represented by STRING by INT and return a
 string containing the result.  Will not overflow if INT can be
 represented by a byte."
-  (let ((result "") (index 0))
+  (let ((result "") (index 0) digit term-1 term-2)
 	 (while (< index (length string))
 		(setq digit (substring string index (1+ index))
 				term-1 (concat result "0")

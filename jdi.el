@@ -1533,6 +1533,7 @@ events in one message."
   (let ((vm (jdwp-get jdwp 'jdi-virtual-machine)))
 	(if vm (run-hook-with-args 'jdi-detached-hooks vm))))
 
+(defvar jdi-deferred-vm-start-events nil)
 (defun jdi-handle-vm-start (jdwp event)
   (jdi-trace "jdi-handle-vm-start %s" event)
   (let ((vm (jdwp-get jdwp 'jdi-virtual-machine)))
@@ -1550,7 +1551,6 @@ events in one message."
 	  (add-hook 'jdibug-connected-hook 'jdi-deferred-vm-start)
 	  )))
 
-(defvar jdi-deferred-vm-start-events nil)
 (defun jdi-deferred-vm-start nil
   "Sometime the vm-start event is received before we are fully connected.
 This handles the event later, once we are connected."

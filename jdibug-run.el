@@ -39,18 +39,19 @@ wait for the debugger to connect."
   :type '(repeat (string :tag "JVM Argument")))
 
 (defcustom jdibug-run-application-args
-  (if (symbolp jde-run-option-application-args) 'jde-run-option-application-args)
+  (if (boundp 'jdee-run-option-application-args)
+      'jdee-run-option-application-args)
   "List of arguments passed to the java class by `jdibug-run'.  If this is a
-symbol, such as `jde-run-option-application-args', then the value of that symbol is used."
+symbol, such as `jdee-run-option-application-args', then the value of that symbol is used."
   :group 'jdibug
   ;; Todo: Figure out how to add :tag "String" to the first choice
   :type '(choice (repeat (string :tag "Argument"))
-                 (symbol :value jde-run-option-application-args)))
+                 (symbol :value jdee-run-option-application-args)))
 
 (defcustom jdibug-run-main-class
-  (if (boundp 'jde-run-application-class) jde-run-application-class)
+  (if (boundp 'jdee-run-application-class) jdee-run-application-class)
   "Name of the class launched by `jdibug-run'.  The default value
-is `jde-run-application-class' if that symbol is bound."
+is `jdee-run-application-class' if that symbol is bound."
   :group 'jdibug
   :type 'string)
 
@@ -130,8 +131,8 @@ current buffer."
   (if (and (stringp jdibug-run-main-class)
 	   (not (string= "" jdibug-run-main-class)))
       jdibug-run-main-class
-	(if (fboundp 'jde-parse-get-buffer-class)
-		(jde-parse-get-buffer-class)
+	(if (fboundp 'jdee-parse-get-buffer-class)
+		(jdee-parse-get-buffer-class)
 	  (error "Unable to determine main class"))))
 
 (defun jdibug-run-get-jvm-args ()
@@ -140,27 +141,27 @@ current buffer."
 		  jdibug-run-jvm-args))
 
 
-;; copy of jde-db-classpath-arg method
+;; copy of jdee-db-classpath-arg method
 (defun jdibug-run-classpath-arg ()
   "Generate the -classpath command line argument for jdibug."
 
   ;; Set the classpath option. Use the local
   ;; classpath, if set; otherwise, the global
   ;; classpath.
-  (let* ((db-option-classpath (if (boundp 'jde-db-option-classpath)
-								  jde-db-option-classpath))
-		 (global-classpath (if (boundp 'jde-global-classpath)
-							   jde-global-classpath))
-		 (classpath
-		  (if db-option-classpath
-			  db-option-classpath
-			global-classpath))
-		(symbol
-		 (if db-option-classpath
-			 'jde-db-option-classpath
-		   'jde-global-classpath)))
+  (let* ((db-option-classpath (if (boundp 'jdee-db-option-classpath)
+				  jdee-db-option-classpath))
+	 (global-classpath (if (boundp 'jdee-global-classpath)
+			       jdee-global-classpath))
+	 (classpath
+	  (if db-option-classpath
+	      db-option-classpath
+	    global-classpath))
+	 (symbol
+	  (if db-option-classpath
+	      'jdee-db-option-classpath
+	    'jdee-global-classpath)))
     (if classpath
-		(if (fboundp 'jde-build-classpath)
-			(list "-classpath" (jde-build-classpath classpath symbol))))))
+	(if (fboundp 'jdee-build-classpath)
+	    (list "-classpath" (jdee-build-classpath classpath symbol))))))
 
 (provide 'jdibug-run)

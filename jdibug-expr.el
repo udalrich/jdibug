@@ -38,6 +38,8 @@
 (require 'eieio)
 (require 'elog)
 ;;(require 'semantic-java)
+(require 'semantic/java)
+(require 'semantic/wisent)
 
 (elog-make-logger jdibug-expr)
 (elog-make-logger jdibug-expr-parse)

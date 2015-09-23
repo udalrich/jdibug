@@ -1,8 +1,8 @@
 (add-hook 'after-save-hook
-		  (lambda ()
+	  (lambda ()
             (load (buffer-file-name))
-			(ert '(tag conversions)))
-		  nil 'local)
+	    (ert '(tag conversions)))
+	  nil 'local)
 
 (require 'ert)
 (require 'jdwp)
