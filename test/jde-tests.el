@@ -223,7 +223,7 @@ an unreasonable amount of time has passed."
   ;; (debug-on-entry 'jdibug-handle-breakpoint)
   ;; (debug-on-entry 'jdibug-test-set-breakpoint-and-run)
   ;;  (debug)
-  (ert '(tags jde))
+  (ert '(tag jde))
   (setq now (float-time)
 	delta (- now then))
   (raise-frame)

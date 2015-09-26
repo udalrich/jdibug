@@ -8,16 +8,13 @@
 (require 'ert)
 (require 'jdibug)
 
-(defmacro with-locals-test (&rest body)
-  (declare (debug 1))
-  (with-jde-test
-   ;; Remove any prexisting breakpoints
-   (jdwp-uninterruptibly
-     (mapc #'jdibug-remove-breakpoint (jdibug-all-breakpoints)))
-   @,body))
-
-
-
+(defmacro with-locals-test (&rest inner-body)
+  (declare (debug t))
+  `(with-jde-test
+	   ;; Remove any prexisting breakpoints
+	   (jdwp-uninterruptibly
+	     (mapc #'jdibug-remove-breakpoint (jdibug-all-breakpoints)))
+	   ,@inner-body))
 
 (ert-deftest local-function-call ()
   "Test that calling the no-arg methods on a local variable works"
@@ -66,6 +63,7 @@
       "result: \"com.jdibug.Main$Stuff@[0-9a-f]+\"$"))))
 
 
+
 (ert-deftest local-max-min-int ()
   "Test that min/max int/long displays correctly"
   :tags '(jde locals)
@@ -110,9 +108,3 @@
   (let* ((eol (save-excursion (end-of-line) (point)))
 	 (rest-of-line (buffer-substring-no-properties (point) eol)))
     (should (string-match regexp rest-of-line))))
-
-
-
-
-
-

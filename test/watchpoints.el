@@ -9,14 +9,14 @@
 (require 'ert)
 (require 'jdibug)
 
-(defmacro with-watchpoints-test (&rest body)
+(defmacro with-watchpoints-test (&rest inner-body)
   (declare (debug t))
   `(with-jde-test
     ;; Remove any prexisting breakpoints
     (jdwp-uninterruptibly
       (mapc #'jdibug-remove-breakpoint (jdibug-all-breakpoints)))
     (jdibug-remove-all-watchpoints)
-    ,@body))
+    ,@inner-body))
 
 (ert-deftest add-watchpoint-array  ()
   "Test that a watch point on a an array reference variable works"
