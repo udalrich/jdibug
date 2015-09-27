@@ -1,7 +1,7 @@
-(jde-project-file-version "1.0")
-(jde-set-variables
- '(jde-global-classpath (quote ("../classes")))
- '(jde-run-option-debug (quote ("Server" "Socket" "javadebug" nil "6001" t)))
- '(jde-which-method-mode nil)
- '(jde-sourcepath (quote ("." "c:/bad/path")))
- '(jde-run-application-class "com.jdibug.Main"))
+(jdee-project-file-version "1.0")
+(jdee-set-variables
+ '(jdee-global-classpath (quote ("../classes")))
+ '(jdee-run-option-debug (quote ("Server" "Socket" "javadebug" nil "6001" t)))
+ '(jdee-which-method-mode nil)
+ '(jdee-sourcepath (quote ("." "c:/bad/path")))
+ '(jdee-run-application-class "com.jdibug.Main"))

@@ -1,6 +1,25 @@
 * JDIbug News                  -*- outline -*-
 
-* 0.5 (Current)
+* 0.7 (Current)
+** Emacs 24
+JDIBug now works with emacs 24 and the version of being developed around
+September 2015.  One significant change is that the JDEE methods and variables are now prefixed with jdee- instead of jde-.
+
+The tests have been converted to use ert instead of elunit, which does not work
+with emacs 24.
+
+Defadvice updated by Łukasz Wiecheć.
+
+Added option to automatically step out of calls to java.* packages.  See jdibug-step-over-classes.
+
+* 0.6
+
+** Display large integers correct
+Integers and longs that are larger than can be stored in emacs (about 2^28) are now displayed correctly  in most cases.  There are
+some corner cases that may fail, such as accessing the 2^31 element of an array.
+
+
+* 0.5
 
 ** Added jdibug-remove-all-breakpoints
 Removes all breakpoints with one interactive command.
@@ -14,8 +33,22 @@ With the current version, if the size of the array exceeds jdibug-locals-max-arr
 shows subarrays, which can be expanded.  While it might take 3 or 4 clicks to find the entry, those clicks
 respond much more quickly so the process should be much faster, even with the extra actions.
 
+** Added support for Android and other JVM that only implement JDWP -with-generic commands.
+The debug interface defines methods that do not include generic
+information (required for pre-1.5 JVM) and methods that do include
+generic information.  The latter are now used if available.  Thanks to
+Lei Wang for the patch.
+
 ** Added breakpoints for when an exception is thrown
-TODO: fill in details when impl is complete.
+`jdibug-break-on-exception' will set a breakpoint for when the given
+exception is thrown.  The name must be fully qualified, but it can be
+a superclass of the actual exception thrown.  For example,
+java.lang.RuntimeException would break if a NullPointerException was
+thown.
+
+The method asks about whether caught or uncaught exceptions should
+cause a break.  However, as described in the JDWP documentation, it is
+possible for either type of exception to be reported as the other type.
 
 
 * 0.4 (2010-12-05)

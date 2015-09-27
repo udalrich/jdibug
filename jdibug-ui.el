@@ -30,12 +30,12 @@
 ;;     jdibug-connect-hosts
 ;; which is a list of  hostname:port that you want to connect to.
 ;; Also ensure the
-;;		jdibug-use-jde-source-paths
+;;		jdibug-use-jdee-source-paths
 ;; is set to t.  This causes jdibug to use the jde sourcepath.
 ;;
 ;;
 ;; After that, make sure you have loaded the JDEE project with the
-;; property variables (namely jde-sourcepath)
+;; property variables (namely jdee-sourcepath)
 ;; and execute C-c C-c C-c in a JDEE buffer, wait for a while
 ;; until you see "Done" in the echo area.
 ;;
@@ -58,67 +58,81 @@
 
 (defcustom jdibug-source-paths nil
   "Paths of the source codes. This will be ignored if
-`jdibug-use-jde-source-paths' is t.  This must be a list like '(\"~/src\") not astring like \"~/src\""
+`jdibug-use-jdee-source-paths' is t.  This must be a list like '(\"~/src\") not astring like \"~/src\""
   :group 'jdibug
   :type 'list)
+
+(defgroup jdibug-ui nil
+  "JDIbug user interface options."
+  :prefix "jdibug"
+  :group 'jdibug
+  :package-version '(jdibug . "0.7"))
 
 (defcustom jdibug-refresh-delay 0.5
   "The delay in seconds between when a breakpoint/step was hit
 and the frames/locals buffer are refreshed. Set to 0 for instant update.
 Set to more for speeding up quick multi step when the frames/locals buffer
 need not be refreshed."
-  :group 'jdibug
+  :group 'jdibug-ui
   :type 'float)
 
 (defcustom jdibug-locals-max-array-size 20
   "The maximum number of entries shown when expanding an array.
 Expanding large numbers of arrays is slow.  Setting this to a
 reasonably small number allows the arrays to be expanded quickly."
-  :group 'jdibug
+  :group 'jdibug-ui
   :type 'integer)
 
 (defcustom jdibug-locals-min-sub-array-size 10
   "The minium number of entries shown when expanding an
 sub-array.  This prevents the subarrays from being exceedingly
 short."
-  :group 'jdibug
+  :group 'jdibug-ui
   :type 'integer)
 
-(defcustom jdibug-use-jde-source-paths t
-  "Set to t to use the jde-sourcepath as the source paths.
+(defcustom jdibug-use-jdee-source-paths t
+  "Set to t to use the jdee-sourcepath as the source paths.
 `jdibug-source-paths' will be ignored if this is set to t."
   :group 'jdibug
   :type 'boolean)
 
 (defcustom jdibug-threads-buffer-name "*JDIbug-Threads*"
   "Name of the buffer to display the tree of threads."
-  :group 'jdibug
+  :group 'jdibug-ui
   :type 'string)
 
 (defcustom jdibug-locals-buffer-name "*JDIbug-Locals*"
   "Name of the buffer to display the tree of local variables."
-  :group 'jdibug
+  :group 'jdibug-ui
   :type 'string)
 
 (defcustom jdibug-frames-buffer-name "*JDIbug-Frames*"
   "Name of the buffer to display the list of active frames."
-  :group 'jdibug
+  :group 'jdibug-ui
   :type 'string)
 
 (defcustom jdibug-breakpoints-buffer-name "*JDIbug-Breakpoints*"
   "Name of the buffer to display the list of breakpoints."
-  :group 'jdibug
+  :group 'jdibug-ui
   :type 'string)
 
 (defcustom jdibug-watchpoints-buffer-name "*JDIbug-Watchpoints*"
   "Name of the buffer to display the list of watchpoints."
-  :group 'jdibug
+  :group 'jdibug-ui
   :type 'string)
 
 (defcustom jdibug-break-on-class-regexp "^public\\s-+class"
   "The regexp that will be used to identify whether you want to break on all the methods in the class."
   :group 'jdibug
   :type 'string)
+
+(defcustom jdibug-step-over-classes
+  '("^java\\." "^javax\\.")
+  "List of regular expressions.  Stepping into a class that matches any of
+the regular expression will result in automatically stepping out of the method."
+  :group 'jdibug-ui
+  :type '(repeat string)
+  :package-version '("jdibug" . "0.7"))
 
 (defvar jdibug-connected-hook nil
   "Hook to run when we are connected to the debuggee.")
@@ -244,8 +258,8 @@ because it have two class loaders, or we have two different vm!")
 	      :accessor jdibug-breakpoint-condition
 	      :documentation
 	      "The condition for the breakpoint.  If non-nil,
-	      only step if the condition evaluates to true.  Any
-	      other value (or an error) causes the breakpoing to
+	      only stop if the condition evaluates to true.  Any
+	      other value (or an error) causes the breakpoint to
 	      be ignored.")
    (condition-text :type string :initform ""
 				   :accessor jdibug-breakpoint-condition-text
@@ -636,17 +650,32 @@ the condition is satisfied."
   ;; 	(jdibug-debug "setting jdibug-active-thread to %s in jdibug-handle-step"
   ;; 			   thread)
 
-  (setq jdibug-active-thread thread)
 
+  (setq jdibug-active-thread thread)
   (jdibug-goto-location location)
 
-  (jdibug-refresh-frames-buffer)
-  (jdibug-refresh-threads-buffer)
+  ;; Check if we are in a class that we want to step out of
+  (if (jdibug--auto-step-out-class-p location)
+      (jdibug-step-out)
+    ;; We want to stop here.  Update the displays
+    (jdibug-refresh-frames-buffer)
+    (jdibug-refresh-threads-buffer)
 
-  (unless jdibug-active-frame
-	(setq jdibug-active-frame (car (jdi-thread-get-frames jdibug-active-thread)))
-	(jdibug-refresh-locals-buffer)
-	(jdibug-refresh-watchpoints-buffer)))
+    (unless jdibug-active-frame
+      (setq jdibug-active-frame (car (jdi-thread-get-frames
+                                      jdibug-active-thread)))
+      (jdibug-refresh-locals-buffer)
+      (jdibug-refresh-watchpoints-buffer))))
+
+(defun jdibug--auto-step-out-class-p (location)
+  "Check if LOCATION is part of a class that we want
+to automatically step out of"
+  (let ((class-name (car (jdi-jni-to-print
+                          (jdi-class-get-signature
+                           (jdi-location-class location))))))
+    (cl-find class-name jdibug-step-over-classes
+             :test (lambda (string regexp) (string-match regexp string)))))
+
 
 (defun jdibug-handle-change-frame (frame)
   (jdibug-debug "jdibug-handle-change-frame")
@@ -759,30 +788,30 @@ the condition is satisfied."
 (defface jdibug-current-line
   `((t (:foreground "navajo white" :background "DodgerBlue")))
   "Face for current executing line"
-  :group 'jdibug)
+  :group 'jdibug-ui)
 
 ;;(custom-set-faces '(jdibug-breakpoint-enabled ((t (:foreground "navajo white" :background "indian red"))) t))
 (defface jdibug-breakpoint-enabled
   `((t (:foreground "navajo white" :background "indian red")))
   "Face for enabled breakpoint"
-  :group 'jdibug)
+  :group 'jdibug-ui)
 
 ;;(custom-set-faces '(jdibug-breakpoint-disabled ((t (:foreground "navajo white" :background "SpringGreen4"))) t))
 (defface jdibug-breakpoint-disabled
   `((t (:foreground "navajo white" :background "SpringGreen4")))
   "Face for disabled breakpoint"
-  :group 'jdibug)
+  :group 'jdibug-ui)
 
 ;;(custom-set-faces '(jdibug-breakpoint-unresolved ((t (:foreground "navajo white" :background "gold4"))) t))
 (defface jdibug-breakpoint-unresolved
   `((t (:foreground "navajo white" :background "gold4")))
   "Face for unresolved breakpoint"
-  :group 'jdibug)
+  :group 'jdibug-ui)
 
 (defface jdibug-current-frame
   `((t (:foreground "navajo white" :background "DodgerBlue")))
   "Face for current frame"
-  :group 'jdibug)
+  :group 'jdibug-ui)
 
 (defun jdibug-expand-method-node (tree)
   (jdwp-uninterruptibly
@@ -1055,7 +1084,8 @@ from START (inclusive) to END (exclusive)"
   "Standard boilerplate for updating BUFFER.  If we cannot update
 now, call RETRY-FUNC to schedule another try later.  Otherwise,
 execute BODY."
-  (declare (indent 3))
+  (declare (indent 3)
+			  (debug (&define buffer retry-func must-be-suspended def-body)))
   `(when (or (jdwp-accepting-process-output-p)
 			jdwp-uninterruptibly-running-p
 			jdwp-sending-command
@@ -1087,7 +1117,7 @@ execute BODY."
 		  (insert "No debug information available")
 		(let* ((values (jdi-frame-get-values jdibug-active-frame variables))
 			   (tree (jdibug-make-locals-tree variables values)))
-		  (jdibug-debug "values.size=" (length values))
+		  (jdibug-debug "values.size=%d" (length values))
 		  (setq jdibug-locals-tree (tree-mode-insert tree))
 		  (widget-put jdibug-locals-tree :jdibug-opened-path (tree-mode-opened-tree jdibug-locals-tree))
 		  (jdi-info "current opened tree path:%s" (tree-mode-opened-tree jdibug-locals-tree))
@@ -1348,16 +1378,16 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
 		(message "Class: %s" (jdi-class-signature (jdi-value-get-reference-type value)))))))
 
 (defun jdibug-get-source-paths ()
-  (or (and jdibug-use-jde-source-paths
-	   (if (boundp 'jde-sourcepath)
-	       (if (fboundp 'jde-normalize-path)
-		   (if (fboundp 'jde-expand-wildcards-and-normalize)
-		       (jde-expand-wildcards-and-normalize jde-sourcepath
-							   'jde-sourcepath)
+  (or (and jdibug-use-jdee-source-paths
+	   (if (boundp 'jdee-sourcepath)
+	       (if (fboundp 'jdee-normalize-path)
+		   (if (fboundp 'jdee-expand-wildcards-and-normalize)
+		       (jdee-expand-wildcards-and-normalize jdee-sourcepath
+							   'jdee-sourcepath)
 		     (mapcar
 		      (lambda (path)
-			(jdibug-normalize-path path 'jde-sourcepath t))
-		      jde-sourcepath)))))
+			(jdibug-normalize-path path 'jdee-sourcepath t))
+		      jdee-sourcepath)))))
 	  (if (stringp jdibug-source-paths)
 		  (error "jdibug-source-paths must be a list of strings, not a single string")
 		jdibug-source-paths)))
@@ -1420,7 +1450,6 @@ based on the file name."
 				  (append result (jdibug-breakpoint-event-requests bp))))
 		(jdibug-message "pending" t))))
   (jdibug-breakpoint-update bp))
-
 
 (defmethod set-breakpoint-in-vm ((bp jdibug-breakpoint-location) vm &optional class)
   (jdibug-debug "set-breakpoint-in-vm %s" (class-name (class-of bp)))
@@ -1620,12 +1649,12 @@ the class is loaded."
 		  (jdibug-show-file-and-line-number (jdibug-breakpoint-source-file bp)
 											(jdibug-breakpoint-line-number bp))))))
 
-(defun jdibug-breakpoints-jde-mode-hook ()
+(defun jdibug-breakpoints-jdee-mode-hook ()
   (mapc (lambda (bp)
 			 (jdibug-breakpoint-update bp))
 		  (jdibug-all-breakpoints)))
 
-(add-hook 'jde-mode-hook 'jdibug-breakpoints-jde-mode-hook)
+(add-hook 'jdee-mode-hook 'jdibug-breakpoints-jdee-mode-hook)
 
 (defun jdibug-refresh-breakpoints-buffer ()
   (jdibug-debug "jdibug-refresh-breakpoints-buffer:%s breakpoints" (length (jdibug-all-breakpoints)))
@@ -1851,21 +1880,35 @@ locals and watchpoint buffers."
 (add-hook 'jdibug-connected-hook 'jdibug-debug-view-2)
 (add-hook 'jdibug-detached-hook 'jdibug-undebug-view)
 
-;; Until when we have our own minor mode, we put it into jde-mode-map.
-;; Ideally, we should use java-mode, but then we run into conflicts
-;; with C-c C-c where we lose.
-(when (boundp 'jde-mode-map)
-  (define-key jde-mode-map [?\C-c ?\C-c ?\C-c] 'jdibug-connect)
-  (define-key jde-mode-map [?\C-c ?\C-c ?\C-d] 'jdibug-disconnect)
-  (define-key jde-mode-map [?\C-c ?\C-c ?\C-b] 'jdibug-toggle-breakpoint)
-  (define-key jde-mode-map [?\C-c ?\C-c ?\C-n] 'jdibug-step-over)
-  (define-key jde-mode-map [?\C-c ?\C-c ?\C-i] 'jdibug-step-into)
-  (define-key jde-mode-map [?\C-c ?\C-c ?\C-o] 'jdibug-step-out)
-  (define-key jde-mode-map [?\C-c ?\C-c ?\C-r] 'jdibug-resume)
-  (define-key jde-mode-map [?\C-c ?\C-c ?\C-a] 'jdibug-resume-all)
-  (define-key jde-mode-map [?\C-c ?\C-c ?\C-k] 'jdibug-exit-jvm)
-  (define-key jde-mode-map [?\C-c ?\C-c ?\C-w] 'jdibug-add-watchpoint)
+(easy-mmode-define-minor-mode
+ jdibug-minor-mode
+ "Toggle jdibug-minor-mode.
+With no argument, this command toggles the mode.
+Non-null prefix argument turns on the mode.
+Null prefix argument turns off the mode.
+
+Supports debugging of Java programs.  Works best in
+`jdee-mode' buffers, but can also work in `java-mode' buffers."
+ nil ;; on by default
+ "JDI" ; nil ;; no mode line symbol
+ ;; keymap, defined as an alist
+ '(([?\C-c ?\C-c ?\C-c] . jdibug-connect)
+   ([?\C-c ?\C-c ?\C-d] . jdibug-disconnect)
+   ([?\C-c ?\C-c ?\C-b] . jdibug-toggle-breakpoint)
+   ([?\C-c ?\C-c ?\C-n] . jdibug-step-over)
+   ([?\C-c ?\C-c ?\C-i] . jdibug-step-into)
+   ([?\C-c ?\C-c ?\C-o] . jdibug-step-out)
+   ([?\C-c ?\C-c ?\C-r] . jdibug-resume)
+   ([?\C-c ?\C-c ?\C-a] . jdibug-resume-all)
+   ([?\C-c ?\C-c ?\C-k] . jdibug-exit-jvm)
+   ([?\C-c ?\C-c ?\C-w] . jdibug-add-watchpoint)
   )
+ :group 'jdibug
+ :require 'jdibug)
+
+;; Turn on the minor mode when a java buffer is loaded.  TODO: add an option to
+;; control this, so the user can have jdibug only in some buffers.
+(add-hook 'java-mode-hook #'jdibug-minor-mode)
 
 (defun jdibug-value-get-string (value)
   "Get a string to be displayed for a value"
@@ -1879,12 +1922,8 @@ locals and watchpoint buffers."
 
 		((or (equal (jdi-value-type value) jdwp-tag-long)
 			 (equal (jdi-value-type value) jdwp-tag-int))
-		 ;; TODO: This will fail for large values (greater than about
-		 ;; 24 bits) since emacs integers only have 24-28 bits.  Doing
-		 ;; this right will require writing something like
-		 ;; number-to-string that works on at least 8 bytes
 ;; 		 (jdibug-debug "value=%s value-value=%s" value (jdi-primitive-value-value value))
-		 (format "%d" (jdwp-vec-to-int (jdi-primitive-value-value value))))
+		 (format "%s" (jdwp-vec-to-int (jdi-primitive-value-value value))))
 
 		((equal (jdi-value-type value) jdwp-tag-float)
 		 (jdibug-float-to-string (jdwp-vec-to-float (jdi-primitive-value-value value))))
@@ -2067,18 +2106,18 @@ special cases like infinity."
 
 
 (defun jdibug-normalize-path (path symbol cygwin-p)
-  "Process PATH and SYMBOL like `jde-normalize-path'.  If CYGWIN-P, leave the result in cygwin form."
+  "Process PATH and SYMBOL like `jdee-normalize-path'.  If CYGWIN-P, leave the result in cygwin form."
   ;; If we want to leave paths in cygwin form, bind the converter to a
   ;; function that does nothing.  Also, if the jdee functions are not
   ;; available, do nothing.
-  (let ((jde-cygwin-path-converter
-		 (or (if (boundp 'jde-cygwin-path-converter)
+  (let ((jdee-cygwin-path-converter
+		 (or (if (boundp 'jdee-cygwin-path-converter)
 				 (unless cygwin-p
-				   jde-cygwin-path-converter))
+				   jdee-cygwin-path-converter))
 			 (list (lambda (path) path)))))
-	(if (fboundp 'jde-normalize-path)
-		(jde-normalize-path path symbol)
-	  (error "jde-normalize-path is not available"))))
+	(if (fboundp 'jdee-normalize-path)
+		(jdee-normalize-path path symbol)
+	  (error "jdee-normalize-path is not available"))))
 
 (defun jdibug-refresh-threads-buffer ()
   (if (timerp jdibug-refresh-threads-buffer-timer)
