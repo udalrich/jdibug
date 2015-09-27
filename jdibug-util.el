@@ -33,23 +33,32 @@
 (require 'elog)
 (elog-make-logger jdibug-util)
 
-;; Install a signal hook to log errors, but don't do it while inside
+ ;; Install a signal hook to log errors, but don't do it while inside
 ;; condition-case.
-(defadvice condition-case (around jdibug-util-condition-case )
-  "Remember when we are ina  condition-case so that we can ignore signals"
-  (let ((jdibug-util-in-condition-case t))
-	 ad-do-it))
+;; (defadvice condition-case (around jdibug-util-condition-case )
+;;   "Remember when we are ina  condition-case so that we can ignore signals"
+;;   (let ((jdibug-util-in-condition-case t))
+;; 	 ad-do-it))
 
+;; LW: trying to rewrite the advices, following http://www.gnu.org/software/emacs/manual/html_node/elisp/Porting-old-advices.html#Porting-old-advices
+
+(defun jdibug-util--condition-case-around (orig-fun &rest args)
+  "Remember when we are in a condition-case so that we can ignore signals"
+  (let ((jdibug-util-in-condition-case t))
+    (apply orig-fun args)))
 
 (defmacro jdibug-util-with-signal-hook (body)
   "Execute BODY with the jdibug-util signal handler installed"
   (declare (indent 'defun))
   `(progn
-	  (ad-activate 'condition-case)
-	  (let ((signal-hook-function 'jdibug-util--signal-hook))
-		 ,body)
-	  (ad-deactivate 'condition-case)))
-
+         ;; add advice only if `condition-case' is _not_ a special form
+         (if (not (special-form-p 'condition-case))
+             (advice-add 'condition-case :around #'jdibug-util--condition-case-around))
+         (let ((signal-hook-function 'jdibug-util--signal-hook))
+           ,body)
+         ;; remove advice only if `condition-case' is _not_ a special form
+         (if (not (special-form-p 'condition-case))
+             (advice-remove 'condition-case #'jdibug-util--condition-case-around))))
 
 (defvar jdibug-util-signal-count 0)
 (defun jdibug-util--signal-hook (error-symbol data)
@@ -94,6 +103,4 @@
   (apply 'run-with-timer secs repeat function args))
 
 (provide 'jdibug-util)
-
-;;; jdibug-util.el ends here
-
+ ;;; jdibug-util.el ends here
