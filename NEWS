@@ -1,6 +1,13 @@
 * JDIbug News                  -*- outline -*-
 
-* 0.5 (Current)
+* 0.7
+
+** Correctly display ints
+Displaying integer values larger than emacs internal representation can hold
+(about 2^30 for a 32-bit build) now works correctly in most cases.  There are
+some corner cases that may fail, such as accessing the 2^31 element of an array.
+
+* 0.5
 
 ** Added jdibug-remove-all-breakpoints
 Removes all breakpoints with one interactive command.
