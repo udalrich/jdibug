@@ -1,7 +1,7 @@
 (add-hook 'after-save-hook
 	  (lambda ()
 	    (unless (and (boundp 'emacs-is-exiting) emacs-is-exiting)
-	      (load (buffer-file-name)) 
+	      (load (buffer-file-name))
 	      (ert '(tag breakpoints))))
 	  nil 'local)
 
@@ -9,7 +9,7 @@
 (require 'jdibug)
 
 (defmacro with-breakpoints-test (&rest body)
-  (declare (debug 1))
+  (declare (debug 1) (indent 0))
   ;; Remove any prexisting breakpoints
   `(with-jde-test
     (jdwp-uninterruptibly
@@ -31,6 +31,7 @@
     (jdibug-test-wait-for-refresh-timers)
 
     (assert-frames-display-value "throwAndCatch"))))
+
 
 (ert-deftest exception-by-type ()
   "Test that catching exception by type works"
@@ -141,6 +142,15 @@ class is loaded but not the inner class"
   ;; Should be at an anonymous inner class
   (assert-frames-display-value "Main\\$[0-9]+\\.run")))
 
+(ert-deftest step-into-java ()
+    "Test that stepping into a java.* class automatically steps out"
+  :tags '(breakpoints jde)
+  (with-breakpoints-test
+    (jdibug-test-set-breakpoint-and-run "Created stuff")
+    (jdibug-test-step-and-wait 'into)
+    (assert-frames-display-value "println" 'missing)))
+
+
 (defun jdibug-test-set-breakpoint-and-run (expr &optional cond no-connect)
   "Set a breakpoint at the first location of EXPR.  Make it conditional on COND.
 Run until a breakpoint is hit. Do not connect to jvm if NO-CONNECT."
@@ -179,12 +189,14 @@ Run until a breakpoint is hit. Do not connect to jvm if NO-CONNECT."
 	   (rest-of-line (buffer-substring-no-properties (point) eol)))
       (should (string-match (concat ":.*\\(" value "\\)") rest-of-line)))))
 
-(defun assert-frames-display-value (regexp)
+(defun assert-frames-display-value (regexp &optional missing)
   "Assert that REGEXP is displayed in the frames window."
 
   (save-excursion
     (set-buffer jdibug-frames-buffer)
     (goto-char (point-min))
-    (should
-     (search-forward-regexp regexp nil t))))
+    (if missing
+        (should-not (search-forward-regexp regexp nil t))
+      (should (search-forward-regexp regexp nil t)))))
+
 

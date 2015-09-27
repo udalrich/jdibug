@@ -62,26 +62,32 @@
   :group 'jdibug
   :type 'list)
 
+(defgroup jdibug-ui nil
+  "JDIbug user interface options."
+  :prefix "jdibug"
+  :group 'jdibug
+  :package-version '(jdibug . "0.7"))
+
 (defcustom jdibug-refresh-delay 0.5
   "The delay in seconds between when a breakpoint/step was hit
 and the frames/locals buffer are refreshed. Set to 0 for instant update.
 Set to more for speeding up quick multi step when the frames/locals buffer
 need not be refreshed."
-  :group 'jdibug
+  :group 'jdibug-ui
   :type 'float)
 
 (defcustom jdibug-locals-max-array-size 20
   "The maximum number of entries shown when expanding an array.
 Expanding large numbers of arrays is slow.  Setting this to a
 reasonably small number allows the arrays to be expanded quickly."
-  :group 'jdibug
+  :group 'jdibug-ui
   :type 'integer)
 
 (defcustom jdibug-locals-min-sub-array-size 10
   "The minium number of entries shown when expanding an
 sub-array.  This prevents the subarrays from being exceedingly
 short."
-  :group 'jdibug
+  :group 'jdibug-ui
   :type 'integer)
 
 (defcustom jdibug-use-jdee-source-paths t
@@ -92,33 +98,41 @@ short."
 
 (defcustom jdibug-threads-buffer-name "*JDIbug-Threads*"
   "Name of the buffer to display the tree of threads."
-  :group 'jdibug
+  :group 'jdibug-ui
   :type 'string)
 
 (defcustom jdibug-locals-buffer-name "*JDIbug-Locals*"
   "Name of the buffer to display the tree of local variables."
-  :group 'jdibug
+  :group 'jdibug-ui
   :type 'string)
 
 (defcustom jdibug-frames-buffer-name "*JDIbug-Frames*"
   "Name of the buffer to display the list of active frames."
-  :group 'jdibug
+  :group 'jdibug-ui
   :type 'string)
 
 (defcustom jdibug-breakpoints-buffer-name "*JDIbug-Breakpoints*"
   "Name of the buffer to display the list of breakpoints."
-  :group 'jdibug
+  :group 'jdibug-ui
   :type 'string)
 
 (defcustom jdibug-watchpoints-buffer-name "*JDIbug-Watchpoints*"
   "Name of the buffer to display the list of watchpoints."
-  :group 'jdibug
+  :group 'jdibug-ui
   :type 'string)
 
 (defcustom jdibug-break-on-class-regexp "^public\\s-+class"
   "The regexp that will be used to identify whether you want to break on all the methods in the class."
   :group 'jdibug
   :type 'string)
+
+(defcustom jdibug-step-over-classes
+  '("^java\\." "^javax\\.")
+  "List of regular expressions.  Stepping into a class that matches any of
+the regular expression will result in automatically stepping out of the method."
+  :group 'jdibug-ui
+  :type '(repeat string)
+  :package-version '("jdibug" . "0.7"))
 
 (defvar jdibug-connected-hook nil
   "Hook to run when we are connected to the debuggee.")
@@ -244,8 +258,8 @@ because it have two class loaders, or we have two different vm!")
 	      :accessor jdibug-breakpoint-condition
 	      :documentation
 	      "The condition for the breakpoint.  If non-nil,
-	      only step if the condition evaluates to true.  Any
-	      other value (or an error) causes the breakpoing to
+	      only stop if the condition evaluates to true.  Any
+	      other value (or an error) causes the breakpoint to
 	      be ignored.")
    (condition-text :type string :initform ""
 				   :accessor jdibug-breakpoint-condition-text
@@ -636,17 +650,32 @@ the condition is satisfied."
   ;; 	(jdibug-debug "setting jdibug-active-thread to %s in jdibug-handle-step"
   ;; 			   thread)
 
-  (setq jdibug-active-thread thread)
 
+  (setq jdibug-active-thread thread)
   (jdibug-goto-location location)
 
-  (jdibug-refresh-frames-buffer)
-  (jdibug-refresh-threads-buffer)
+  ;; Check if we are in a class that we want to step out of
+  (if (jdibug--auto-step-out-class-p location)
+      (jdibug-step-out)
+    ;; We want to stop here.  Update the displays
+    (jdibug-refresh-frames-buffer)
+    (jdibug-refresh-threads-buffer)
 
-  (unless jdibug-active-frame
-	(setq jdibug-active-frame (car (jdi-thread-get-frames jdibug-active-thread)))
-	(jdibug-refresh-locals-buffer)
-	(jdibug-refresh-watchpoints-buffer)))
+    (unless jdibug-active-frame
+      (setq jdibug-active-frame (car (jdi-thread-get-frames
+                                      jdibug-active-thread)))
+      (jdibug-refresh-locals-buffer)
+      (jdibug-refresh-watchpoints-buffer))))
+
+(defun jdibug--auto-step-out-class-p (location)
+  "Check if LOCATION is part of a class that we want
+to automatically step out of"
+  (let ((class-name (car (jdi-jni-to-print
+                          (jdi-class-get-signature
+                           (jdi-location-class location))))))
+    (cl-find class-name jdibug-step-over-classes
+             :test (lambda (string regexp) (string-match regexp string)))))
+
 
 (defun jdibug-handle-change-frame (frame)
   (jdibug-debug "jdibug-handle-change-frame")
@@ -759,30 +788,30 @@ the condition is satisfied."
 (defface jdibug-current-line
   `((t (:foreground "navajo white" :background "DodgerBlue")))
   "Face for current executing line"
-  :group 'jdibug)
+  :group 'jdibug-ui)
 
 ;;(custom-set-faces '(jdibug-breakpoint-enabled ((t (:foreground "navajo white" :background "indian red"))) t))
 (defface jdibug-breakpoint-enabled
   `((t (:foreground "navajo white" :background "indian red")))
   "Face for enabled breakpoint"
-  :group 'jdibug)
+  :group 'jdibug-ui)
 
 ;;(custom-set-faces '(jdibug-breakpoint-disabled ((t (:foreground "navajo white" :background "SpringGreen4"))) t))
 (defface jdibug-breakpoint-disabled
   `((t (:foreground "navajo white" :background "SpringGreen4")))
   "Face for disabled breakpoint"
-  :group 'jdibug)
+  :group 'jdibug-ui)
 
 ;;(custom-set-faces '(jdibug-breakpoint-unresolved ((t (:foreground "navajo white" :background "gold4"))) t))
 (defface jdibug-breakpoint-unresolved
   `((t (:foreground "navajo white" :background "gold4")))
   "Face for unresolved breakpoint"
-  :group 'jdibug)
+  :group 'jdibug-ui)
 
 (defface jdibug-current-frame
   `((t (:foreground "navajo white" :background "DodgerBlue")))
   "Face for current frame"
-  :group 'jdibug)
+  :group 'jdibug-ui)
 
 (defun jdibug-expand-method-node (tree)
   (jdwp-uninterruptibly

@@ -74,15 +74,21 @@
   (remove-hook 'jdibug-breakpoint-hit-hook #'jdibug-test-breakpoint-hit-hook))
 
 (defvar jdibug-test-step-hit nil)
-(defun jdibug-test-step-over-and-wait ()
-  "Step over the current thread, and then wait until the step is
+(defun jdibug-test-step-over-and-wait
+  (jdibug-test-step-and-wait 'over))
+
+(defun jdibug-test-step-and-wait (step)
+  "Step the current thread, and then wait until the step is
 finished.  Also wait for all of the buffers to finish updating."
   ;; Add a hook to remember when we hit a breakpoint
   (add-hook 'jdi-step-hooks #'jdibug-test-step-hit-hook)
   (setq jdibug-test-step-hit nil)
 
   ;; Step
-  (jdibug-step-over)
+  (case step
+    ('over (jdibug-step-over))
+    ('into (jdibug-step-into))
+    (t (error "Unknown step type: %s" step)))
 
   ;; Wait for the flag to be set
   (jdibug-test-info "Waiting for step to finish")

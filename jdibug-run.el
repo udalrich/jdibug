@@ -31,11 +31,17 @@
 
 (require 'jdibug-ui)
 
+(defgroup jdibug-run nil
+  "JDIbug running options"
+  :prefix "jdibug"
+  :group 'jdibug
+  :package-version '("jdibug" . "0.7")
+)
 (defcustom jdibug-run-jvm-args nil
   "The arguments that will be passed to the JVM by `jdibug-run'.  The value is
 prepended with additional arguments that will cause the JVM to
 wait for the debugger to connect."
-  :group 'jdibug
+  :group 'jdibug-run
   :type '(repeat (string :tag "JVM Argument")))
 
 (defcustom jdibug-run-application-args
@@ -43,7 +49,7 @@ wait for the debugger to connect."
       'jdee-run-option-application-args)
   "List of arguments passed to the java class by `jdibug-run'.  If this is a
 symbol, such as `jdee-run-option-application-args', then the value of that symbol is used."
-  :group 'jdibug
+  :group 'jdibug-run
   ;; Todo: Figure out how to add :tag "String" to the first choice
   :type '(choice (repeat (string :tag "Argument"))
                  (symbol :value jdee-run-option-application-args)))
@@ -52,18 +58,18 @@ symbol, such as `jdee-run-option-application-args', then the value of that symbo
   (if (boundp 'jdee-run-application-class) jdee-run-application-class)
   "Name of the class launched by `jdibug-run'.  The default value
 is `jdee-run-application-class' if that symbol is bound."
-  :group 'jdibug
+  :group 'jdibug-run
   :type 'string)
 
 (defcustom jdibug-run-timeout 10
   "Number of seconds to wait for Java process to be ready to accept connections."
-  :group 'jdibug
+  :group 'jdibug-run
   :type 'float)
 
 (defcustom jdibug-run-jvm-ready-regexp
   "Listening for transport dt_socket at address: "
   "The JVM will print this string when it is ready for a debugger to connect."
-  :group 'jdibug
+  :group 'jdibug-run
   :type 'string)
 
 

@@ -10,6 +10,8 @@ with emacs 24.
 
 Defadvice updated by Łukasz Wiecheć.
 
+Added option to automatically step out of calls to java.* packages.  See jdibug-step-over-classes.
+
 * 0.6
 
 ** Display large integers correct
