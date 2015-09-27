@@ -28,17 +28,19 @@
   "Run BODY, but set things up to support jdee-based testing"
   (declare (debug (body)))
   ;; Shorten the refresh delay so tests can run faster
-  `(unwind-protect 
+  `(unwind-protect
        (save-current-buffer
-	 (let ((jdibug-refresh-delay 0.1)
-	       (jdibug-jde-test-Main-buffer
-		(find-file (expand-file-name
-			    "java/src/com/jdibug/Main.java"
-			    jdibug-test-root-dir)))
-	       (process (get-buffer-process
-			 (jdibug-test-main-buffer-name))))
+         (let ((jdibug-refresh-delay 0.1)
+               (jdibug-jde-test-Main-buffer
+                (find-file (expand-file-name
+                            "java/src/com/jdibug/Main.java"
+                            jdibug-test-root-dir)))
+               (process (get-buffer-process
+                         (jdibug-test-main-buffer-name))))
 	   (when process
 	     (kill-process process))
+       (with-current-buffer jdibug-jde-test-Main-buffer
+         (jdee-mode))
 	   ,@body))
 
      (jdibug-test-info "jde-test-suite teardown")
