@@ -26,7 +26,7 @@
 
 (defmacro with-jde-test (&rest body)
   "Run BODY, but set things up to support jdee-based testing"
-  (declare (debug (body)))
+  (declare (debug t) (indent 0))
   ;; Shorten the refresh delay so tests can run faster
   `(unwind-protect
        (save-current-buffer
