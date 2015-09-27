@@ -30,12 +30,12 @@
 ;;     jdibug-connect-hosts
 ;; which is a list of  hostname:port that you want to connect to.
 ;; Also ensure the
-;;		jdibug-use-jde-source-paths
+;;		jdibug-use-jdee-source-paths
 ;; is set to t.  This causes jdibug to use the jde sourcepath.
 ;;
 ;;
 ;; After that, make sure you have loaded the JDEE project with the
-;; property variables (namely jde-sourcepath)
+;; property variables (namely jdee-sourcepath)
 ;; and execute C-c C-c C-c in a JDEE buffer, wait for a while
 ;; until you see "Done" in the echo area.
 ;;
@@ -58,7 +58,7 @@
 
 (defcustom jdibug-source-paths nil
   "Paths of the source codes. This will be ignored if
-`jdibug-use-jde-source-paths' is t.  This must be a list like '(\"~/src\") not astring like \"~/src\""
+`jdibug-use-jdee-source-paths' is t.  This must be a list like '(\"~/src\") not astring like \"~/src\""
   :group 'jdibug
   :type 'list)
 
@@ -84,8 +84,8 @@ short."
   :group 'jdibug
   :type 'integer)
 
-(defcustom jdibug-use-jde-source-paths t
-  "Set to t to use the jde-sourcepath as the source paths.
+(defcustom jdibug-use-jdee-source-paths t
+  "Set to t to use the jdee-sourcepath as the source paths.
 `jdibug-source-paths' will be ignored if this is set to t."
   :group 'jdibug
   :type 'boolean)
@@ -1349,16 +1349,16 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
 		(message "Class: %s" (jdi-class-signature (jdi-value-get-reference-type value)))))))
 
 (defun jdibug-get-source-paths ()
-  (or (and jdibug-use-jde-source-paths
-	   (if (boundp 'jde-sourcepath)
-	       (if (fboundp 'jde-normalize-path)
-		   (if (fboundp 'jde-expand-wildcards-and-normalize)
-		       (jde-expand-wildcards-and-normalize jde-sourcepath
-							   'jde-sourcepath)
+  (or (and jdibug-use-jdee-source-paths
+	   (if (boundp 'jdee-sourcepath)
+	       (if (fboundp 'jdee-normalize-path)
+		   (if (fboundp 'jdee-expand-wildcards-and-normalize)
+		       (jdee-expand-wildcards-and-normalize jdee-sourcepath
+							   'jdee-sourcepath)
 		     (mapcar
 		      (lambda (path)
-			(jdibug-normalize-path path 'jde-sourcepath t))
-		      jde-sourcepath)))))
+			(jdibug-normalize-path path 'jdee-sourcepath t))
+		      jdee-sourcepath)))))
 	  (if (stringp jdibug-source-paths)
 		  (error "jdibug-source-paths must be a list of strings, not a single string")
 		jdibug-source-paths)))
@@ -1621,12 +1621,12 @@ the class is loaded."
 		  (jdibug-show-file-and-line-number (jdibug-breakpoint-source-file bp)
 											(jdibug-breakpoint-line-number bp))))))
 
-(defun jdibug-breakpoints-jde-mode-hook ()
+(defun jdibug-breakpoints-jdee-mode-hook ()
   (mapc (lambda (bp)
 			 (jdibug-breakpoint-update bp))
 		  (jdibug-all-breakpoints)))
 
-(add-hook 'jde-mode-hook 'jdibug-breakpoints-jde-mode-hook)
+(add-hook 'jdee-mode-hook 'jdibug-breakpoints-jdee-mode-hook)
 
 (defun jdibug-refresh-breakpoints-buffer ()
   (jdibug-debug "jdibug-refresh-breakpoints-buffer:%s breakpoints" (length (jdibug-all-breakpoints)))
@@ -1852,21 +1852,35 @@ locals and watchpoint buffers."
 (add-hook 'jdibug-connected-hook 'jdibug-debug-view-2)
 (add-hook 'jdibug-detached-hook 'jdibug-undebug-view)
 
-;; Until when we have our own minor mode, we put it into jde-mode-map.
-;; Ideally, we should use java-mode, but then we run into conflicts
-;; with C-c C-c where we lose.
-(when (boundp 'jde-mode-map)
-  (define-key jde-mode-map [?\C-c ?\C-c ?\C-c] 'jdibug-connect)
-  (define-key jde-mode-map [?\C-c ?\C-c ?\C-d] 'jdibug-disconnect)
-  (define-key jde-mode-map [?\C-c ?\C-c ?\C-b] 'jdibug-toggle-breakpoint)
-  (define-key jde-mode-map [?\C-c ?\C-c ?\C-n] 'jdibug-step-over)
-  (define-key jde-mode-map [?\C-c ?\C-c ?\C-i] 'jdibug-step-into)
-  (define-key jde-mode-map [?\C-c ?\C-c ?\C-o] 'jdibug-step-out)
-  (define-key jde-mode-map [?\C-c ?\C-c ?\C-r] 'jdibug-resume)
-  (define-key jde-mode-map [?\C-c ?\C-c ?\C-a] 'jdibug-resume-all)
-  (define-key jde-mode-map [?\C-c ?\C-c ?\C-k] 'jdibug-exit-jvm)
-  (define-key jde-mode-map [?\C-c ?\C-c ?\C-w] 'jdibug-add-watchpoint)
+(easy-mmode-define-minor-mode
+ jdibug-minor-mode
+ "Toggle jdibug-minor-mode.
+With no argument, this command toggles the mode.
+Non-null prefix argument turns on the mode.
+Null prefix argument turns off the mode.
+
+Supports debugging of Java programs.  Works best in
+`jdee-mode' buffers, but can also work in `java-mode' buffers."
+ nil ;; on by default
+ "JDI" ; nil ;; no mode line symbol
+ ;; keymap, defined as an alist
+ '(([?\C-c ?\C-c ?\C-c] . jdibug-connect)
+   ([?\C-c ?\C-c ?\C-d] . jdibug-disconnect)
+   ([?\C-c ?\C-c ?\C-b] . jdibug-toggle-breakpoint)
+   ([?\C-c ?\C-c ?\C-n] . jdibug-step-over)
+   ([?\C-c ?\C-c ?\C-i] . jdibug-step-into)
+   ([?\C-c ?\C-c ?\C-o] . jdibug-step-out)
+   ([?\C-c ?\C-c ?\C-r] . jdibug-resume)
+   ([?\C-c ?\C-c ?\C-a] . jdibug-resume-all)
+   ([?\C-c ?\C-c ?\C-k] . jdibug-exit-jvm)
+   ([?\C-c ?\C-c ?\C-w] . jdibug-add-watchpoint)
   )
+ :group 'jdibug
+ :require 'jdibug)
+
+;; Turn on the minor mode when a java buffer is loaded.  TODO: add an option to
+;; control this, so the user can have jdibug only in some buffers.
+(add-hook 'java-mode-hook #'jdibug-minor-mode)
 
 (defun jdibug-value-get-string (value)
   "Get a string to be displayed for a value"
@@ -2064,18 +2078,18 @@ special cases like infinity."
 
 
 (defun jdibug-normalize-path (path symbol cygwin-p)
-  "Process PATH and SYMBOL like `jde-normalize-path'.  If CYGWIN-P, leave the result in cygwin form."
+  "Process PATH and SYMBOL like `jdee-normalize-path'.  If CYGWIN-P, leave the result in cygwin form."
   ;; If we want to leave paths in cygwin form, bind the converter to a
   ;; function that does nothing.  Also, if the jdee functions are not
   ;; available, do nothing.
-  (let ((jde-cygwin-path-converter
-		 (or (if (boundp 'jde-cygwin-path-converter)
+  (let ((jdee-cygwin-path-converter
+		 (or (if (boundp 'jdee-cygwin-path-converter)
 				 (unless cygwin-p
-				   jde-cygwin-path-converter))
+				   jdee-cygwin-path-converter))
 			 (list (lambda (path) path)))))
-	(if (fboundp 'jde-normalize-path)
-		(jde-normalize-path path symbol)
-	  (error "jde-normalize-path is not available"))))
+	(if (fboundp 'jdee-normalize-path)
+		(jdee-normalize-path path symbol)
+	  (error "jdee-normalize-path is not available"))))
 
 (defun jdibug-refresh-threads-buffer ()
   (if (timerp jdibug-refresh-threads-buffer-timer)
