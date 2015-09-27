@@ -191,5 +191,3 @@ Not really a conversion like the rest of the file, but sort of."
 			  (should (<= (ceiling num-display step)
                           jdibug-locals-max-array-size))))
 		  data)))
-
-

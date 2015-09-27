@@ -102,7 +102,7 @@ public class Main
 		  try {
 				throw new JdibugBarException("caught");
 		  } catch (RuntimeException exc) {
-				Systtem.out.println("Caught expected exception");
+				System.out.println("Caught expected exception");
 				exc.printStackTrace(System.out);
 		  }
 	 }

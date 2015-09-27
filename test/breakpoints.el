@@ -107,12 +107,13 @@
 inner or outer class is loaded."
   :tags '(breakpoints jde)
 
-(with-breakpoints-test  (jdibug-test-info "Running nested-class-breakpoint");
+  (with-breakpoints-test
+    (jdibug-test-info "Running nested-class-breakpoint");
 
-  (jdibug-test-set-breakpoint-and-run "doStuff();")
+    (jdibug-test-set-breakpoint-and-run "doStuff();")
 
-  ;; Should be at an anonymous inner class
-  (assert-frames-display-value "Main\\$[0-9]+\\.run")))
+    ;; Should be at an anonymous inner class
+    (assert-frames-display-value "Main\\$[0-9]+\\.run")))
 
 (ert-deftest nested-class-breakpoint-after-load ()
   "Test that breakpoints in nested classes work when the breakpoint is set
@@ -133,14 +134,14 @@ class is loaded but not the inner class"
   :tags '(breakpoints jde)
 
   (with-breakpoints-test
-  (jdibug-test-info "Running nested-class-breakpoint-after-load-of-outer")
+    (jdibug-test-info "Running nested-class-breakpoint-after-load-of-outer")
 
-  (jdibug-test-set-breakpoint-and-run "twoAsInt")
+    (jdibug-test-set-breakpoint-and-run "twoAsInt")
 
-  (jdibug-test-set-breakpoint-and-run "doStuff();" nil 'no-connect)
+    (jdibug-test-set-breakpoint-and-run "doStuff();" nil 'no-connect)
 
-  ;; Should be at an anonymous inner class
-  (assert-frames-display-value "Main\\$[0-9]+\\.run")))
+    ;; Should be at an anonymous inner class
+    (assert-frames-display-value "Main\\$[0-9]+\\.run")))
 
 (ert-deftest step-into-java ()
     "Test that stepping into a java.* class automatically steps out"
@@ -198,5 +199,3 @@ Run until a breakpoint is hit. Do not connect to jvm if NO-CONNECT."
     (if missing
         (should-not (search-forward-regexp regexp nil t))
       (should (search-forward-regexp regexp nil t)))))
-
-

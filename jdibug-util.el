@@ -97,10 +97,11 @@
   ;;   												 (apply function args)))
   ;;   	 function args))
 
-  ;; Emacs-24 doesn't allow advince on condition-case.  Figure out if there is a
+  ;; Emacs-24 doesn't allow advice on condition-case.  Figure out if there is a
   ;; way to restore the logging, but for now, just run the function without the
   ;; wrapper.
   (apply 'run-with-timer secs repeat function args))
 
 (provide 'jdibug-util)
  ;;; jdibug-util.el ends here
+

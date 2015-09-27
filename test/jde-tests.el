@@ -1,4 +1,3 @@
-					;
 ;; These tests run JDE and JDI together, for a system level
 ;; integration test suite.  These tests assume that the code in
 ;; test/java has been built.
@@ -48,7 +47,6 @@
      (jdwp-traffic-info "Test Finished")
      ))
 
-
 (defvar jdibug-test-breakpoint-hit nil)
 (defun jdibug-test-resume-and-wait-for-breakpoint ()
   "Resume all threads, and then wait until a breakpoint is hit."
@@ -74,7 +72,7 @@
   (remove-hook 'jdibug-breakpoint-hit-hook #'jdibug-test-breakpoint-hit-hook))
 
 (defvar jdibug-test-step-hit nil)
-(defun jdibug-test-step-over-and-wait
+(defun jdibug-test-step-over-and-wait ()
   (jdibug-test-step-and-wait 'over))
 
 (defun jdibug-test-step-and-wait (step)

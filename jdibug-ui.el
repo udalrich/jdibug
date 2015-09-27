@@ -1451,7 +1451,6 @@ based on the file name."
 		(jdibug-message "pending" t))))
   (jdibug-breakpoint-update bp))
 
-
 (defmethod set-breakpoint-in-vm ((bp jdibug-breakpoint-location) vm &optional class)
   (jdibug-debug "set-breakpoint-in-vm %s" (class-name (class-of bp)))
   (let ((source-file (jdibug-breakpoint-source-file bp))
