@@ -41,10 +41,10 @@
             (goto-char (point-min))
             (while (search-forward "@minor-version@" nil t)
               (replace-match jdibug-release-minor-version)))
-          (let ((out-file (expand-file-name (in-file) jdibug-build-directory )))
+          (let ((out-file (expand-file-name in-file jdibug-build-directory )))
             (write-file out-file)
             (byte-compile-file out-file)))
-        ("jdibug.el" "jdibug-pkg.el"))
+        '("jdibug.el" "jdibug-pkg.el"))
 
   (pop-to-buffer "*Compile-Log*")
   (message "finished compilation"))

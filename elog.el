@@ -99,7 +99,9 @@
 ;; Good Luck Have Fun
 
 ;;; Code:
-(require 'cl)
+(eval-and-compile
+  (require 'cl))
+
 (defstruct elog-appender
   category
   priority
