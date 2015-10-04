@@ -47,16 +47,16 @@
 ;; (elog-set-appenders
 ;;  (list
 ;;   (make-elog-appender :category 'foo
-;; 					     :priority 'trace
-;; 					     :layout "%H:%M:%S [%p] %c : %m%n"
-;; 					     :output " foo-log")
+;;                       :priority 'trace
+;;                       :layout "%H:%M:%S [%p] %c : %m%n"
+;;                       :output " foo-log")
 ;;   (make-elog-appender :category 'bar
-;; 					     :priority 'error
-;; 					     :layout "%H:%M:%S [%p] %c : %m%n"
-;; 					     :output " bar-log")
+;;                       :priority 'error
+;;                       :layout "%H:%M:%S [%p] %c : %m%n"
+;;                       :output " bar-log")
 ;;   (make-elog-appender :priority 'error
-;; 					     :layout "%H:%M:%S [%p] %c : %m%n"
-;; 					     :output 'elog-safe-message)))
+;;                       :layout "%H:%M:%S [%p] %c : %m%n"
+;;                       :output 'elog-safe-message)))
 ;;
 ;; :category specifies the module that you pass to elog-make-logger
 ;; :priority specifies that anything above and including this priority
@@ -99,7 +99,7 @@
 ;; Good Luck Have Fun
 
 ;;; Code:
-
+(require 'cl)
 (defstruct elog-appender
   category
   priority
@@ -108,51 +108,51 @@
 
 (eval-and-compile
   (defvar elog-appenders nil
-	"A list of elog-appender.")
+    "A list of elog-appender.")
 
   (defvar elog-categories nil
-	"List of categories that we have so far.")
+    "List of categories that we have so far.")
 
   (defvar elog-priorities nil
-	"A list of priorities for logging, higher number means more important.")
+    "A list of priorities for logging, higher number means more important.")
 
   (setq elog-priorities
-		'((trace . 0)
-		  (debug . 1)
-		  (info  . 2)
-		  (warn  . 3)
-		  (error . 4)
-		  (fatal . 5)))
+        '((trace . 0)
+          (debug . 1)
+          (info  . 2)
+          (warn  . 3)
+          (error . 4)
+          (fatal . 5)))
 
   (defun elog-priority-num (pri)
-	(cdr (assoc pri elog-priorities)))
+    (cdr (assoc pri elog-priorities)))
 
   (defun elog-get-appenders (priority category)
-	(loop for app in elog-appenders
-		  when (and (or (null (elog-appender-category app)) (equal category (elog-appender-category app)))
-					(<= (elog-priority-num (elog-appender-priority app)) (elog-priority-num priority)))
-		  collect app))
+    (loop for app in elog-appenders
+          when (and (or (null (elog-appender-category app)) (equal category (elog-appender-category app)))
+                    (<= (elog-priority-num (elog-appender-priority app)) (elog-priority-num priority)))
+          collect app))
 
   (defun elog-update-flags ()
-	(loop for cat in elog-categories
-		  do
-		  (loop for priority in elog-priorities
-				do
-				(let ((flag (intern (format "%s-%s-flag" cat (car priority)))))
-				  (if (elog-get-appenders (car priority) cat)
-					  (set flag t)
-					(set flag nil)))))))
+    (loop for cat in elog-categories
+          do
+          (loop for priority in elog-priorities
+                do
+                (let ((flag (intern (format "%s-%s-flag" cat (car priority)))))
+                  (if (elog-get-appenders (car priority) cat)
+                      (set flag t)
+                    (set flag nil)))))))
 
 (defmacro elog-make-logger (category)
   (let ((macros
-		 (mapcar (lambda (pri)
-				   (let* ((suffix (car pri))
-						  (funcname (concat (symbol-name category) "-" (symbol-name suffix))))
-					 `(defmacro ,(intern funcname) (fmt &rest objects)
-						`(elog-log ',',suffix ',',category ,fmt ,@objects))))
-				 elog-priorities)))
-	(add-to-list 'elog-categories category)
-	(elog-update-flags)
+         (mapcar (lambda (pri)
+                   (let* ((suffix (car pri))
+                          (funcname (concat (symbol-name category) "-" (symbol-name suffix))))
+                     `(defmacro ,(intern funcname) (fmt &rest objects)
+                        `(elog-log ',',suffix ',',category ,fmt ,@objects))))
+                 elog-priorities)))
+    (add-to-list 'elog-categories category)
+    (elog-update-flags)
     `(progn ,@macros (add-to-list 'elog-categories ',category) (elog-update-flags))))
 
 (defun elog-set-appenders (appenders)
@@ -161,11 +161,11 @@
 
 (defun elog-appender-layout-apply (layout priority category fmt &rest objects)
   (let* ((msg layout)
-		 (now (current-time))
-		 (hour (format-time-string "%H" now))
-		 (minute (format-time-string "%M" now))
-		 (second (format-time-string "%S" now))
-		 (case-fold-search nil))
+         (now (current-time))
+         (hour (format-time-string "%H" now))
+         (minute (format-time-string "%M" now))
+         (second (format-time-string "%S" now))
+         (case-fold-search nil))
     (setq msg (replace-regexp-in-string "%H" hour msg))
     (setq msg (replace-regexp-in-string "%M" minute msg))
     (setq msg (replace-regexp-in-string "%S" second msg))
@@ -177,27 +177,27 @@
 
 (defun elog-appender-apply (appender priority category fmt &rest objects)
   (let ((output (apply 'elog-appender-layout-apply (elog-appender-layout appender) priority category fmt objects)))
-	(cond ((stringp (elog-appender-output appender))
-		   (with-current-buffer (get-buffer-create (elog-appender-output appender))
-			 (goto-char (point-max))
-			 (insert output)))
-		  ((functionp (elog-appender-output appender))
-		   (funcall (elog-appender-output appender) output)))))
+    (cond ((stringp (elog-appender-output appender))
+           (with-current-buffer (get-buffer-create (elog-appender-output appender))
+             (goto-char (point-max))
+             (insert output)))
+          ((functionp (elog-appender-output appender))
+           (funcall (elog-appender-output appender) output)))))
 
 (defmacro elog-log (priority category fmt &rest objects)
   `(if (symbol-value (intern (format "%s-%s-flag" ,category ,priority)))
-	   (let ((appenders (elog-get-appenders ,priority ,category)))
-		 (if appenders
-			 (dolist (app appenders)
-			   (elog-appender-apply app ,priority ,category ,fmt ,@objects))))))
+       (let ((appenders (elog-get-appenders ,priority ,category)))
+         (if appenders
+             (dolist (app appenders)
+               (elog-appender-apply app ,priority ,category ,fmt ,@objects))))))
 
 (defun elog-trim (obj max)
   (let ((str (if (stringp obj)
-				 obj
-			   (format "%s" obj))))
-	(if (> (length str) max)
-		(substring str 0 (- max 3))
-	  str)))
+                 obj
+               (format "%s" obj))))
+    (if (> (length str) max)
+        (substring str 0 (- max 3))
+      str)))
 
 (defun elog-safe-message (string &rest args)
   "Send STRING to message without causing problems if it contains
