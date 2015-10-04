@@ -3,9 +3,9 @@
 ;; Author: Troy Daniels <udalrich.schermer@gmail.com>
 ;; Maintainer: Troy Daniels <udalrich.schermer@gmail.com>
 
-;;; Commentary:
+;;; URL: https://github.com/udalrich/jdibug/branches
 
-;; https://github.com/udalrich/jdibug/branches
+;;; Commentary:
 
 ;; If you are using JDEE, you only need to customize two variables
 ;;     jdibug-connect-hosts
@@ -25,10 +25,11 @@
 ;; Just run your application until you hit the breakpoint
 ;; after that stuffs are pretty much self explanatory
 ;;
-;; The rest of the functions are almost similiar to that of jdb and jdebug
-;; Wrapper that requires all the relevant components
+;; The rest of the functions are almost similiar to that of jdb and jdebug.
 
 ;;; Code:
+
+;; Wrapper that requires all the relevant components
 
 (require 'elog)
 (require 'tree-mode)
