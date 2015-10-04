@@ -35,7 +35,7 @@ dist: build doc melpa
 	bzip2 $(BUILD_DIR)/$(BUILD_NAME).tar
 
 
-melpa:
+melpa: build doc
 # MELPA wants everything in the repository, so we need to copy the files
 # generated from the wy files to someplace under version control. Ugh.
 	@echo Copying wy files
