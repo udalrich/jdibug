@@ -100,7 +100,7 @@
 
 ;;; Code:
 
-(defstruct elog-appender
+(cl-defstruct elog-appender
   category
   priority
   layout
