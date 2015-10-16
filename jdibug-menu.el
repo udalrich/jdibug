@@ -110,7 +110,7 @@
 
 (easy-menu-define jdibug-menu java-mode-map "JDIbug Menu"
   jdibug-menu-spec)
-;; (easy-menu-define jdibug-menu jde-mode-map "JDIbug Menu"
+;; (easy-menu-define jdibug-menu jdee-mode-map "JDIbug Menu"
 ;;   jdibug-menu-spec)
 
 (provide 'jdibug-menu)
