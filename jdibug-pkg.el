@@ -6,7 +6,9 @@
   "Lisp based Java debugger" ; description
   () ; dependencies
   :url "http://github.com/udalrich/jdibug"
-  :keywords '("java" "tools"))
+  :keywords '("java" "tools")
+  :files '("*.el" "generated/*.el"))
+
 )
 
 ;; Local Variables:
