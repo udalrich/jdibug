@@ -49,11 +49,5 @@
 (defconst jdibug-version (concat jdibug-major-version "." jdibug-minor-version)
   "Version of this release.")
 
-;; Expand load-path if this is a melpa-install
-(let ((generated-dir (concat (file-name-directory (buffer-file-name))
-                             "generated")))
-  (when (file-exists-p generated-dir)
-    (add-to-list 'load-path generated-dir)))
-
 (provide 'jdibug)
 ;;; jdibug.el ends here
