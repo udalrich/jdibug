@@ -11,7 +11,7 @@ EMACS_ARGS=-batch -q --no-site-file  -l $(EL_INIT)
 
 
 # TODO: Better way to find jdee.
-JDEE_DIR:=$(shell find $(HOME)/.emacs.d/elpa -type d -name "jdee-*")
+JDEE_DIR:=$(shell find $(HOME)/.emacs.d/ -type d -name "jdee-*")
 
 TEST_DIR = ./test
 

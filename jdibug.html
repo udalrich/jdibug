@@ -1,354 +1,366 @@
-<html lang="en">
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<!-- Created by GNU Texinfo 5.2, http://www.gnu.org/software/texinfo/ -->
 <head>
 <title>JDIbug User Manual</title>
-<meta http-equiv="Content-Type" content="text/html">
+
 <meta name="description" content="JDIbug User Manual">
-<meta name="generator" content="makeinfo 4.8">
-<link title="Top" rel="top" href="#Top">
-<link href="http://www.gnu.org/software/texinfo/" rel="generator-home" title="Texinfo Homepage">
-<meta http-equiv="Content-Style-Type" content="text/css">
-<style type="text/css"><!--
-  pre.display { font-family:inherit }
-  pre.format  { font-family:inherit }
-  pre.smalldisplay { font-family:inherit; font-size:smaller }
-  pre.smallformat  { font-family:inherit; font-size:smaller }
-  pre.smallexample { font-size:smaller }
-  pre.smalllisp    { font-size:smaller }
-  span.sc    { font-variant:small-caps }
-  span.roman { font-family:serif; font-weight:normal; } 
-  span.sansserif { font-family:sans-serif; font-weight:normal; } 
---></style>
+<meta name="keywords" content="JDIbug User Manual">
+<meta name="resource-type" content="document">
+<meta name="distribution" content="global">
+<meta name="Generator" content="makeinfo">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<link href="#Top" rel="start" title="Top">
+<link href="dir.html#Top" rel="up" title="(dir)">
+<style type="text/css">
+<!--
+a.summary-letter {text-decoration: none}
+blockquote.smallquotation {font-size: smaller}
+div.display {margin-left: 3.2em}
+div.example {margin-left: 3.2em}
+div.indentedblock {margin-left: 3.2em}
+div.lisp {margin-left: 3.2em}
+div.smalldisplay {margin-left: 3.2em}
+div.smallexample {margin-left: 3.2em}
+div.smallindentedblock {margin-left: 3.2em; font-size: smaller}
+div.smalllisp {margin-left: 3.2em}
+kbd {font-style:oblique}
+pre.display {font-family: inherit}
+pre.format {font-family: inherit}
+pre.menu-comment {font-family: serif}
+pre.menu-preformatted {font-family: serif}
+pre.smalldisplay {font-family: inherit; font-size: smaller}
+pre.smallexample {font-size: smaller}
+pre.smallformat {font-family: inherit; font-size: smaller}
+pre.smalllisp {font-size: smaller}
+span.nocodebreak {white-space:nowrap}
+span.nolinebreak {white-space:nowrap}
+span.roman {font-family:serif; font-weight:normal}
+span.sansserif {font-family:sans-serif; font-weight:normal}
+ul.no-bullet {list-style: none}
+-->
+</style>
+
+
 </head>
-<body>
 
-<div class="node">
-<p><hr>
+<body lang="en" bgcolor="#FFFFFF" text="#000000" link="#0000FF" vlink="#800080" alink="#FF0000">
+<h1 class="settitle" align="center">JDIbug User Manual</h1>
+
 <a name="Top"></a>
-Next:&nbsp;<a rel="next" accesskey="n" href="#Rationale">Rationale</a>,
-Previous:&nbsp;<a rel="previous" accesskey="p" href="#dir">(dir)</a>,
-Up:&nbsp;<a rel="up" accesskey="u" href="#dir">(dir)</a>
-
+<div class="header">
+<p>
+Next: <a href="#Rationale" accesskey="n" rel="next">Rationale</a>, Previous: <a href="dir.html#Top" accesskey="p" rel="prev">(dir)</a>, Up: <a href="dir.html#Top" accesskey="u" rel="up">(dir)</a> &nbsp; </p>
 </div>
+<a name="JDIbug-User-Manual"></a>
+<h1 class="top">JDIbug User Manual</h1>
 
-<h2 class="unnumbered">JDIbug User Manual</h2>
+<table class="menu" border="0" cellspacing="0">
+<tr><td align="left" valign="top">&bull; <a href="#Rationale" accesskey="1">Rationale</a>:</td><td>&nbsp;&nbsp;</td><td align="left" valign="top">Why I created JDIbug
+</td></tr>
+<tr><td align="left" valign="top">&bull; <a href="#Installation" accesskey="2">Installation</a>:</td><td>&nbsp;&nbsp;</td><td align="left" valign="top">How to install JDIbug
+</td></tr>
+<tr><td align="left" valign="top">&bull; <a href="#Configuration" accesskey="3">Configuration</a>:</td><td>&nbsp;&nbsp;</td><td align="left" valign="top">Configuring JDIbug
+</td></tr>
+<tr><td align="left" valign="top">&bull; <a href="#Connecting" accesskey="4">Connecting</a>:</td><td>&nbsp;&nbsp;</td><td align="left" valign="top">Connecting to and Disconnecting from a debuggee
+</td></tr>
+<tr><td align="left" valign="top">&bull; <a href="#Breakpoints" accesskey="5">Breakpoints</a>:</td><td>&nbsp;&nbsp;</td><td align="left" valign="top">Setting and clearing breakpoints
+</td></tr>
+<tr><td align="left" valign="top">&bull; <a href="#Stepping" accesskey="6">Stepping</a>:</td><td>&nbsp;&nbsp;</td><td align="left" valign="top">Stepping into, over and out of source codes
+</td></tr>
+<tr><td align="left" valign="top">&bull; <a href="#Locals-Browser" accesskey="7">Locals Browser</a>:</td><td>&nbsp;&nbsp;</td><td align="left" valign="top">Using the Locals Browser
+</td></tr>
+<tr><td align="left" valign="top">&bull; <a href="#Frames-Browser" accesskey="8">Frames Browser</a>:</td><td>&nbsp;&nbsp;</td><td align="left" valign="top">Using the Frames Browser
+</td></tr>
+<tr><td align="left" valign="top">&bull; <a href="#Breakpoints-Browser" accesskey="9">Breakpoints Browser</a>:</td><td>&nbsp;&nbsp;</td><td align="left" valign="top">Using the Breakpoint Browser
+</td></tr>
+<tr><td align="left" valign="top">&bull; <a href="#Threads-Browser">Threads Browser</a>:</td><td>&nbsp;&nbsp;</td><td align="left" valign="top">Using the Threads Browser
+</td></tr>
+<tr><td align="left" valign="top">&bull; <a href="#Watchpoint-Buffer">Watchpoint Buffer</a>:</td><td>&nbsp;&nbsp;</td><td align="left" valign="top">Using the Watchpoint Buffer
+</td></tr>
+<tr><td align="left" valign="top">&bull; <a href="#Window-Layout">Window Layout</a>:</td><td>&nbsp;&nbsp;</td><td align="left" valign="top">Changing the default window layout
+</td></tr>
+<tr><td align="left" valign="top">&bull; <a href="#Bug-Reporting">Bug Reporting</a>:</td><td>&nbsp;&nbsp;</td><td align="left" valign="top">When you think there&rsquo;s a bug in JDIbug
+</td></tr>
+</table>
 
-   <p>
-
-<ul class="menu">
-<li><a accesskey="1" href="#Rationale">Rationale</a>:                    Why I created JDIbug
-<li><a accesskey="2" href="#Installation">Installation</a>:                 How to install JDIbug
-<li><a accesskey="3" href="#Configuration">Configuration</a>:                Configuring JDIbug
-<li><a accesskey="4" href="#Connecting">Connecting</a>:                   Connecting to and Disconnecting from a debuggee
-<li><a accesskey="5" href="#Breakpoints">Breakpoints</a>:                  Setting and clearing breakpoints
-<li><a accesskey="6" href="#Stepping">Stepping</a>:                     Stepping into, over and out of source codes
-<li><a accesskey="7" href="#Locals-Browser">Locals Browser</a>:               Using the Locals Browser
-<li><a accesskey="8" href="#Frames-Browser">Frames Browser</a>:               Using the Frames Browser
-<li><a accesskey="9" href="#Breakpoints-Browser">Breakpoints Browser</a>:          Using the Breakpoint Browser
-<li><a href="#Threads-Browser">Threads Browser</a>:              Using the Threads Browser
-<li><a href="#Watchpoint-Buffer">Watchpoint Buffer</a>:            Using the Watchpoint Buffer
-<li><a href="#Window-Layout">Window Layout</a>:                Changing the default window layout
-<li><a href="#Bug-Reporting">Bug Reporting</a>:                When you think there's a bug in JDIbug
-</ul>
-
-<div class="node">
-<p><hr>
+<hr>
 <a name="Rationale"></a>
-Next:&nbsp;<a rel="next" accesskey="n" href="#Installation">Installation</a>,
-Previous:&nbsp;<a rel="previous" accesskey="p" href="#Top">Top</a>,
-Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
-
+<div class="header">
+<p>
+Next: <a href="#Installation" accesskey="n" rel="next">Installation</a>, Previous: <a href="#Top" accesskey="p" rel="prev">Top</a>, Up: <a href="#Top" accesskey="u" rel="up">Top</a> &nbsp; </p>
 </div>
-
+<a name="Rationale-1"></a>
 <h2 class="chapter">1 Rationale</h2>
 
-<p>
-One word, locals browser. As I started using JDEE, there are two
+<p>One word, locals browser. As I started using JDEE, there are two
 debuggers that are available, which are jdb and jdebug.
-
-jdb is too simple to be used as a debugger, I find myself doing
+</p>
+<p>jdb is too simple to be used as a debugger, I find myself doing
 <code>locals</code> repeatedly while stepping through the codes, and the
 output of <code>locals</code> are not sorted! It is worse when I want to
 inspect the attributes of particular objects.
-
-jdebug is too slow and buggy for my liking, stepping through the
+</p>
+<p>jdebug is too slow and buggy for my liking, stepping through the
 source files takes forever.
-
-I then started using jswat, which is very user friendly. But it
-doesn't integrate with Emacs.
-
-So I created JDIbug.
-
-<div class="node">
-<p><hr>
+</p>
+<p>I then started using jswat, which is very user friendly. But it
+doesn&rsquo;t integrate with Emacs.
+</p>
+<p>So I created JDIbug.
+</p>
+<hr>
 <a name="Installation"></a>
-Next:&nbsp;<a rel="next" accesskey="n" href="#Configuration">Configuration</a>,
-Previous:&nbsp;<a rel="previous" accesskey="p" href="#Rationale">Rationale</a>,
-Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
-
+<div class="header">
+<p>
+Next: <a href="#Configuration" accesskey="n" rel="next">Configuration</a>, Previous: <a href="#Rationale" accesskey="p" rel="prev">Rationale</a>, Up: <a href="#Top" accesskey="u" rel="up">Top</a> &nbsp; </p>
 </div>
-
+<a name="Installation-1"></a>
 <h2 class="chapter">2 Installation</h2>
 
-<p>
-JDIbug is hosted at googlecode, at
+<p>JDIbug is hosted at googlecode, at
 <a href="http://code.google.com/p/jdibug/">http://code.google.com/p/jdibug/</a>
-
-Download distribution file and untar it into somewhere within
+</p>
+<p>Download distribution file and untar it into somewhere within
 your <code>load-path</code>. For example, I keep all my emacs modules under
-my <samp><span class="file">~/emacs/site</span></samp>, so the jdibug <samp><span class="file">.el</span></samp> files will go into
-<samp><span class="file">~/emacs/site/jdibug-0.4</span></samp>.
+my <samp>~/emacs/site</samp>, so the jdibug <samp>.el</samp> files will go into
+<samp>~/emacs/site/jdibug-0.4</samp>.
+</p>
+<p>Then add the path into your <code>load-path</code>, and <code>require</code> it,
+for example, I have the following in my <samp>.emacs</samp> file:
+</p>
+<div class="example">
+<pre class="example">(add-to-list 'load-path (expand-file-name &quot;~/emacs/site/jdibug-0.5&quot;))
+(require 'jdibug)
+</pre></div>
 
-Then add the path into your <code>load-path</code>, and <code>require</code> it,
-for example, I have the following in my <samp><span class="file">.emacs</span></samp> file:
-
-<pre class="example">     (add-to-list 'load-path (expand-file-name "~/emacs/site/jdibug-0.5"))
-     (require 'jdibug)
-</pre>
-   <p>
-You also need to install CEDET from
+<p>You also need to install CEDET from
 <a href="http://cedet.sourceforge.net/">http://cedet.sourceforge.net/</a>.  The current code was tested
 with the 1.0pre7 release.  If you are using Emacs 23, CEDET should
 already be installed as part of the release.  Otherwise, follow the
 installation instructions from the above link.
-
-That's it, you are good to go.
-
-<div class="node">
-<p><hr>
+</p>
+<p>That&rsquo;s it, you are good to go.
+</p>
+<hr>
 <a name="Configuration"></a>
-Next:&nbsp;<a rel="next" accesskey="n" href="#Connecting">Connecting</a>,
-Previous:&nbsp;<a rel="previous" accesskey="p" href="#Installation">Installation</a>,
-Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
-
+<div class="header">
+<p>
+Next: <a href="#Connecting" accesskey="n" rel="next">Connecting</a>, Previous: <a href="#Installation" accesskey="p" rel="prev">Installation</a>, Up: <a href="#Top" accesskey="u" rel="up">Top</a> &nbsp; </p>
 </div>
-
+<a name="Configuration-1"></a>
 <h2 class="chapter">3 Configuration</h2>
 
-<p>
-Although JDIbug current does not rely on any data from JDEE, a lot of
+<p>Although JDIbug current does not rely on any data from JDEE, a lot of
 things are made very simple when using JDIbug with JDEE. So please
 <a href="http://jdee.sourceforge.net/install.html">install JDEE</a> if you have not yet done it.
-
-There are only two parameters that you need to configure before you
-can start using JDIbug, which is the `jdibug-connect-hosts' parameter.
+</p>
+<p>There are only two parameters that you need to configure before you
+can start using JDIbug, which is the &lsquo;jdibug-connect-hosts&rsquo; parameter.
 <code>jdibug-connect-hosts</code> specifies a list of hostname and ports of
 the debuggee process that you want to debug.  It is possible to
-connect to multiple hosts.  For example, <code>("localhost:6001"
-"server:6002")</code> would cause JDIbug to attempt to connect to a process
+connect to multiple hosts.  For example, <code>(&quot;localhost:6001&quot;
+&quot;server:6002&quot;)</code> would cause JDIbug to attempt to connect to a process
 at port 6001 on the computer starting JDIbug and to port 6002 on the
 machine &ldquo;server&rdquo;.
-
-If you have multiple projects set up using JDEE's <samp><span class="file">prj.el</span></samp> file,
-you can set the two parameters inside the <samp><span class="file">prj.el</span></samp> file so that
+</p>
+<p>If you have multiple projects set up using JDEE&rsquo;s <samp>prj.el</samp> file,
+you can set the two parameters inside the <samp>prj.el</samp> file so that
 different projects can be connected using different host/ports by
 JDIbug.
+</p>
+<p>If you are using JDEE, you will also want to customize jde-run-option-debug, as shown below.
+</p>
+<img src="images/jde-run-option-debug.png" alt="images/jde-run-option-debug">
 
-   If you are using JDEE, you will also want to customize jde-run-option-debug, as shown below.
+<p>Ensure that you use the same port number when customizing &lsquo;jdibug-connect-hosts&rsquo; and &lsquo;jde-run-option-debug&rsquo;.
+</p>
 
-<img src="images/jde-run-option-debug.png" alt="images/jde-run-option-debug.png">
-
-   Ensure that you use the same port number when customizing `jdibug-connect-hosts' and `jde-run-option-debug'.
-
-
-If you want to use JDIbug without using JDEE, you need to customize two
+<p>If you want to use JDIbug without using JDEE, you need to customize two
 additional parameters.  Customize <code>jdibug-use-jde-source-paths</code> to false
 (nil).  Then customize <code>jdibug-source-paths</code> to the location of your
-source.  This should be a list of locations: <code>("~/src")</code>
-<strong>not</strong> <code>"~/src"</code>.
-
-   If you are not using JDEE, you will want to add the following lines
+source.  This should be a list of locations: <code>(&quot;~/src&quot;)</code>
+<strong>not</strong> <code>&quot;~/src&quot;</code>.
+</p>
+<p>If you are not using JDEE, you will want to add the following lines
 the your java command.  (These values work with the Sun JVM.  Other
-JVM's may need different parameters.)
-<pre class="example">     -Xdebug
-     -Xrunjdwp:transport=dt_socket,address=6001,server=y,suspend=y
-</pre>
-   <p>
-<div class="node">
-<p><hr>
+JVM&rsquo;s may need different parameters.)
+</p><div class="example">
+<pre class="example">-Xdebug
+-Xrunjdwp:transport=dt_socket,address=6001,server=y,suspend=y
+</pre></div>
+
+<hr>
 <a name="Connecting"></a>
-Next:&nbsp;<a rel="next" accesskey="n" href="#Breakpoints">Breakpoints</a>,
-Previous:&nbsp;<a rel="previous" accesskey="p" href="#Configuration">Configuration</a>,
-Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
-
+<div class="header">
+<p>
+Next: <a href="#Breakpoints" accesskey="n" rel="next">Breakpoints</a>, Previous: <a href="#Configuration" accesskey="p" rel="prev">Configuration</a>, Up: <a href="#Top" accesskey="u" rel="up">Top</a> &nbsp; </p>
 </div>
-
+<a name="Connecting-1"></a>
 <h2 class="chapter">4 Connecting</h2>
-
 <p>After configuring JDIbug, use the key sequence <kbd>C-c C-c C-c</kbd> in a
 jde-mode buffer to connect to the debuggee process. By default, the
 frame will be split into windows each displaying different
 buffers with the java source file on the top left, the locals browser
 on the top right, the stack browser on the bottom left, and the
 breakpoints list on the bottom right.
+</p>
 
-
-To disconnect from the debuggee, use the key sequence <kbd>C-c C-c
+<p>To disconnect from the debuggee, use the key sequence <kbd>C-c C-c
 C-d</kbd>.
-
-<div class="node">
-<p><hr>
+</p>
+<hr>
 <a name="Breakpoints"></a>
-Next:&nbsp;<a rel="next" accesskey="n" href="#Stepping">Stepping</a>,
-Previous:&nbsp;<a rel="previous" accesskey="p" href="#Connecting">Connecting</a>,
-Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
-
+<div class="header">
+<p>
+Next: <a href="#Stepping" accesskey="n" rel="next">Stepping</a>, Previous: <a href="#Connecting" accesskey="p" rel="prev">Connecting</a>, Up: <a href="#Top" accesskey="u" rel="up">Top</a> &nbsp; </p>
 </div>
-
+<a name="Breakpoints-1"></a>
 <h2 class="chapter">5 Breakpoints</h2>
-
 <p>You can set breakpoints before or after you have made the connection
 to the debuggee.
-
-To toggle the breakpoint on the current line of java source, use the
+</p>
+<p>To toggle the breakpoint on the current line of java source, use the
 key sequence <kbd>C-c C-c C-b</kbd> in the java source buffer. This toggles
 the breakpoints on the current line between disabled, enabled, and no
 breakpoint. The &ldquo;disabled&rdquo; status is just an easy way of remembering
 that line as a line of interest but you do not want the debugger to
 stop there.
-
-If the line of code is not loaded when the breakpoint is requested, it
+</p>
+<p>If the line of code is not loaded when the breakpoint is requested, it
 will be marked as pending. When the class is finally loaded, the
 breakpoint will be installed.
-
-You can also break on all the methods a class by positioning the
+</p>
+<p>You can also break on all the methods a class by positioning the
 cursor on the first line in the class (usually <code>^public class</code>)
 and calling <code>jdibug-toggle-breakpoint</code> or <kbd>C-c C-c
 C-b</kbd>. Multiple breakpoints will be installed for the first line of
 every method in the class. Note that the pseudo method <code>&lt;init&gt;</code>
 will also be breakpoint-ed.
-
-Attempting to set a breakpoint at a method declaration will not have
+</p>
+<p>Attempting to set a breakpoint at a method declaration will not have
 an effect (unless that line also contains executable code).
-
-<em>New in 0.4</em>  Previous versions did not support breakpoints in
+</p>
+<p><em>New in 0.4</em>  Previous versions did not support breakpoints in
 inner classes.  Version 0.4 should support this functionality.
 Version 0.5 fixed bugs where these breakpoints were not always set.
+</p>
+<table class="menu" border="0" cellspacing="0">
+<tr><th colspan="3" align="left" valign="top"><pre class="menu-comment">Other types of breakpoints
+</pre></th></tr><tr><td align="left" valign="top">&bull; <a href="#Exception-Breakpoints" accesskey="1">Exception Breakpoints</a>:</td><td>&nbsp;&nbsp;</td><td align="left" valign="top">Breaking when an exception is thrown
+</td></tr>
+</table>
 
-
-</li></ul>
-<p>Other types of breakpoints
-<ul class="menu">
-<li><a accesskey="1" href="#Exception-Breakpoints">Exception Breakpoints</a>:  Breaking when an exception is thrown
-</ul>
-
-<div class="node">
-<p><hr>
+<hr>
 <a name="Exception-Breakpoints"></a>
-Previous:&nbsp;<a rel="previous" accesskey="p" href="#Breakpoints">Breakpoints</a>,
-Up:&nbsp;<a rel="up" accesskey="u" href="#Breakpoints">Breakpoints</a>
-
+<div class="header">
+<p>
+Previous: <a href="#Breakpoints" accesskey="p" rel="prev">Breakpoints</a>, Up: <a href="#Breakpoints" accesskey="u" rel="up">Breakpoints</a> &nbsp; </p>
 </div>
-
+<a name="Exception-Breakpoints-1"></a>
 <h3 class="section">5.1 Exception Breakpoints</h3>
 
-<p>
-<em>New in 0.5</em>  It is now possible to set a breakpoint for when an
+<p><em>New in 0.5</em>  It is now possible to set a breakpoint for when an
 exception is thrown. <code>jdibug-break-on-exception</code> will prompt for
 the qualified name of a class.  When an exception of that class is
 about to be thrown, the thread will be suspended.
-
-<code>jdibug-break-on-exception</code> will also ask if it should break for
+</p>
+<p><code>jdibug-break-on-exception</code> will also ask if it should break for
 caught or uncaught exceptions.  Due to interactions with native
 methods and compiler-generated code, it is possible for a caught
 exception to be reported as uncaught and vice versa.
+</p>
 
-
-<div class="node">
-<p><hr>
+<hr>
 <a name="Stepping"></a>
-Next:&nbsp;<a rel="next" accesskey="n" href="#Locals-Browser">Locals Browser</a>,
-Previous:&nbsp;<a rel="previous" accesskey="p" href="#Breakpoints">Breakpoints</a>,
-Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
-
+<div class="header">
+<p>
+Next: <a href="#Locals-Browser" accesskey="n" rel="next">Locals Browser</a>, Previous: <a href="#Breakpoints" accesskey="p" rel="prev">Breakpoints</a>, Up: <a href="#Top" accesskey="u" rel="up">Top</a> &nbsp; </p>
 </div>
-
+<a name="Stepping-1"></a>
 <h2 class="chapter">6 Stepping</h2>
-
 <p>When the debugger is suspended, you can use the following key
 sequences to step through the program.
+</p>
+<div class="example">
+<pre class="example">C-c C-c C-n to step over.
+C-c C-c C-i to step into.
+C-c C-c C-o to step out.
+</pre></div>
 
-<pre class="example">     C-c C-c C-n to step over.
-     C-c C-c C-i to step into.
-     C-c C-c C-o to step out.
-</pre>
-   <p>
-As these keys are used very often, I bind them to function keys for
+<p>As these keys are used very often, I bind them to function keys for
 faster access. I have the following in my .emacs file:
+</p>
+<div class="example">
+<pre class="example">(define-key jde-mode-map [f8]   'jdibug-step-over)
+(define-key jde-mode-map [M-f8] 'jdibug-step-into)
+(define-key jde-mode-map [f7]   'jdibug-step-out)
+(define-key jde-mode-map [M-f7] 'jdibug-resume)
+</pre></div>
 
-<pre class="example">     (define-key jde-mode-map [f8]   'jdibug-step-over)
-     (define-key jde-mode-map [M-f8] 'jdibug-step-into)
-     (define-key jde-mode-map [f7]   'jdibug-step-out)
-     (define-key jde-mode-map [M-f7] 'jdibug-resume)
-</pre>
-   <p>
-When you are done, you can use the key sequence <kbd>C-c C-c C-r</kbd> to
+<p>When you are done, you can use the key sequence <kbd>C-c C-c C-r</kbd> to
 resume the main thread in the debugger process. Or if you have added
 the snipplet above, you can just <kbd>M-f7</kbd> for that.  You can also
 use <kbd>C-c C-c C-a</kbd> to resume all threads in the JVM.
-
-<div class="node">
-<p><hr>
+</p>
+<hr>
 <a name="Locals-Browser"></a>
-Next:&nbsp;<a rel="next" accesskey="n" href="#Frames-Browser">Frames Browser</a>,
-Previous:&nbsp;<a rel="previous" accesskey="p" href="#Stepping">Stepping</a>,
-Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
-
+<div class="header">
+<p>
+Next: <a href="#Frames-Browser" accesskey="n" rel="next">Frames Browser</a>, Previous: <a href="#Stepping" accesskey="p" rel="prev">Stepping</a>, Up: <a href="#Top" accesskey="u" rel="up">Top</a> &nbsp; </p>
 </div>
-
+<a name="Locals-Browser-1"></a>
 <h2 class="chapter">7 Locals Browser</h2>
-
 <p>The locals browser uses the emacs tree-mode to display the local
 variables. Each of the variables can be expanded to view the member
 variables by clicking on the expand icon.
-
-When the cursor is over any element in the tree, you can press the
+</p>
+<p>When the cursor is over any element in the tree, you can press the
 <kbd>s</kbd> key to invoke the <code>toString</code> method on the variable under
 the cursor. The result will be printed in the echo-area. You can also
 press the <kbd>c</kbd> key to print the class name of the object under the
 cursor in the echo area.
-
-One extra feature that is very useful in the Locals Browser is that it
+</p>
+<p>One extra feature that is very useful in the Locals Browser is that it
 reduces the number of clicks that you have to do to inspect a
 variable. By default, a number of java objects will be displayed with
 their string representation, for example Boolean, Number, StringBuffer
 etc. For decendants of Collection and Map, there will be extra
 information displayed about the number of items that are within the
 Collection of Map.
-
-If you like the above feature, there's more! You can define custom
+</p>
+<p>If you like the above feature, there&rsquo;s more! You can define custom
 displayer functions for your own java objects, for example, if you
 have a class <code>com.foo.Dog</code> which have a getter called
 <code>getName</code>, and you want to see the name of the dog displayed, you
-can just add the following line into your <samp><span class="file">.emacs</span></samp> (after the
+can just add the following line into your <samp>.emacs</samp> (after the
 <code>(require 'jdibug)</code> line) and viola, you will see the name of the
 dog instead of the <code>Dog</code> class name. The method that is specified
 must receive no arguments and return a <code>java.lang.String</code>.
+</p>
+<div class="example">
+<pre class="example">(add-to-list 'jdi-value-custom-set-strings '(&quot;com.foo.Dog&quot; &quot;getName&quot;))
+</pre></div>
 
-<pre class="example">     (add-to-list 'jdi-value-custom-set-strings '("com.foo.Dog" "getName"))
-</pre>
-   <p>
-When expanding a Collection or Map, the locals browser will be
+<p>When expanding a Collection or Map, the locals browser will be
 displaying the contents as an array instead of having you to click one
 or two more times to see the contents within the Collection or Map.
-
-At the end of every object, there is a pseudo node named <code>methods</code>
+</p>
+<p>At the end of every object, there is a pseudo node named <code>methods</code>
 that can be expanded to show all the methods for that object and also
-static methods of the object's class. Expanding any of the methods
+static methods of the object&rsquo;s class. Expanding any of the methods
 will invoke the method and the results of the invocation will be shown
 in the expanded node. Currently only methods which does not need
 arguments can be invoked.
-
-<div class="node">
-<p><hr>
+</p>
+<hr>
 <a name="Frames-Browser"></a>
-Next:&nbsp;<a rel="next" accesskey="n" href="#Breakpoints-Browser">Breakpoints Browser</a>,
-Previous:&nbsp;<a rel="previous" accesskey="p" href="#Locals-Browser">Locals Browser</a>,
-Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
-
+<div class="header">
+<p>
+Next: <a href="#Breakpoints-Browser" accesskey="n" rel="next">Breakpoints Browser</a>, Previous: <a href="#Locals-Browser" accesskey="p" rel="prev">Locals Browser</a>, Up: <a href="#Top" accesskey="u" rel="up">Top</a> &nbsp; </p>
 </div>
-
+<a name="Frames-Browser-1"></a>
 <h2 class="chapter">8 Frames Browser</h2>
-
 <p>The frames buffer is a simple list of all the frames from the
 <code>main</code> up to the current function. It provides a simple
 caller/callee stack of the current breakpoint. If the frame points to
@@ -356,182 +368,171 @@ a location which can be corresponded to a line of code in the source
 path, the frame will be clickable, and the source code buffer will be
 updated to show the file and line number. The locals browser will also
 be updated to show the locals of that particular frame.
-
-Please note that the current execution point does not change when you
+</p>
+<p>Please note that the current execution point does not change when you
 switch between the frames, so if you do <code>jdibug-step-over</code>, the
 stepping will go back to the original execution point.
-
-Threads are also clickable.  This does not update the locals browser,
+</p>
+<p>Threads are also clickable.  This does not update the locals browser,
 but does change which thread will be affected with subsequent commands
 like <code>jdibug-resume</code> or <code>jdibug-step-into</code>.
-
-<div class="node">
-<p><hr>
+</p>
+<hr>
 <a name="Breakpoints-Browser"></a>
-Next:&nbsp;<a rel="next" accesskey="n" href="#Threads-Browser">Threads Browser</a>,
-Previous:&nbsp;<a rel="previous" accesskey="p" href="#Frames-Browser">Frames Browser</a>,
-Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
-
+<div class="header">
+<p>
+Next: <a href="#Threads-Browser" accesskey="n" rel="next">Threads Browser</a>, Previous: <a href="#Frames-Browser" accesskey="p" rel="prev">Frames Browser</a>, Up: <a href="#Top" accesskey="u" rel="up">Top</a> &nbsp; </p>
 </div>
-
+<a name="Breakpoints-Browser-1"></a>
 <h2 class="chapter">9 Breakpoints Browser</h2>
-
 <p>The breakpoints buffer shows a list of the current active and disabled
 breakpoints. Clicking on the breakpoints will show the line of code of
 the breakpoint in the source code buffer.
+</p>
+<table class="menu" border="0" cellspacing="0">
+<tr><td align="left" valign="top">&bull; <a href="#Conditional-Breakpoints" accesskey="1">Conditional Breakpoints </a>:</td><td>&nbsp;&nbsp;</td><td align="left" valign="top">Breaking when a condition is satisfied
+</td></tr>
+</table>
 
-
-<ul class="menu">
-<li><a accesskey="1" href="#Conditional-Breakpoints">Conditional Breakpoints </a>:  Breaking when a condition is satisfied
-</ul>
-
-<div class="node">
-<p><hr>
+<hr>
 <a name="Conditional-Breakpoints"></a>
-Previous:&nbsp;<a rel="previous" accesskey="p" href="#Breakpoints-Browser">Breakpoints Browser</a>,
-Up:&nbsp;<a rel="up" accesskey="u" href="#Breakpoints-Browser">Breakpoints Browser</a>
-
+<div class="header">
+<p>
+Previous: <a href="#Breakpoints-Browser" accesskey="p" rel="prev">Breakpoints Browser</a>, Up: <a href="#Breakpoints-Browser" accesskey="u" rel="up">Breakpoints Browser</a> &nbsp; </p>
 </div>
-
+<a name="Conditional-Breakpoints-1"></a>
 <h3 class="section">9.1 Conditional Breakpoints</h3>
-
 <p>Pressing <kbd>c</kbd> while at a breakpoint allows you to set a condition expression
 on the breakpoint.  This feature is under development, so most common
 expressions are understood and supported, but more complex constructs
 might not work.  Whenever the breakpoint is reached, the expression is
 evaluated. If the result is the boolean value true, execution stops as
 usual for a breakpoint.  Otherwise, the program resumes execution.
-
-Evaluating the expression is a fairly slow process, so conditional
+</p>
+<p>Evaluating the expression is a fairly slow process, so conditional
 breakpoints should be used with care.  Stopping on the fifth iteration
 of a loop should not have a noticeable effect on the runtime, but
 stopping on iteration 10,000 will take a long time.
-
-The only error checking done at the time the condition is created is
+</p>
+<p>The only error checking done at the time the condition is created is
 to check that the expression is syntactically valid.  No attempt is
 made to determine that the result is a boolean or that any variables
 referenced in the expression are in scope.  If the expression is
 invalid, the program will resume execution.
-
-<div class="node">
-<p><hr>
+</p>
+<hr>
 <a name="Threads-Browser"></a>
-Next:&nbsp;<a rel="next" accesskey="n" href="#Watchpoint-Buffer">Watchpoint Buffer</a>,
-Previous:&nbsp;<a rel="previous" accesskey="p" href="#Breakpoints-Browser">Breakpoints Browser</a>,
-Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
-
+<div class="header">
+<p>
+Next: <a href="#Watchpoint-Buffer" accesskey="n" rel="next">Watchpoint Buffer</a>, Previous: <a href="#Breakpoints-Browser" accesskey="p" rel="prev">Breakpoints Browser</a>, Up: <a href="#Top" accesskey="u" rel="up">Top</a> &nbsp; </p>
 </div>
-
+<a name="Threads-Browser-1"></a>
 <h2 class="chapter">10 Threads Browser</h2>
-
 <p>The threads buffer is normally not visible, but can be shown by the
 command <code>jdibug-debug-view-1</code>.  This buffer lists all of the
 threads and threadgroups in the JVM (including system threads that are
 suppressed in the frames browser).
-
-When expanding a thread, details about the thread are shown as well as
+</p>
+<p>When expanding a thread, details about the thread are shown as well as
 buttons to suspend and resume the thread.  Suspending the thread can
 be useful to determine where it is executing, as it allows it to be
 selected as the current thread in the frames browser.  At that point,
 it is possible to step through the thread with the usual commands.
-
-<div class="node">
-<p><hr>
+</p>
+<hr>
 <a name="Watchpoint-Buffer"></a>
-Next:&nbsp;<a rel="next" accesskey="n" href="#Window-Layout">Window Layout</a>,
-Previous:&nbsp;<a rel="previous" accesskey="p" href="#Threads-Browser">Threads Browser</a>,
-Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
-
+<div class="header">
+<p>
+Next: <a href="#Window-Layout" accesskey="n" rel="next">Window Layout</a>, Previous: <a href="#Threads-Browser" accesskey="p" rel="prev">Threads Browser</a>, Up: <a href="#Top" accesskey="u" rel="up">Top</a> &nbsp; </p>
 </div>
-
+<a name="Watchpoint-Buffer-1"></a>
 <h2 class="chapter">11 Watchpoint Buffer</h2>
-
 <p><em>New in 0.4</em> The watchpoint buffer can be shown by <code>jdibug-debug-view-2</code> if it
 is not initially visible.  This buffer displays a list of
 expressions.  Whenever the current thread is suspended, the
 expressions are also evaluated.
-
-If there is an error in the expression (a variable is out of scope,
+</p>
+<p>If there is an error in the expression (a variable is out of scope,
 a name is mispelled, the expression contains unsupported operations)
 an error message is displayed instead.
-
-The expressions that are supported by conditional breakpoints are
+</p>
+<p>The expressions that are supported by conditional breakpoints are
 exactly those that are supposed by watchpoints, so you can test if
 your expression will work in a conditional breakpoint by first
 entering it as a watchpoint.
-
-<div class="node">
-<p><hr>
+</p>
+<hr>
 <a name="Window-Layout"></a>
-Next:&nbsp;<a rel="next" accesskey="n" href="#Bug-Reporting">Bug Reporting</a>,
-Previous:&nbsp;<a rel="previous" accesskey="p" href="#Watchpoint-Buffer">Watchpoint Buffer</a>,
-Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
-
+<div class="header">
+<p>
+Next: <a href="#Bug-Reporting" accesskey="n" rel="next">Bug Reporting</a>, Previous: <a href="#Watchpoint-Buffer" accesskey="p" rel="prev">Watchpoint Buffer</a>, Up: <a href="#Top" accesskey="u" rel="up">Top</a> &nbsp; </p>
 </div>
-
+<a name="Window-Layout-1"></a>
 <h2 class="chapter">12 Window Layout</h2>
-
 <p>The default four buffers layout is what I like the most on my screen.
 The commands <code>jdibug-debug-view</code>, <code>jdibug-debug-view-1</code> and
 <code>jdibug-debug-view-2</code> display different windows.  If you do not
 like any of these, creating additional commands can be done fairly
 simply by modifying those commands.
+</p>
+<p>After you create your own functions that create the window layout of
+your liking, and then add this in your <samp>.emacs</samp> file:
+</p>
+<div class="example">
+<pre class="example">(remove-hook 'jdibug-connected-hook 'my-jdibug-debug-view)
+(remove-hook 'jdibug-detached-hook  'my-jdibug-undebug-view)
+</pre></div>
 
-After you create your own functions that create the window layout of
-your liking, and then add this in your <samp><span class="file">.emacs</span></samp> file:
-
-<pre class="example">     (remove-hook 'jdibug-connected-hook 'my-jdibug-debug-view)
-     (remove-hook 'jdibug-detached-hook  'my-jdibug-undebug-view)
-</pre>
-   <p>
-And then proceed to add your equivalent functions in the above
+<p>And then proceed to add your equivalent functions in the above
 hooks. You can refer to the two functions <code>jdibug-debug-view</code> and
 <code>jdibug-undebug-view</code> for a start.
-
-<div class="node">
-<p><hr>
+</p>
+<hr>
 <a name="Bug-Reporting"></a>
-Previous:&nbsp;<a rel="previous" accesskey="p" href="#Window-Layout">Window Layout</a>,
-Up:&nbsp;<a rel="up" accesskey="u" href="#Top">Top</a>
-
+<div class="header">
+<p>
+Previous: <a href="#Window-Layout" accesskey="p" rel="prev">Window Layout</a>, Up: <a href="#Top" accesskey="u" rel="up">Top</a> &nbsp; </p>
 </div>
-
+<a name="Bug-Reporting-1"></a>
 <h2 class="chapter">13 Bug Reporting</h2>
-
-<p>If you think there's a bug in JDIbug, please submit the log together
+<p>If you think there&rsquo;s a bug in JDIbug, please submit the log together
 with a description of what you have done.
-
-JDIbug uses the <samp><span class="file">elog.el</span></samp> module that I have written for this
+</p>
+<p>JDIbug uses the <samp>elog.el</samp> module that I have written for this
 purpose.
+</p>
+<p>Run the following piece of code
+</p><div class="example">
+<pre class="example">(elog-set-appenders
+ (list
+  (make-elog-appender :category 'jdwp
+                      :priority 'trace
+                      :layout &quot;%H:%M:%S [%p] %c : %m%n&quot;
+                      :output &quot;*jdwp-log*&quot;)
+  (make-elog-appender :category 'jdi
+                      :priority 'trace
+                      :layout &quot;%H:%M:%S [%p] %c : %m%n&quot;
+                      :output &quot;*jdwp-log*&quot;)
+  (make-elog-appender :category 'jdibug
+                      :priority 'trace
+                      :layout &quot;%H:%M:%S [%p] %c : %m%n&quot;
+                      :output &quot;*jdwp-log*&quot;)
+  (make-elog-appender :category 'jdwp-traffic
+                      :priority 'info
+                      :layout &quot;%H:%M:%S: %m%n&quot;
+                      :output &quot;*jdwp-traffic*&quot;)))
+</pre></div>
 
-Run the following piece of code
-<pre class="example">     (elog-set-appenders
-      (list
-       (make-elog-appender :category 'jdwp
-                           :priority 'trace
-                           :layout "%H:%M:%S [%p] %c : %m%n"
-                           :output "*jdwp-log*")
-       (make-elog-appender :category 'jdi
-                           :priority 'trace
-                           :layout "%H:%M:%S [%p] %c : %m%n"
-                           :output "*jdwp-log*")
-       (make-elog-appender :category 'jdibug
-                           :priority 'trace
-                           :layout "%H:%M:%S [%p] %c : %m%n"
-                           :output "*jdwp-log*")
-       (make-elog-appender :category 'jdwp-traffic
-                           :priority 'info
-                           :layout "%H:%M:%S: %m%n"
-                           :output "*jdwp-traffic*")))
-</pre>
-   <p>
-Redo the actions that have generated the bug.
-
-Save the content of the <code>*jdwp-log*</code> and
+<p>Redo the actions that have generated the bug.
+</p>
+<p>Save the content of the <code>*jdwp-log*</code> and
 <code>*jdwp-traffic*</code> buffers into files.
-
-Create an issue at <a href="https://code.google.com/p/jdibug/issues/list">the JDIbug issue page</a>.  Attach the files and describe what the
+</p>
+<p>Create an issue at <a href="https://code.google.com/p/jdibug/issues/list">the JDIbug issue page</a>.  Attach the files and describe what the
 problem is and how to reproduce it.
+</p><hr>
 
-</body></html>
 
+
+</body>
+</html>
