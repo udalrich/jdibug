@@ -103,6 +103,70 @@
      (assert-rest-of-line-matches ": -9223372036854775808$"))))
 
 
+(ert-deftest local-filter ()
+  "Test filtering of variables in the locals buffer"
+  :tags '(jde locals)
+  (with-locals-test
+   (jdibug-test-connect-to-jvm)
+
+   (goto-char (point-min))
+   (search-forward "main.submitJobs")
+   (jdibug-toggle-breakpoint)
+
+   ;; Run it
+   (setq jdwp-signal-count 0)
+   (jdibug-test-resume-and-wait-for-breakpoint)
+   (jdibug-test-wait-for-refresh-timers)
+
+   ;; Expand the Main object.  All the fields should be displayed
+   (jdibug-test-check-filtered-fields
+    nil
+    '("value" "staticValue" "finalValue" "staticFinalValue")
+    nil)
+
+   (jdibug-test-check-filtered-fields
+    '(jdi-field-static-p)
+    '("value" "finalValue")
+    '("staticValue" "staticFinalValue")
+    nil)
+
+   (jdibug-test-check-filtered-fields
+    '(jdi-field-final-p)
+    '("value" "staticValue")
+    '("finalValue" "staticFinalValue")
+
+   (jdibug-test-check-filtered-fields
+    '(jdi-field-final-p jdi-field-static-p)
+    '("value")
+    '("staticValue" "finalValue" "staticFinalValue")
+    )
+
+   )))
+
+
+(defun jdibug-test-check-filtered-fields (filters variables-present variables-missing)
+  (let ((jdibug-locals-buffer-field-filters filters))
+    ;; Step once, so the buffer is redrawn
+    (jdibug-test-step-and-wait);
+
+    (with-current-buffer jdibug-locals-buffer
+       (goto-char (point-min))
+       (search-forward "main: Main")
+       (search-backward "[+]")
+       (widget-button-press (point))
+
+       (let ((limit (save-excursion (search-forward "maxInt"))))
+         (should limit)
+         (dolist (var variables-present)
+           (save-excursion
+             (should (search-forward-regexp (concat "\\b" var "\\b") limit))))
+         (dolist (var variables-missing)
+           (save-excursion
+             (should-not (search-forward-regexp (concat "\\b" var "\\b") limit))))))))
+
+
+
+
 (defun assert-rest-of-line-matches (regexp)
   "Assert that the line, starting at point, matches REGEXP"
   (let* ((eol (save-excursion (end-of-line) (point)))

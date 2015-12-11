@@ -123,6 +123,18 @@ the regular expression will result in automatically stepping out of the method."
 (defvar jdibug-resumed-hook nil
   "Hook to run when debuggee is resumed.")
 
+(defcustom jdibug-locals-buffer-field-filters nil
+  "Filters to hide fields in the locals buffer.  The filter is
+passed a `jdi-field'.  If any filter returns t, the field is not
+shown.  Useful values include `jdi-field-static-p',
+`jdi-field-final-p' and `jdi-field-static-final-p'.  Note that
+`jdi-field-static-p' will filter static fields and static final
+fields."
+  :group 'jdibug-ui
+  :type '(repeat function)
+  :package-version '("jdibug" . "0.7"))
+
+
 (require 'bindat)
 (require 'elog)
 (require 'jdwp)
@@ -920,7 +932,8 @@ Otherwise use :old-args which saved by `tree-mode-backup-args'."
     (jdibug-debug "jdibug-value-expander got %s values" (length values))
     (append (loop for v in values
                   for f in fields
-                  collect (jdibug-make-tree-from-field-value f v))
+                  when (jdibug-make-tree-from-field-value f v)
+                  collect it)
             (list (jdibug-make-methods-node value)))))
 
 (defun jdibug-value-expander-array (value &optional first last)
@@ -1009,27 +1022,42 @@ from START (inclusive) to END (exclusive)"
       (jdibug-value-custom-expand-map-1 value start end))))
 
 (defun jdibug-make-tree-from-field-value (field value)
-  (let ((display (format "%s%s: %s"
-                         (if (or (jdi-field-static-p field) (jdi-field-final-p field))
-                             (format "(%s%s) "
-                                     (if (jdi-field-static-p field) "S" "")
-                                     (if (jdi-field-final-p field) "F" ""))
-                           "")
-                         (jdi-field-name field)
-                         (jdibug-value-get-string value))))
-    (if (jdi-value-has-children-p value)
-        `(tree-widget
-          :node (push-button
-                 :tag ,display
-                 :format "%[%t%]\n")
-          :open nil
-          :args nil
-          :jdi-value ,value
-          :expander jdibug-value-expander
-          :dynargs jdibug-value-expander)
-      `(item
-        :value
-        ,display))))
+  (if (jdibug-locals-filter-field-p field)
+      nil
+    (let ((display (format "%s%s: %s"
+                           (if (or (jdi-field-static-p field) (jdi-field-final-p field))
+                               (format "(%s%s) "
+                                       (if (jdi-field-static-p field) "S" "")
+                                       (if (jdi-field-final-p field) "F" ""))
+                             "")
+                           (jdi-field-name field)
+                           (jdibug-value-get-string value))))
+      (if (jdi-value-has-children-p value)
+          `(tree-widget
+            :node (push-button
+                   :tag ,display
+                   :format "%[%t%]\n")
+            :open nil
+            :args nil
+            :jdi-value ,value
+            :expander jdibug-value-expander
+            :dynargs jdibug-value-expander)
+        `(item
+          :value
+          ,display)))))
+
+(defun jdibug-locals-filter-field-p (field)
+  "Test if FIELD should be filtered out of the display"
+
+  (let ((filters jdibug-locals-buffer-field-filters)
+        filter result)
+    (while filters
+      (setq filter (car filters)
+            filters (cdr filters))
+      (when (funcall filter field)
+        ;; Clear filters to break out of the loop
+        (setq filters nil result t)))
+    result))
 
 (defun jdibug-make-tree-from-variable-value (variable value string)
   (jdibug-make-tree-from-value (jdi-variable-name variable) value string))
@@ -1355,19 +1383,22 @@ of conses suitable for passing to `jdibug-refresh-watchpoints-1'"
         (message "Class: %s" (jdi-class-signature (jdi-value-get-reference-type value)))))))
 
 (defun jdibug-get-source-paths ()
-  (or (and jdibug-use-jdee-source-paths
-       (if (boundp 'jdee-sourcepath)
-           (if (fboundp 'jdee-normalize-path)
-           (if (fboundp 'jdee-expand-wildcards-and-normalize)
-               (jdee-expand-wildcards-and-normalize jdee-sourcepath
-                               'jdee-sourcepath)
-             (mapcar
-              (lambda (path)
-            (jdibug-normalize-path path 'jdee-sourcepath t))
-              jdee-sourcepath)))))
-      (if (stringp jdibug-source-paths)
-          (error "jdibug-source-paths must be a list of strings, not a single string")
-        jdibug-source-paths)))
+  "Get the roots of the source code trees."
+  (if jdibug-use-jdee-source-paths
+      (if (fboundp #'jdee-get-sourcepath)
+          (jdee-get-sourcepath)
+        (if (boundp 'jdee-sourcepath)
+            (if (fboundp 'jdee-normalize-path)
+                (if (fboundp 'jdee-expand-wildcards-and-normalize)
+                    (jdee-expand-wildcards-and-normalize jdee-sourcepath
+                                                         'jdee-sourcepath)
+                  (mapcar
+                   (lambda (path)
+                     (jdibug-normalize-path path 'jdee-sourcepath t))
+                   jdee-sourcepath)))))
+    (if (stringp jdibug-source-paths)
+        (error "jdibug-source-paths must be a list of strings, not a single string")
+      jdibug-source-paths)))
 
 (defun jdibug-file-in-source-paths-p (file)
   (jdibug-debug "jdibug-file-in-source-paths-p:%s" file)

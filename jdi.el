@@ -1181,6 +1181,11 @@ http://java.sun.com/j2se/1.5.0/docs/guide/jni/spec/types.html#wp428"
 (defun jdi-field-final-p (field)
   (not (equal (logand (jdi-field-mod-bits field) jdi-access-final) 0)))
 
+(defun jdi-field-static-final-p (field)
+  (not (equal (logand (jdi-field-mod-bits field)
+                      (logor jdi-access-final jdi-access-static)) 0)))
+
+
 (defun jdi-remove-duplicated (fields)
   "Return a list of jdi-fields, without duplicated names, the first field is kept."
   (let (names filtered)

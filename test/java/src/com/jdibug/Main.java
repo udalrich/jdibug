@@ -15,6 +15,7 @@ public class Main
 {
     public static void main(String[] args)
     {
+
         Stuff stuff = new Stuff();
         stuff.x = 7;
 
@@ -22,11 +23,11 @@ public class Main
 
         int twoAsInt = 2;
 
-		  // Test display of large integers
-		  int maxInt = Integer.MAX_VALUE;
-		  int minInt = Integer.MIN_VALUE;
-		  long maxLong = Long.MAX_VALUE;
-		  long minLong = Long.MIN_VALUE;
+          // Test display of large integers
+          int maxInt = Integer.MAX_VALUE;
+          int minInt = Integer.MIN_VALUE;
+          long maxLong = Long.MAX_VALUE;
+          long minLong = Long.MIN_VALUE;
 
         float f = 1.2f;
         int intVar = 3;
@@ -47,88 +48,88 @@ public class Main
 
         List<String> list = Arrays.asList("foo", "bar");
 
-		  // Large array for testing display of sub-arrays
-		  Object[] largeArray = new Object[20000];
-		  largeArray[17] = floatArray;
-		  largeArray[173] = list;
+          // Large array for testing display of sub-arrays
+          Object[] largeArray = new Object[20000];
+          largeArray[17] = floatArray;
+          largeArray[173] = list;
 
-		  largeArray = new Object[23456];
-		  largeArray[1732] = floatArray;
-		  largeArray[8542] = list;
+          largeArray = new Object[23456];
+          largeArray[1732] = floatArray;
+          largeArray[8542] = list;
 
         System.out.println(list);
 
-		  Map<Integer, Number> numberMap = new HashMap<Integer, Number>();
-		  Collection<String> bigCollection = new TreeSet<String>();
-		  for (int number = 0; number < 52; ++number)
-		  {
-				numberMap.put(number, 2.3*number);
-				bigCollection.add("entry " + number);
-		  }
+          Map<Integer, Number> numberMap = new HashMap<Integer, Number>();
+          Collection<String> bigCollection = new TreeSet<String>();
+          for (int number = 0; number < 52; ++number)
+          {
+                numberMap.put(number, 2.3*number);
+                bigCollection.add("entry " + number);
+          }
 
         Main main = new Main();
         main.submitJobs();
-		  System.out.println("submitJobs returned");
+        System.out.println("submitJobs returned");
 
-		  if (args.length == 0)
-		  {
-				Gui gui = new Gui();
-				gui.drawStuff();
-		  }
-		  else
-		  {
-				main.testExceptions();
-		  }
-		  System.out.println("Main.main finished");
+          if (args.length == 0)
+          {
+                Gui gui = new Gui();
+                gui.drawStuff();
+          }
+
+          {
+                main.testExceptions();
+          }
+          System.out.println("Main.main finished");
     }
 
-	 private void testExceptions()
-	 {
-		  throwAndCatch();
+     private void testExceptions()
+     {
+          throwAndCatch();
 
-		  throwWithoutCatch();
+          throwWithoutCatch();
 
 
-	 }
+     }
 
-	 private void throwWithoutCatch()
-	 {
-		  // And now an uncaught one for testing that
-		  throw new JdibugFooException("uncaught");
-	 }
+     private void throwWithoutCatch()
+     {
+          // And now an uncaught one for testing that
+          throw new JdibugFooException("uncaught");
+     }
 
-	 private void throwAndCatch()
-	 {
-		  try {
-				throw new JdibugBarException("caught");
-		  } catch (RuntimeException exc) {
-				System.out.println("Caught expected exception");
-				exc.printStackTrace(System.out);
-		  }
-	 }
+     private void throwAndCatch()
+     {
+          try {
+                throw new JdibugBarException("caught");
+          } catch (RuntimeException exc) {
+                System.out.println("Caught expected exception");
+                exc.printStackTrace(System.out);
+          }
+     }
 
     private void submitJobs()
     {
         ExecutorService service = Executors.newFixedThreadPool(2);
         List<Future<?>> results = new ArrayList<Future<?>>();
 
-		Collection<Runnable> tasks = new ArrayList<Runnable>();
-		for (int index = 0; index < 10; ++index)
-		{
-			tasks.add(new Runnable()
-				{
-					@Override
-					public void run()
-					{
-						doStuff();
-					}
-				});
-		}
+        Collection<Runnable> tasks = new ArrayList<Runnable>();
+        for (int index = 0; index < 10; ++index)
+        {
+            tasks.add(new Runnable()
+                {
+                    @Override
+                    public void run()
+                    {
+                        doStuff();
+                    }
+                });
+        }
 
-		for (Runnable runnable: tasks)
-		{
+        for (Runnable runnable: tasks)
+        {
             results.add(service.submit(runnable));
-		}
+        }
 
         for (Future<?> result: results)
         {
@@ -165,4 +166,15 @@ public class Main
         int x;
         double y;
     }
+
+    public Main() {
+        value = 2.1;
+        staticValue = 3.4;
+        finalValue = 5.6;
+    }
+
+    private double value;
+    private static double staticValue;
+    private final double finalValue;
+    private static final double staticFinalValue = 3.1417;
 }
