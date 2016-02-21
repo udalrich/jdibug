@@ -4,12 +4,9 @@
   "jdibug" ; package name
   "@major-version@.@minor-version@" ; version
   "Lisp based Java debugger" ; description
-  () ; dependencies
+  ((tree-mode "0")) ; dependencies
   :url "http://github.com/udalrich/jdibug"
   :keywords '("java" "tools"))
-
-
-)
 
 ;; Local Variables:
 ;; no-byte-compile: t
