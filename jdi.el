@@ -370,7 +370,7 @@ correct class."
 		(progn
 		  (if signature (setf (jdi-class-signature found) signature))
 		  (if ref-type-tag (setf (jdi-class-ref-type-tag found) ref-type-tag))
-		  (if status (setf (jdi-class-status found)) status))
+		  (if status (setf (jdi-class-status found) status)))
 	  (puthash id (setq found (make-jdi-class :virtual-machine vm
 											  :id id
 											  :signature signature
@@ -1183,7 +1183,7 @@ http://java.sun.com/j2se/1.5.0/docs/guide/jni/spec/types.html#wp428"
 
 (defun jdi-field-static-final-p (field)
   (not (equal (logand (jdi-field-mod-bits field)
-                      (logor jdi-access-final jdi-access-static)) 0)))
+                      (logior jdi-access-final jdi-access-static)) 0)))
 
 
 (defun jdi-remove-duplicated (fields)
