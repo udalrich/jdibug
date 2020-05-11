@@ -2,3 +2,4 @@ build
 *.elc
 *~
 /jdibug-java-expr-wy.el
+wisent.output
